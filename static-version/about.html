@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="meta.about">About — Faatix</title>
+  <meta name="description" content="About Faatix — the purpose behind the business system.">
+  <link rel="icon" href="assets/img/faatix-logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="about">
+  <div data-component="header"></div>
+
+  <main id="main">
+    <!-- Page hero -->
+    <section class="page-hero">
+      <div class="hero__bg" aria-hidden="true"></div>
+      <div class="container page-hero__grid">
+        <div class="page-hero__text">
+          <span class="badge"><span data-icon="info"></span><span data-i18n="about.badge"></span></span>
+          <h1 data-i18n-html="about.title"></h1>
+          <p data-i18n="about.subtitle"></p>
+          <div class="hero__actions">
+            <a class="btn btn--primary btn--lg" href="features.html"><span data-i18n="common.explore"></span><span data-icon="arrow-right"></span></a>
+          </div>
+        </div>
+        <div class="art-card" data-reveal aria-hidden="true">
+          <div data-component="landscape"></div>
+          <div class="art-panel">
+            <span class="icon-tile"><span data-icon="folder"></span></span>
+            <span class="icon-tile icon-tile--brand"><span data-icon="target"></span></span>
+            <span class="icon-tile"><span data-icon="bar-chart"></span></span>
+            <span class="icon-tile icon-tile--dark"><span data-icon="shield"></span></span>
+            <span class="icon-tile"><span data-icon="users"></span></span>
+            <span class="icon-tile icon-tile--brand"><span data-icon="languages"></span></span>
+          </div>
+          <div class="float-card float-card--tl">
+            <span class="icon-tile"><span data-icon="layers"></span></span>
+            <div><strong data-i18n="mock.organized"></strong><small data-i18n="mock.connectedSub"></small></div>
+          </div>
+          <div class="float-card float-card--r">
+            <span class="icon-tile"><span data-icon="languages"></span></span>
+            <div><strong data-i18n="mock.bilingual"></strong><small data-i18n="mock.bilingualSub"></small></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Purpose -->
+    <section class="section section--surface">
+      <div class="container split">
+        <div data-reveal>
+          <span class="eyebrow" data-i18n="about.eyebrow"></span>
+          <h2 data-i18n-html="about.purposeTitle"></h2>
+          <p data-i18n="about.purpose1"></p>
+          <p data-i18n="about.purpose2"></p>
+        </div>
+        <div class="stack">
+          <article class="icon-card" data-reveal>
+            <span class="icon-tile"><span data-icon="target"></span></span>
+            <div><h3 data-i18n="about.mission"></h3><p data-i18n="about.missionText"></p></div>
+          </article>
+          <article class="icon-card" data-reveal data-reveal-delay="1">
+            <span class="icon-tile"><span data-icon="compass"></span></span>
+            <div><h3 data-i18n="about.vision"></h3><p data-i18n="about.visionText"></p></div>
+          </article>
+          <article class="icon-card" data-reveal data-reveal-delay="2">
+            <span class="icon-tile"><span data-icon="heart"></span></span>
+            <div><h3 data-i18n="about.values"></h3><p data-i18n="about.valuesText"></p></div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Principles -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <h2 data-i18n-html="about.standTitle"></h2>
+          <p data-i18n="about.standSub"></p>
+        </div>
+        <div class="card-grid card-grid--4">
+          <article class="icon-card" data-reveal>
+            <span class="icon-tile"><span data-icon="sparkles"></span></span>
+            <h3 data-i18n="about.p1"></h3><p data-i18n="about.p1Text"></p>
+          </article>
+          <article class="icon-card" data-reveal data-reveal-delay="1">
+            <span class="icon-tile"><span data-icon="lock"></span></span>
+            <h3 data-i18n="about.p2"></h3><p data-i18n="about.p2Text"></p>
+          </article>
+          <article class="icon-card" data-reveal data-reveal-delay="2">
+            <span class="icon-tile"><span data-icon="languages"></span></span>
+            <h3 data-i18n="about.p3"></h3><p data-i18n="about.p3Text"></p>
+          </article>
+          <article class="icon-card" data-reveal data-reveal-delay="3">
+            <span class="icon-tile"><span data-icon="trending-up"></span></span>
+            <h3 data-i18n="about.p4"></h3><p data-i18n="about.p4Text"></p>
+          </article>
+        </div>
+
+        <!-- Placeholder: company story & team -->
+        <div class="note" data-reveal>
+          <span class="icon-tile"><span data-icon="building"></span></span>
+          <div>
+            <h3 data-i18n="about.storyTitle"></h3>
+            <p data-i18n="about.storyText"></p>
+            <small data-i18n="common.placeholder"></small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div data-component="cta"></div>
+  </main>
+
+  <div data-component="footer"></div>
+
+  <script src="assets/js/translations.js"></script>
+  <script src="assets/js/i18n.js"></script>
+  <script src="assets/js/icons.js"></script>
+  <script src="assets/js/components.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

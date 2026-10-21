@@ -1,0 +1,17 @@
+{
+  "name": "faatix",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Faatix business system — React frontend, Node.js API, MySQL database.",
+  "scripts": {
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client",
+    "db:init": "npm run db:init --prefix server",
+    "dev": "concurrently -n api,web -c green,cyan \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
+    "build": "npm run build --prefix client",
+    "start": "npm start --prefix server",
+    "db:seed": "npm run db:seed --prefix server"
+  },
+  "devDependencies": {
+    "concurrently": "9.0.1"
+  }
+}

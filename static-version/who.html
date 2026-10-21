@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="meta.who">Who Can Use Faatix? — Faatix</title>
+  <meta name="description" content="Who can use Faatix — businesses and roles the platform is designed for.">
+  <link rel="icon" href="assets/img/faatix-logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="who">
+  <div data-component="header"></div>
+
+  <main id="main">
+    <!-- Page hero -->
+    <section class="page-hero">
+      <div class="hero__bg" aria-hidden="true"></div>
+      <div class="container page-hero__grid">
+        <div class="page-hero__text">
+          <span class="badge"><span data-icon="users"></span><span data-i18n="who.badge"></span></span>
+          <h1 data-i18n-html="who.title"></h1>
+          <p data-i18n="who.subtitle"></p>
+          <div class="hero__actions">
+            <a class="btn btn--primary btn--lg" href="signin.html"><span data-i18n="common.getStarted"></span><span data-icon="arrow-right"></span></a>
+            <a class="btn btn--ghost btn--lg" href="features.html" data-i18n="common.explore"></a>
+          </div>
+        </div>
+        <div class="art-card" data-reveal aria-hidden="true">
+          <div data-component="landscape"></div>
+          <div class="art-panel">
+            <span class="icon-tile"><span data-icon="store"></span></span>
+            <span class="icon-tile icon-tile--brand"><span data-icon="briefcase"></span></span>
+            <span class="icon-tile"><span data-icon="building"></span></span>
+            <span class="icon-tile icon-tile--dark"><span data-icon="user-check"></span></span>
+            <span class="icon-tile"><span data-icon="calculator"></span></span>
+            <span class="icon-tile icon-tile--brand"><span data-icon="users"></span></span>
+          </div>
+          <div class="float-card float-card--tl float-card--stack">
+            <div class="avatars">
+              <span><span data-icon="user"></span></span><span><span data-icon="user"></span></span><span><span data-icon="user"></span></span><span><span data-icon="plus"></span></span>
+            </div>
+            <div><strong data-i18n="mock.roles"></strong><small data-i18n="mock.rolesSub"></small></div>
+          </div>
+          <div class="float-card float-card--r">
+            <span class="icon-tile"><span data-icon="trending-up"></span></span>
+            <div><strong data-i18n="mock.growth"></strong><small data-i18n="audience.growingBadge"></small></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Business types (reference pricing layout) -->
+    <section class="section section--tight">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <h2 data-i18n-html="who.typesTitle"></h2>
+          <p data-i18n="who.typesSub"></p>
+        </div>
+        <div data-component="audience"></div>
+      </div>
+    </section>
+
+    <!-- Roles -->
+    <section class="section section--surface">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <h2 data-i18n-html="who.rolesTitle"></h2>
+          <p data-i18n="who.rolesSub"></p>
+        </div>
+        <div class="card-grid card-grid--4">
+          <article class="icon-card" data-reveal>
+            <span class="icon-tile"><span data-icon="briefcase"></span></span>
+            <h3 data-i18n="who.r1"></h3><p data-i18n="who.r1Text"></p>
+          </article>
+          <article class="icon-card" data-reveal data-reveal-delay="1">
+            <span class="icon-tile"><span data-icon="user-check"></span></span>
+            <h3 data-i18n="who.r2"></h3><p data-i18n="who.r2Text"></p>
+          </article>
+          <article class="icon-card" data-reveal data-reveal-delay="2">
+            <span class="icon-tile"><span data-icon="users"></span></span>
+            <h3 data-i18n="who.r3"></h3><p data-i18n="who.r3Text"></p>
+          </article>
+          <article class="icon-card" data-reveal data-reveal-delay="3">
+            <span class="icon-tile"><span data-icon="calculator"></span></span>
+            <h3 data-i18n="who.r4"></h3><p data-i18n="who.r4Text"></p>
+          </article>
+        </div>
+
+        <!-- Placeholder: industry examples -->
+        <div class="note" data-reveal>
+          <span class="icon-tile"><span data-icon="store"></span></span>
+          <div>
+            <h3 data-i18n="who.industryTitle"></h3>
+            <p data-i18n="who.industryText"></p>
+            <small data-i18n="common.placeholder"></small>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div data-component="cta"></div>
+  </main>
+
+  <div data-component="footer"></div>
+
+  <script src="assets/js/translations.js"></script>
+  <script src="assets/js/i18n.js"></script>
+  <script src="assets/js/icons.js"></script>
+  <script src="assets/js/components.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>

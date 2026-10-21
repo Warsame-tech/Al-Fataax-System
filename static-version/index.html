@@ -1,0 +1,111 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title data-i18n="meta.home">Faatix — Business System</title>
+  <meta name="description" content="Faatix — one organized, secure business system, available in Somali and English.">
+  <link rel="icon" href="assets/img/faatix-logo.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;1,500;1,600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/styles.css">
+</head>
+<body data-page="home">
+  <div data-component="header"></div>
+
+  <main id="main">
+    <!-- Hero -->
+    <section class="hero">
+      <div class="hero__bg" aria-hidden="true"></div>
+      <div class="container">
+        <div class="hero__content">
+          <span class="badge"><span data-icon="sparkles"></span><span data-i18n="home.badge"></span></span>
+          <h1 data-i18n-html="home.title"></h1>
+          <p data-i18n="home.subtitle"></p>
+          <div class="hero__actions">
+            <a class="btn btn--primary btn--lg" href="signin.html"><span data-i18n="common.getStarted"></span><span data-icon="arrow-right"></span></a>
+            <a class="btn btn--ghost btn--lg" href="features.html" data-i18n="common.explore"></a>
+          </div>
+        </div>
+
+        <div class="hero-visual" data-reveal>
+          <div data-component="landscape"></div>
+
+          <!-- Phone mockup -->
+          <div class="phone" aria-hidden="true">
+            <div class="phone__island"></div>
+            <div class="phone__screen">
+              <div class="phone__status"><span>9:41</span><span class="phone__status-icons"><i></i><i></i><i></i></span></div>
+              <div class="phone__head">
+                <span class="phone__label" data-i18n="mock.activity"></span>
+                <strong class="phone__value">1,248</strong>
+                <span class="delta"><span data-icon="trending-up"></span>+12% <span data-i18n="mock.thisWeek"></span></span>
+              </div>
+              <svg class="phone__chart" viewBox="0 0 300 90" preserveAspectRatio="none">
+                <defs><linearGradient id="phone-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a9b2b" stop-opacity=".45"/><stop offset="1" stop-color="#4a9b2b" stop-opacity="0"/></linearGradient></defs>
+                <path d="M0 70 L20 62 L35 68 L50 52 L65 58 L80 44 L95 50 L110 36 L125 46 L140 30 L155 40 L170 28 L185 38 L200 22 L215 34 L230 20 L245 30 L260 14 L275 24 L290 10 L300 16 V90 H0Z" fill="url(#phone-fill)"/>
+                <path d="M0 70 L20 62 L35 68 L50 52 L65 58 L80 44 L95 50 L110 36 L125 46 L140 30 L155 40 L170 28 L185 38 L200 22 L215 34 L230 20 L245 30 L260 14 L275 24 L290 10 L300 16" fill="none" stroke="#3f8a23" stroke-width="2"/>
+              </svg>
+              <ul class="phone__list">
+                <li class="phone__item"><span class="icon-tile icon-tile--sm"><span data-icon="file-text"></span></span><span data-i18n="mock.records"></span><strong>842</strong></li>
+                <li class="phone__item"><span class="icon-tile icon-tile--sm"><span data-icon="bar-chart"></span></span><span data-i18n="mock.reports"></span><strong>36</strong></li>
+                <li class="phone__item"><span class="icon-tile icon-tile--sm"><span data-icon="users"></span></span><span data-i18n="mock.team"></span><strong>12</strong></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Floating cards -->
+          <div class="float-card float-card--tl" aria-hidden="true">
+            <span class="icon-tile"><span data-icon="shield"></span></span>
+            <div><strong data-i18n="mock.secure"></strong><small data-i18n="mock.secureSub"></small></div>
+          </div>
+          <div class="float-card float-card--bl float-card--stack" aria-hidden="true">
+            <strong data-i18n="mock.overview"></strong>
+            <div class="overview-row">
+              <span class="phone__value">+18%</span>
+              <span class="mini-bars"><span></span><span></span><span></span><span></span><span></span></span>
+            </div>
+          </div>
+          <div class="float-card float-card--r" aria-hidden="true">
+            <span class="icon-tile icon-tile--dark"><span data-icon="languages"></span></span>
+            <div><strong data-i18n="mock.bilingual"></strong><small data-i18n="mock.bilingualSub"></small></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Features preview -->
+    <section class="section">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <h2 data-i18n-html="home.featTitle"></h2>
+          <p data-i18n="home.featSub"></p>
+        </div>
+        <div data-component="showcase"></div>
+      </div>
+    </section>
+
+    <!-- Who can use -->
+    <section class="section section--tight">
+      <div class="container">
+        <div class="section-head" data-reveal>
+          <h2 data-i18n-html="home.whoTitle"></h2>
+          <p data-i18n="home.whoSub"></p>
+        </div>
+        <div data-component="audience"></div>
+      </div>
+    </section>
+
+    <div data-component="cta"></div>
+  </main>
+
+  <div data-component="footer"></div>
+
+  <script src="assets/js/translations.js"></script>
+  <script src="assets/js/i18n.js"></script>
+  <script src="assets/js/icons.js"></script>
+  <script src="assets/js/components.js"></script>
+  <script src="assets/js/app.js"></script>
+</body>
+</html>
