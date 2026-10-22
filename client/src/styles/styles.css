@@ -107,6 +107,9 @@ h3 { font-weight: 600; line-height: 1.3; }
 .btn[disabled] { opacity: .7; cursor: progress; transform: none; }
 .btn--primary { background: var(--orange); color: var(--navy-950); box-shadow: var(--shadow-orange); }
 .btn--primary:hover { background: #ff7a35; }
+/* brand blue button (sign-in page) */
+.btn--blue { background: #3b82f6; color: #fff; box-shadow: 0 14px 26px -14px rgba(35, 115, 244, .8); }
+.btn--blue:hover { background: #2373f4; }
 .btn--outline { background: #fff; color: var(--navy); border-color: var(--line); box-shadow: var(--shadow-sm); }
 .btn--outline:hover { border-color: var(--orange); color: var(--orange-700); }
 .btn--navy { background: var(--navy); color: #fff; }

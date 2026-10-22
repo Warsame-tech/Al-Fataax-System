@@ -86,7 +86,7 @@ export default function SignIn() {
                 {status && t(`signin.${status}`)}
               </p>
 
-              <button className="btn btn--primary btn--lg btn--block" type="submit" disabled={loading}>
+              <button className="btn btn--blue btn--lg btn--block" type="submit" disabled={loading}>
                 <span>{t(loading ? "signin.loading" : "signin.submit")}</span><Icon name="arrow-right" />
               </button>
             </form>
