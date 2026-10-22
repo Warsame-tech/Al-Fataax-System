@@ -26,7 +26,7 @@ const en = {
     usernameTaken: "This username is already taken.", insufficientStock: "{product}: only {available} in stock.",
     alreadyCancelled: "This was already cancelled.", hasPayments: "This has payments and can't be cancelled.",
     notPayable: "This can't receive payments.", invalidLogo: "Logo must be PNG, JPG or WEBP.", logoTooLarge: "Logo must be 2 MB or smaller.",
-    invalidImage: "Photo must be PNG, JPG or WEBP.", imageTooLarge: "Photo must be 2 MB or smaller.",
+    invalidImage: "Photo must be PNG, JPG or WEBP.", changeNeedsCash: "Change can only be given from a cash payment.", imageTooLarge: "Photo must be 2 MB or smaller.",
     importErrors: "Some rows have errors. Fix them and try again.", serverOffline: "Cannot reach the server.", failed: "Something went wrong. Please try again.",
     validation: "Please check the highlighted fields.", notFound: "Not found.", mismatch: "Passwords don't match."
   },
@@ -65,7 +65,12 @@ const en = {
     scan: "Scan barcode", scanTitle: "Scan with camera", scanHelp: "Hold the item's barcode in front of the camera.",
     scanNoCamera: "The camera can't be opened. Allow camera access, or use a barcode scanner or type the code.",
     scanned: "Scanned item", added: "Added to cart", inCart: "In cart: {qty}", addAnother: "Add another",
-    scanEmpty: "Scan or pick a product to see its photo, price and details here.", noPhoto: "No photo"
+    scanEmpty: "Scan or pick a product to see its photo, price and details here.", noPhoto: "No photo",
+    clearItem: "Clear highlighted item", payment: "Payment", unitsAt: "{qty} unit(s) at {price}", qtyLabel: "QTY: {qty}",
+    payTitle: "Payment", addMethod: "Click to add a payment method:", applied: "Applied payments", noApplied: "No payments added yet. Click a payment method on the left.",
+    totalDue: "Total due", totalPaid: "Total paid", remaining: "Remaining", changeDue: "Change to give", confirm: "Confirm order",
+    restOnCredit: "The rest stays on credit — {name} pays later.", needCustomer: "Choose a customer above to leave the rest on credit.",
+    discountLocked: "Only owners and managers can give discounts.", exact: "Exact", walkInDefault: "Walk-in customer (default)", outRibbon: "Out of stock"
   },
   invoices: {
     title: "Sales invoices", new: "New invoice", priceList: "Price list", retail: "Retail prices", wholesale: "Wholesale prices",
@@ -162,7 +167,7 @@ const so = {
     usernameTaken: "Magacan isticmaale horay ayaa loo qaatay.", insufficientStock: "{product}: kaliya {available} ayaa kaydka ku jira.",
     alreadyCancelled: "Tan horay ayaa loo joojiyay.", hasPayments: "Tani lacag-bixin ayay leedahay lamana joojin karo.",
     notPayable: "Tani lacag ma qaadan karto.", invalidLogo: "Astaantu waa inay noqotaa PNG, JPG ama WEBP.", logoTooLarge: "Astaantu waa inay ka yaraataa 2 MB.",
-    invalidImage: "Sawirku waa inuu noqdaa PNG, JPG ama WEBP.", imageTooLarge: "Sawirku waa inuu ka yaraadaa 2 MB.",
+    invalidImage: "Sawirku waa inuu noqdaa PNG, JPG ama WEBP.", changeNeedsCash: "Baaqiga waxaa laga bixin karaa lacag caddaan ah oo keliya.", imageTooLarge: "Sawirku waa inuu ka yaraadaa 2 MB.",
     importErrors: "Safaf qaar ayaa khalad leh. Sax oo isku day mar kale.", serverOffline: "Lama gaari karo server-ka.", failed: "Wax baa khaldamay. Isku day mar kale.",
     validation: "Fadlan hubi goobaha la calaamadeeyay.", notFound: "Lama helin.", mismatch: "Furayaasha sirta ah isma mid aha."
   },
@@ -201,7 +206,12 @@ const so = {
     scan: "Akhri baarkoodka", scanTitle: "Ku akhri kamarada", scanHelp: "Baarkoodka alaabta hor dhig kamarada.",
     scanNoCamera: "Kamarada lama furi karo. Oggolow kamarada, ama isticmaal qalabka baarkoodka ama qor koodka.",
     scanned: "Alaabta la akhriyay", added: "Waa lagu daray gaadhiga", inCart: "Gaadhiga: {qty}", addAnother: "Mid kale ku dar",
-    scanEmpty: "Akhri ama dooro alaab si aad halkan ugu aragto sawirkeeda, qiimaha iyo faahfaahinteeda.", noPhoto: "Sawir ma leh"
+    scanEmpty: "Akhri ama dooro alaab si aad halkan ugu aragto sawirkeeda, qiimaha iyo faahfaahinteeda.", noPhoto: "Sawir ma leh",
+    clearItem: "Tirtir shayga la doortay", payment: "Lacag bixinta", unitsAt: "{qty} xabbo oo {price} ah", qtyLabel: "TIRADA: {qty}",
+    payTitle: "Lacag bixinta", addMethod: "Guji hab lacag bixin si aad ugu darto:", applied: "Lacagaha la bixiyay", noApplied: "Weli lacag lama darin. Guji hab lacag bixin bidixda.",
+    totalDue: "Wadarta la bixinayo", totalPaid: "Wadarta la bixiyay", remaining: "Haraaga", changeDue: "Baaqiga la celinayo", confirm: "Xaqiiji iibka",
+    restOnCredit: "Haraagu waa deyn — {name} ayaa bixin doona mar dambe.", needCustomer: "Kor ka dooro macmiil si haraagu deyn u noqdo.",
+    discountLocked: "Kaliya milkiilayaasha iyo maamulayaasha ayaa dhimis bixin kara.", exact: "Sax", walkInDefault: "Macmiil socod ah (caadi)", outRibbon: "Waa dhammaaday"
   },
   invoices: {
     title: "Qaansheegyada iibka", new: "Qaansheeg cusub", priceList: "Liiska qiimaha", retail: "Qiimaha tafaariiqda", wholesale: "Qiimaha jumlada",
