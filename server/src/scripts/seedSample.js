@@ -38,7 +38,7 @@ async function resetSample() {
   await withTx(async (conn) => {
     for (const t of ["return_items", "returns", "sale_items", "invoice_items", "purchase_items", "customer_payments", "supplier_payments",
       "cash_transactions", "stock_movements", "sales", "invoices", "purchases", "expenses", "other_income", "products", "categories", "brands",
-      "customers", "suppliers", "cash_accounts", "bank_accounts", "notifications", "trial_records", "business_settings", "business_user_roles", "audit_logs", "users"]) {
+      "customers", "suppliers", "payment_methods", "cash_accounts", "bank_accounts", "notifications", "trial_records", "business_settings", "business_user_roles", "audit_logs", "users"]) {
       await conn.query(`DELETE FROM ${t} WHERE business_id = ?`, [b.id]);
     }
     await conn.query("DELETE FROM businesses WHERE id = ?", [b.id]);

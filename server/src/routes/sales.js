@@ -4,6 +4,7 @@ import { requireAuth, audit } from "../middleware/auth.js";
 import { can, requirePerm } from "../lib/permissions.js";
 import { ah, id, money, quantity, withTx, ensureOwned, badRequest, conflict, num, round2, METHODS, text, optText, range } from "../lib/http.js";
 import { nextNumber, lockProducts, moveStock, moneyMove } from "../lib/ledger.js";
+import { methodForPayment } from "./paymentMethods.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -37,18 +38,28 @@ function readItems(body) {
 }
 
 /*
- * Split payments (POS payment screen): payments = [{ method: cash|mobile_money|bank, bankAccountId?, amount }].
+ * Split payments (POS payment screen): payments = [{ paymentMethodId, amount }]
+ * (a business's own methods, e.g. "E-Dahab (136227)") or [{ method: cash|mobile_money|bank, bankAccountId?, amount }].
  * - More than the total is allowed only when cash covers the change (change is given in cash).
  * - Less than the total leaves the rest on credit, which needs a customer.
  * Returns the money actually kept per payment, the change, and the sale-level method.
  */
-function readSplitPayments(list, total, customerId) {
-  const payments = list.slice(0, 10).map((x) => ({ method: x?.method, bankAccountId: id(x?.bankAccountId), amount: money(x?.amount) }));
-  payments.forEach((x, i) => {
-    if (!METHODS.includes(x.method)) throw badRequest({ [`payments.${i}.method`]: "required" });
-    if (Number.isNaN(x.amount) || x.amount <= 0) throw badRequest({ [`payments.${i}.amount`]: "invalidAmount" });
-    if (x.method === "bank" && !x.bankAccountId) throw badRequest({ [`payments.${i}.bankAccountId`]: "required" });
-  });
+async function readSplitPayments(conn, businessId, list, total, customerId) {
+  const payments = [];
+  for (const [i, x] of list.slice(0, 10).entries()) {
+    const amount = money(x?.amount);
+    if (Number.isNaN(amount) || amount <= 0) throw badRequest({ [`payments.${i}.amount`]: "invalidAmount" });
+    if (x?.paymentMethodId !== undefined && x?.paymentMethodId !== null) {
+      const pm = await methodForPayment(conn, businessId, id(x.paymentMethodId));
+      if (!pm) throw badRequest({ [`payments.${i}.paymentMethodId`]: "required" });
+      payments.push({ method: pm.kind, paymentMethodId: pm.id, account: pm.account, amount });
+      continue;
+    }
+    const method = x?.method;
+    if (!METHODS.includes(method)) throw badRequest({ [`payments.${i}.method`]: "required" });
+    if (method === "bank" && !id(x?.bankAccountId)) throw badRequest({ [`payments.${i}.bankAccountId`]: "required" });
+    payments.push({ method, bankAccountId: id(x?.bankAccountId), amount });
+  }
   const sum = round2(payments.reduce((t, x) => t + x.amount, 0));
   let change = 0;
   if (sum > total) {
@@ -102,7 +113,7 @@ export async function createSale(conn, ctx, body) {
   let paid; let paidMethod; let change = 0;
   let collected = [];
   if (split) {
-    const r = readSplitPayments(body.payments, total, customerId);
+    const r = await readSplitPayments(conn, businessId, body.payments, total, customerId);
     ({ paid, change, method } = r);
     collected = r.kept;
   } else if (method === "credit") {
@@ -134,10 +145,10 @@ export async function createSale(conn, ctx, body) {
   }
   for (const pay of collected) {
     const [p] = await conn.query(
-      `INSERT INTO customer_payments (business_id, customer_id, sale_id, amount, method, paid_at, user_id) VALUES (?, ?, ?, ?, ?, COALESCE(?, UTC_TIMESTAMP()), ?)`,
-      [businessId, customerId, saleId, pay.amount, pay.method, ctx.at || null, userId]
+      `INSERT INTO customer_payments (business_id, customer_id, sale_id, amount, method, payment_method_id, paid_at, user_id) VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, UTC_TIMESTAMP()), ?)`,
+      [businessId, customerId, saleId, pay.amount, pay.method, pay.paymentMethodId || null, ctx.at || null, userId]
     );
-    await moneyMove(conn, { businessId, userId, direction: "in", method: pay.method, bankAccountId: pay.bankAccountId, amount: pay.amount, refType: "customer_payment", refId: p.insertId, description: receiptNo, at: ctx.at || null });
+    await moneyMove(conn, { businessId, userId, direction: "in", method: pay.method, bankAccountId: pay.bankAccountId, account: pay.account, amount: pay.amount, refType: "customer_payment", refId: p.insertId, description: receiptNo, at: ctx.at || null });
   }
   await audit(conn, { businessId, userId, action: "sale.created", entity: "sale", entityId: saleId, meta: { total, method } });
   return { id: saleId, receiptNo, total, paid, change };
@@ -172,12 +183,15 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
       WHERE si.sale_id = ? AND si.business_id = ? ORDER BY si.id`, [s.id, bid]);
   const [[cust]] = s.customer_id ? await pool.query("SELECT name, phone FROM customers WHERE id = ? AND business_id = ?", [s.customer_id, bid]) : [[null]];
   const [[cashier]] = await pool.query("SELECT full_name FROM users WHERE id = ? AND business_id = ?", [s.user_id, bid]);
-  const [payments] = await pool.query("SELECT amount, method, paid_at FROM customer_payments WHERE sale_id = ? AND business_id = ? ORDER BY id", [s.id, bid]);
+  const [payments] = await pool.query(
+    `SELECT cp.amount, cp.method, cp.paid_at, pm.name pm_name, pm.number pm_number
+       FROM customer_payments cp LEFT JOIN payment_methods pm ON pm.id = cp.payment_method_id AND pm.business_id = cp.business_id
+      WHERE cp.sale_id = ? AND cp.business_id = ? ORDER BY cp.id`, [s.id, bid]);
   res.json({
     business: req.business,
     sale: { id: s.id, number: s.receipt_no, at: s.sold_at, status: s.status, method: s.payment_method, subtotal: num(s.subtotal), discount: num(s.discount), total: num(s.total), paid: num(s.amount_paid), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
     items: items.map((i) => ({ name: i.name, sku: i.sku, qty: num(i.qty), unitPrice: num(i.unit_price), total: num(i.line_total) })),
-    payments: payments.map((p) => ({ amount: num(p.amount), method: p.method, at: p.paid_at }))
+    payments: payments.map((p) => ({ amount: num(p.amount), method: p.method, label: p.pm_name ? (p.pm_number ? `${p.pm_name} (${p.pm_number})` : p.pm_name) : null, at: p.paid_at }))
   });
 }));
 
@@ -202,17 +216,13 @@ router.post("/:id/cancel", requirePerm("sales.cancel"), ah(async (req, res) => {
       await moveStock(conn, { businessId: bid, userId: uid, product: products.get(i.product_id), qtyChange: num(i.qty), type: "return_in", refType: "sale", refId: s.id, note: reason });
     }
     // Refund each payment through the same method and account (negative payment keeps "money received" accurate).
-    const [payments] = await conn.query("SELECT id, method, amount FROM customer_payments WHERE sale_id = ? AND business_id = ? AND amount > 0 ORDER BY id", [s.id, bid]);
+    const [payments] = await conn.query("SELECT id, method, payment_method_id, amount FROM customer_payments WHERE sale_id = ? AND business_id = ? AND amount > 0 ORDER BY id", [s.id, bid]);
     for (const p of payments) {
       const amount = round2(num(p.amount));
-      await conn.query("INSERT INTO customer_payments (business_id, customer_id, sale_id, amount, method, reference, paid_at, user_id) VALUES (?, ?, ?, ?, ?, 'REFUND', UTC_TIMESTAMP(), ?)",
-        [bid, s.customer_id, s.id, -amount, p.method, uid]);
-      let bankAccountId = null;
-      if (p.method === "bank") {
-        const [[acc]] = await conn.query("SELECT bank_account_id FROM cash_transactions WHERE business_id = ? AND ref_type = 'customer_payment' AND ref_id = ? LIMIT 1", [bid, p.id]);
-        bankAccountId = acc?.bank_account_id || null;
-      }
-      await moneyMove(conn, { businessId: bid, userId: uid, direction: "out", method: p.method, bankAccountId, amount, refType: "refund", refId: ret.insertId, description: `${s.receipt_no} refund` });
+      await conn.query("INSERT INTO customer_payments (business_id, customer_id, sale_id, amount, method, payment_method_id, reference, paid_at, user_id) VALUES (?, ?, ?, ?, ?, ?, 'REFUND', UTC_TIMESTAMP(), ?)",
+        [bid, s.customer_id, s.id, -amount, p.method, p.payment_method_id, uid]);
+      const [[orig]] = await conn.query("SELECT cash_account_id, bank_account_id FROM cash_transactions WHERE business_id = ? AND ref_type = 'customer_payment' AND ref_id = ? LIMIT 1", [bid, p.id]);
+      await moneyMove(conn, { businessId: bid, userId: uid, direction: "out", method: p.method, account: orig || undefined, amount, refType: "refund", refId: ret.insertId, description: `${s.receipt_no} refund` });
     }
     await conn.query("UPDATE sales SET status = 'cancelled', amount_paid = 0 WHERE id = ? AND business_id = ?", [s.id, bid]);
     await audit(conn, { businessId: bid, userId: uid, action: "sale.cancelled", entity: "sale", entityId: s.id, meta: { reason, refunded: num(s.amount_paid) }, ip: req.ip });

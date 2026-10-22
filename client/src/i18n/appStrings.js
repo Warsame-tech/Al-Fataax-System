@@ -71,7 +71,16 @@ const en = {
     totalDue: "Total due", totalPaid: "Total paid", remaining: "Remaining", changeDue: "Change to give", confirm: "Confirm order",
     restOnCredit: "The rest stays on credit — {name} pays later.", needCustomer: "Choose a customer above to leave the rest on credit.",
     discountLocked: "Only owners and managers can give discounts.", exact: "Exact", walkInDefault: "Walk-in customer (default)", outRibbon: "Out of stock",
-    codePh: "Scan or type barcode, then Enter", filterPh: "Search products…", newProduct: "New product", itemsCount: "{n} items"
+    codePh: "Scan or type barcode, then Enter", filterPh: "Search products…", newProduct: "New product", itemsCount: "{n} items",
+    discPercent: "Discount in percent — click to switch to an amount", discAmount: "Discount as an amount — click to switch to percent", locked: "Locked",
+    noMethods: "No payment methods are switched on. The owner can add them in Settings → Payment methods."
+  },
+  payMethods: {
+    title: "Payment methods", help: "These appear on the POS payment screen. Add the wallets and banks your business uses, and switch off the ones you don't.",
+    add: "Add payment method", edit: "Edit payment method", name: "Name", number: "Number (optional)", numberHint: "Shown in brackets, e.g. E-Dahab (136227).",
+    kind: "Type", kindHint: "Cash payments can give change. Each method gets its own balance in Cash & bank.", kindLocked: "The type can't be changed after the method is created.",
+    kinds: { cash: "Cash", mobile_money: "Mobile money", bank: "Bank" }, showOnPos: "Show on the payment screen",
+    on: "On", off: "Off", up: "Move up", down: "Move down", preview: "Shows on the payment screen as"
   },
   invoices: {
     title: "Sales invoices", new: "New invoice", priceList: "Price list", retail: "Retail prices", wholesale: "Wholesale prices",
@@ -213,7 +222,16 @@ const so = {
     totalDue: "Wadarta la bixinayo", totalPaid: "Wadarta la bixiyay", remaining: "Haraaga", changeDue: "Baaqiga la celinayo", confirm: "Xaqiiji iibka",
     restOnCredit: "Haraagu waa deyn — {name} ayaa bixin doona mar dambe.", needCustomer: "Kor ka dooro macmiil si haraagu deyn u noqdo.",
     discountLocked: "Kaliya milkiilayaasha iyo maamulayaasha ayaa dhimis bixin kara.", exact: "Sax", walkInDefault: "Macmiil socod ah (caadi)", outRibbon: "Waa dhammaaday",
-    codePh: "Akhri ama qor baarkoodka, kadib Enter", filterPh: "Raadi alaab…", newProduct: "Alaab cusub", itemsCount: "{n} shay"
+    codePh: "Akhri ama qor baarkoodka, kadib Enter", filterPh: "Raadi alaab…", newProduct: "Alaab cusub", itemsCount: "{n} shay",
+    discPercent: "Dhimis boqolley ah — guji si aad ugu beddesho qaddar", discAmount: "Dhimis qaddar ah — guji si aad ugu beddesho boqolley", locked: "Xiran",
+    noMethods: "Ma jiro hab lacag bixin oo shidan. Milkiiluhu wuxuu ku dari karaa Dejinta → Hababka lacag bixinta."
+  },
+  payMethods: {
+    title: "Hababka lacag bixinta", help: "Kuwani waxay ka muuqdaan shaashadda lacag bixinta ee POS. Ku dar boorsooyinka iyo bangiyada ganacsigaagu isticmaalo, oo dami kuwa aadan isticmaalin.",
+    add: "Ku dar hab lacag bixin", edit: "Wax ka beddel habka lacag bixinta", name: "Magaca", number: "Lambarka (ikhtiyaari)", numberHint: "Wuxuu ka muuqdaa qaansooyinka, tusaale E-Dahab (136227).",
+    kind: "Nooca", kindHint: "Lacagta caddaanka ah ayaa baaqi bixin karta. Hab kastaa wuxuu leeyahay haraag gaar ah oo ku jira Lacagta & bangiga.", kindLocked: "Nooca lama beddeli karo marka habka la sameeyo kadib.",
+    kinds: { cash: "Lacag caddaan", mobile_money: "Lacag mobile", bank: "Bangi" }, showOnPos: "Ka muuji shaashadda lacag bixinta",
+    on: "Shidan", off: "Dansan", up: "Kor u qaad", down: "Hoos u dhig", preview: "Shaashadda lacag bixinta waxay u muujinaysaa"
   },
   invoices: {
     title: "Qaansheegyada iibka", new: "Qaansheeg cusub", priceList: "Liiska qiimaha", retail: "Qiimaha tafaariiqda", wholesale: "Qiimaha jumlada",

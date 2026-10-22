@@ -54,7 +54,7 @@ export default function Receipt() {
           <div><dt>{t("ui.common.subtotal")}</dt><dd><Money value={s.subtotal} /></dd></div>
           {s.discount > 0 && <div><dt>{t("ui.common.discount")}</dt><dd>− <Money value={s.discount} /></dd></div>}
           <div className="is-total"><dt>{t("ui.common.total")}</dt><dd><Money value={s.total} /></dd></div>
-          {payments.filter((p) => p.amount > 0).map((p, k) => <div key={k}><dt>{t(`ui.methods.${p.method}`)}</dt><dd><Money value={p.amount} /></dd></div>)}
+          {payments.filter((p) => p.amount > 0).map((p, k) => <div key={k}><dt>{p.label || t(`ui.methods.${p.method}`)}</dt><dd><Money value={p.amount} /></dd></div>)}
           {s.balance > 0 && s.status === "completed" && <div className="is-balance"><dt>{t("ui.common.balance")}</dt><dd><Money value={s.balance} /></dd></div>}
         </dl>
         <p className="receipt__thanks">{t("ui.pos.thankYou")}</p>

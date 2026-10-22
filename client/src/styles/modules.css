@@ -596,3 +596,52 @@
 .app-shell .kpi { padding: 14px; }
 .app-shell .kpi__value { margin-top: 8px; font-size: clamp(1.15rem, 1.6vw, 1.4rem); }
 .app-shell .dash-card { padding: 14px; }
+
+/* ---------- payment screen: discount box (number + % / $ switch) and plain method list ---------- */
+.disc-box { display: inline-flex; align-items: stretch; overflow: hidden; border: 2px solid var(--navy); border-radius: 10px; background: #fff; }
+.disc-box input { width: 70px; min-height: 34px; padding: 4px 8px; border: 0; font: inherit; font-size: .95rem; }
+.disc-box input:focus { outline: none; }
+.disc-box button {
+  display: grid; place-items: center; min-width: 36px; border: 0; background: var(--navy); color: #fff; cursor: pointer;
+  font: inherit; font-weight: 700;
+}
+.disc-box button .icon { width: 16px; height: 16px; }
+.disc-box.is-locked { border-color: #dfe3ee; opacity: .7; }
+.disc-box.is-locked button { background: #b8bdd0; cursor: default; }
+.paybox__lock { padding: 3px 8px; border: 1px solid #dfe3ee; border-radius: 6px; background: #fff; }
+.paybox__methods button { min-height: 46px; font-size: .95rem; }
+.paybox__methods button span { flex: 1; }
+
+/* ---------- Settings → Payment methods ---------- */
+.pm-panel { display: grid; gap: 12px; }
+.pm-panel__head { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.pm-panel__head .panel-card__title { margin-bottom: 4px; }
+.pm-list { display: grid; gap: 8px; }
+.pm-list li { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid #e8ebf3; border-radius: 12px; background: #fff; }
+.pm-list li.is-off { background: #f7f8fc; }
+.pm-list li.is-off .pm-list__text strong { color: var(--muted); }
+.pm-list__icon { display: grid; place-items: center; flex: none; width: 38px; height: 38px; border-radius: 10px; }
+.pm-list__icon .icon { width: 18px; height: 18px; }
+.pm-list__icon--cash { background: #e3f6ec; color: #11683f; }
+.pm-list__icon--mobile_money { background: #fff3ec; color: var(--orange-700); }
+.pm-list__icon--bank { background: var(--blue-50); color: var(--blue); }
+.pm-list__text { flex: 1; min-width: 0; display: grid; }
+.pm-list__text strong { font-size: .95rem; color: var(--navy); }
+.pm-list__text small { color: var(--muted); font-size: .8rem; }
+.pm-list__actions { display: flex; align-items: center; gap: 6px; }
+.pm-switch {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 0 10px 0 4px; border: 1px solid #dfe3ee; border-radius: 999px;
+  background: #fff; cursor: pointer; font: inherit; font-size: .8rem; font-weight: 600; color: var(--muted);
+}
+.pm-switch span { position: relative; width: 34px; height: 20px; border-radius: 999px; background: #d5d9e6; transition: background-color .2s; }
+.pm-switch span::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); }
+.pm-switch.is-on { color: #11683f; border-color: #b7e4cb; }
+.pm-switch.is-on span { background: #1f9d61; }
+.pm-switch.is-on span::after { transform: translateX(14px); }
+.pm-preview { display: grid; gap: 2px; padding: 10px 12px; border-radius: 10px; background: var(--soft); }
+.pm-preview small { color: var(--muted); font-size: .78rem; }
+.pm-preview strong { color: var(--navy); }
+@media (max-width: 640px) {
+  .pm-list li { flex-wrap: wrap; }
+  .pm-list__actions { width: 100%; justify-content: flex-end; }
+}

@@ -244,26 +244,24 @@ function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
   const can = usePerm();
   const m = useMoney();
   const errText = useErrorText();
-  const banks = useApi("/api/accounts/banks");
+  const methodsApi = useApi("/api/payment-methods");   // the business's own methods (Settings → Payment methods)
   const sub = useSubmit();
   const [discount, setDiscount] = useState("");
-  const [payments, setPayments] = useState([]);    // [{ key, method, bankAccountId, label, amount }]
+  const [discMode, setDiscMode] = useState("percent"); // "percent" | "amount"
+  const [payments, setPayments] = useState([]);    // [{ key, paymentMethodId, kind, label, amount }]
 
   const r2 = (v) => Math.round(v * 100) / 100;
-  const disc = Math.min(Math.max(Number(discount) || 0, 0), subtotal);
+  const discValue = Math.max(Number(discount) || 0, 0);
+  const disc = discMode === "percent" ? r2(subtotal * Math.min(discValue, 100) / 100) : Math.min(discValue, subtotal);
   const total = r2(subtotal - disc);
   const paid = r2(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0));
   const remaining = r2(total - paid);
-  const cashPaid = r2(payments.filter((p) => p.method === "cash").reduce((s, p) => s + (Number(p.amount) || 0), 0));
+  const cashPaid = r2(payments.filter((p) => p.kind === "cash").reduce((s, p) => s + (Number(p.amount) || 0), 0));
   const change = remaining < 0 ? -remaining : 0;
   const changeOk = change === 0 || cashPaid >= change;
   const canConfirm = cart.length > 0 && changeOk && (remaining <= 0 || customer) && !sub.busy;
 
-  const METHODS = [
-    { key: "cash", method: "cash", label: t("ui.methods.cash"), icon: "wallet" },
-    { key: "mobile_money", method: "mobile_money", label: t("ui.methods.mobile_money"), icon: "smartphone" },
-    ...(banks.data?.banks || []).map((b) => ({ key: `bank-${b.id}`, method: "bank", bankAccountId: b.id, label: b.name, icon: "landmark" }))
-  ];
+  const METHODS = (methodsApi.data?.methods || []).map((pm) => ({ key: `pm-${pm.id}`, paymentMethodId: pm.id, kind: pm.kind, label: pm.label }));
 
   const addPayment = (mm) => setPayments((list) => {
     const due = r2(total - list.reduce((s, p) => s + (Number(p.amount) || 0), 0));
@@ -279,7 +277,7 @@ function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
       items: cart.map((l) => ({ productId: l.product.id, qty: l.qty })),
       customerId: customer?.id || null,
       discount: disc || 0,
-      payments: payments.filter((p) => Number(p.amount) > 0).map((p) => ({ method: p.method, bankAccountId: p.bankAccountId || null, amount: Number(p.amount) }))
+      payments: payments.filter((p) => Number(p.amount) > 0).map((p) => ({ paymentMethodId: p.paymentMethodId, amount: Number(p.amount) }))
     };
     const result = await sub.run(() => apiRequest("/api/sales", { method: "POST", body }));
     if (result) onDone(result);
@@ -294,9 +292,15 @@ function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
             <div className="paybox__disc">
               <dt>{t("ui.common.discount")}</dt>
               <dd>
-                {can("sales.discount") ? (
-                  <input className="input input--sm" type="number" min="0" step="0.01" value={discount} onChange={(e) => setDiscount(e.target.value)} aria-label={t("ui.common.discount")} />
-                ) : <span className="paybox__lock" title={t("ui.pos.discountLocked")}><Icon name="lock" />{t("ui.pos.discountLocked")}</span>}
+                <span className={"disc-box" + (can("sales.discount") ? "" : " is-locked")}>
+                  <input type="number" min="0" max={discMode === "percent" ? 100 : undefined} step={discMode === "percent" ? "1" : "0.01"} value={discount}
+                    disabled={!can("sales.discount")} onChange={(e) => setDiscount(e.target.value)} aria-label={t("ui.common.discount")} />
+                  <button type="button" disabled={!can("sales.discount")} onClick={() => setDiscMode((x) => (x === "percent" ? "amount" : "percent"))}
+                    title={t(discMode === "percent" ? "ui.pos.discPercent" : "ui.pos.discAmount")}>
+                    {discMode === "percent" ? <Icon name="percent" /> : "$"}
+                  </button>
+                </span>
+                {!can("sales.discount") && <span className="paybox__lock" title={t("ui.pos.discountLocked")}><Icon name="lock" />{t("ui.pos.locked")}</span>}
                 <strong className="paybox__disc-amt">{disc > 0 ? `− ${m(disc)}` : m(0)}</strong>
               </dd>
             </div>
@@ -311,10 +315,9 @@ function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
           <p className="paybox__label">{t("ui.pos.addMethod")}</p>
           <div className="paybox__methods">
             {METHODS.map((mm) => (
-              <button key={mm.key} type="button" onClick={() => addPayment(mm)}>
-                <Icon name={mm.icon} /><span>{mm.label}</span><Icon name="plus" className="paybox__plus" />
-              </button>
+              <button key={mm.key} type="button" onClick={() => addPayment(mm)}><span>{mm.label}</span></button>
             ))}
+            {methodsApi.data && METHODS.length === 0 && <p className="dash-empty">{t("ui.pos.noMethods")}</p>}
           </div>
         </div>
 
@@ -324,7 +327,7 @@ function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
             <ul className="paybox__applied">
               {payments.map((p) => (
                 <li key={p.key}>
-                  <span className="paybox__applied-name"><Icon name={p.icon} />{p.label}</span>
+                  <span className="paybox__applied-name">{p.label}</span>
                   <input className="input input--sm" type="number" min="0" step="0.01" value={p.amount} onChange={(e) => setAmount(p.key, e.target.value)} aria-label={p.label} />
                   <button type="button" className="icon-btn" onClick={() => remove(p.key)} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
                 </li>

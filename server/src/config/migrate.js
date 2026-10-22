@@ -1,15 +1,47 @@
 /*
  * Small, idempotent schema upgrades for databases created by an older schema.sql.
  * Runs at server start; each step checks information_schema first, so it is safe
- * on MySQL and MariaDB and does nothing when the column already exists.
+ * on MySQL and MariaDB and does nothing when the table / column already exists.
  */
 import { pool } from "./db.js";
 
+const TABLES = [
+  {
+    table: "payment_methods",
+    ddl: `CREATE TABLE IF NOT EXISTS payment_methods (
+      id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id     INT UNSIGNED NOT NULL,
+      name            VARCHAR(80)  NOT NULL,
+      number          VARCHAR(60)  NULL,
+      kind            ENUM('cash','mobile_money','bank') NOT NULL,
+      cash_account_id INT UNSIGNED NULL,
+      bank_account_id INT UNSIGNED NULL,
+      is_active       TINYINT(1) NOT NULL DEFAULT 1,
+      sort_order      INT NOT NULL DEFAULT 0,
+      created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_pm_business (business_id, sort_order),
+      CONSTRAINT fk_pm_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+      CONSTRAINT fk_pm_cash     FOREIGN KEY (cash_account_id) REFERENCES cash_accounts(id),
+      CONSTRAINT fk_pm_bank     FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id)
+    ) ENGINE=InnoDB`
+  }
+];
+
 const COLUMNS = [
-  { table: "products", column: "image_path", ddl: "ALTER TABLE products ADD COLUMN image_path VARCHAR(255) NULL AFTER barcode" }
+  { table: "products", column: "image_path", ddl: "ALTER TABLE products ADD COLUMN image_path VARCHAR(255) NULL AFTER barcode" },
+  { table: "customer_payments", column: "payment_method_id", ddl: "ALTER TABLE customer_payments ADD COLUMN payment_method_id INT UNSIGNED NULL AFTER method" }
 ];
 
 export async function migrate() {
+  for (const t of TABLES) {
+    const [[row]] = await pool.query(
+      "SELECT COUNT(*) n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", [t.table]
+    );
+    if (!row.n) {
+      await pool.query(t.ddl);
+      console.log(`Database upgraded: created ${t.table}`);
+    }
+  }
   for (const c of COLUMNS) {
     const [[row]] = await pool.query(
       "SELECT COUNT(*) n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?",

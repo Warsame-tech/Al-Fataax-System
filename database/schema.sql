@@ -231,6 +231,25 @@ CREATE TABLE IF NOT EXISTS cash_transactions (
   CONSTRAINT fk_ctx_bank     FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id)
 ) ENGINE=InnoDB;
 
+-- POS payment methods set up by each business (Settings → Payment methods),
+-- e.g. "E-Dahab (136227)". Each pays into its own cash or bank account.
+CREATE TABLE IF NOT EXISTS payment_methods (
+  id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id     INT UNSIGNED NOT NULL,
+  name            VARCHAR(80)  NOT NULL,
+  number          VARCHAR(60)  NULL,
+  kind            ENUM('cash','mobile_money','bank') NOT NULL,
+  cash_account_id INT UNSIGNED NULL,
+  bank_account_id INT UNSIGNED NULL,
+  is_active       TINYINT(1) NOT NULL DEFAULT 1,
+  sort_order      INT NOT NULL DEFAULT 0,
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_pm_business (business_id, sort_order),
+  CONSTRAINT fk_pm_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+  CONSTRAINT fk_pm_cash     FOREIGN KEY (cash_account_id) REFERENCES cash_accounts(id),
+  CONSTRAINT fk_pm_bank     FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id)
+) ENGINE=InnoDB;
+
 -- -----------------------------------------------------------------------------
 -- Retail sales (POS)
 -- -----------------------------------------------------------------------------
@@ -323,6 +342,7 @@ CREATE TABLE IF NOT EXISTS customer_payments (
   sale_id         BIGINT UNSIGNED NULL,
   amount          DECIMAL(14,2) NOT NULL,
   method          ENUM('cash','mobile_money','bank') NOT NULL,
+  payment_method_id INT UNSIGNED NULL,               -- business payment method (E-Dahab, ...)
   cash_account_id INT UNSIGNED NULL,
   bank_account_id INT UNSIGNED NULL,
   reference       VARCHAR(80) NULL,

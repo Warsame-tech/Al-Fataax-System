@@ -191,7 +191,100 @@ export function Settings() {
         <FormError error={sub.formError} /><Saved show={saved} />
         {can("settings.edit") && <div className="form-actions"><button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.common.save")}</button></div>}
       </form>
+      {can("settings.edit") && <PaymentMethods />}
     </div>
+  );
+}
+
+/*
+ * Payment methods shown on the POS payment screen (e.g. "E-Dahab (136227)", "Salaam Bank").
+ * The owner adds, renames, re-orders and switches them on / off. Each new method gets its
+ * own money account, so its balance appears separately in Cash & bank.
+ */
+const PM_KINDS = ["cash", "mobile_money", "bank"];
+const PM_ICON = { cash: "wallet", mobile_money: "smartphone", bank: "landmark" };
+
+function PaymentMethods() {
+  const { t } = useLanguage();
+  const list = useApi("/api/payment-methods?all=1");
+  const [editing, setEditing] = useState(null);   // method or {} for a new one
+  const [busyId, setBusyId] = useState(null);
+  const methods = list.data?.methods || [];
+
+  const move = async (m, dir) => {
+    setBusyId(m.id);
+    try { await apiRequest(`/api/payment-methods/${m.id}/move`, { method: "PATCH", body: { dir } }); list.reload(); } finally { setBusyId(null); }
+  };
+  const toggle = async (m) => {
+    setBusyId(m.id);
+    try { await apiRequest(`/api/payment-methods/${m.id}`, { method: "PUT", body: { name: m.name, number: m.number || "", isActive: !m.isActive } }); list.reload(); } finally { setBusyId(null); }
+  };
+
+  return (
+    <section className="panel-card pm-panel">
+      <div className="pm-panel__head">
+        <div>
+          <h2 className="panel-card__title"><Icon name="credit-card" />{t("ui.payMethods.title")}</h2>
+          <p className="muted">{t("ui.payMethods.help")}</p>
+        </div>
+        <button type="button" className="btn btn--primary" onClick={() => setEditing({})}><Icon name="plus" /><span>{t("ui.payMethods.add")}</span></button>
+      </div>
+      {list.loading && !list.data ? <Loading /> : (
+        <ul className="pm-list">
+          {methods.map((m, i) => (
+            <li key={m.id} className={m.isActive ? "" : "is-off"}>
+              <span className={`pm-list__icon pm-list__icon--${m.kind}`}><Icon name={PM_ICON[m.kind]} /></span>
+              <div className="pm-list__text">
+                <strong>{m.label}</strong>
+                <small>{t(`ui.payMethods.kinds.${m.kind}`)}{!m.isActive && ` · ${t("ui.payMethods.off")}`}</small>
+              </div>
+              <div className="pm-list__actions">
+                <button type="button" className="icon-btn" disabled={i === 0 || busyId === m.id} onClick={() => move(m, "up")} aria-label={t("ui.payMethods.up")}><Icon name="chevron-up" /></button>
+                <button type="button" className="icon-btn" disabled={i === methods.length - 1 || busyId === m.id} onClick={() => move(m, "down")} aria-label={t("ui.payMethods.down")}><Icon name="chevron-down" /></button>
+                <button type="button" className={"pm-switch" + (m.isActive ? " is-on" : "")} role="switch" aria-checked={m.isActive} disabled={busyId === m.id} onClick={() => toggle(m)}>
+                  <span />{m.isActive ? t("ui.payMethods.on") : t("ui.payMethods.off")}
+                </button>
+                <button type="button" className="btn btn--outline btn--sm" onClick={() => setEditing(m)}>{t("ui.common.edit")}</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+      {editing && <PaymentMethodForm method={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); list.reload(); }} />}
+    </section>
+  );
+}
+
+function PaymentMethodForm({ method, onClose, onSaved }) {
+  const { t } = useLanguage();
+  const isNew = !method.id;
+  const [f, setF] = useState({ name: method.name || "", number: method.number || "", kind: method.kind || "mobile_money", isActive: method.isActive ?? true });
+  const sub = useSubmit();
+  const save = async (e) => {
+    e.preventDefault();
+    const ok = await sub.run(() => apiRequest(isNew ? "/api/payment-methods" : `/api/payment-methods/${method.id}`, { method: isNew ? "POST" : "PUT", body: f }));
+    if (ok) onSaved();
+  };
+  const preview = f.number.trim() ? `${f.name || "…"} (${f.number.trim()})` : (f.name || "…");
+  return (
+    <Modal title={t(isNew ? "ui.payMethods.add" : "ui.payMethods.edit")} onClose={onClose}>
+      <form onSubmit={save} className="form-grid">
+        <Field label={t("ui.payMethods.name")} error={sub.fieldErrors.name}><input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder="E-Dahab" autoFocus /></Field>
+        <Field label={t("ui.payMethods.number")} hint={t("ui.payMethods.numberHint")}><input className="input" value={f.number} onChange={(e) => setF({ ...f, number: e.target.value })} placeholder="136227" /></Field>
+        <Field label={t("ui.payMethods.kind")} error={sub.fieldErrors.kind} hint={isNew ? t("ui.payMethods.kindHint") : t("ui.payMethods.kindLocked")}>
+          <div className="seg">
+            {PM_KINDS.map((k) => <button key={k} type="button" disabled={!isNew} aria-pressed={f.kind === k} onClick={() => setF({ ...f, kind: k })}>{t(`ui.payMethods.kinds.${k}`)}</button>)}
+          </div>
+        </Field>
+        <label className="checkbox"><input type="checkbox" checked={f.isActive} onChange={(e) => setF({ ...f, isActive: e.target.checked })} /><span>{t("ui.payMethods.showOnPos")}</span></label>
+        <p className="pm-preview"><small>{t("ui.payMethods.preview")}</small><strong>{preview}</strong></p>
+        <FormError error={sub.formError} />
+        <div className="form-actions">
+          <button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button>
+          <button type="submit" className="btn btn--primary" disabled={sub.busy}>{t(sub.busy ? "ui.common.saving" : "ui.common.save")}</button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
