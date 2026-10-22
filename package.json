@@ -3,11 +3,15 @@
   "private": true,
   "version": "0.1.0",
   "description": "Faatix business system — React frontend, Node.js API, MySQL database.",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "install:all": "npm install && npm install --prefix server && npm install --prefix client",
     "db:init": "npm run db:init --prefix server",
     "dev": "concurrently -n api,web -c green,cyan \"npm run dev --prefix server\" \"npm run dev --prefix client\"",
-    "build": "npm run build --prefix client",
+    "build": "npm ci --prefix server --omit=dev && npm ci --prefix client --include=dev && npm run build --prefix client",
+    "build:client": "npm run build --prefix client",
     "start": "npm start --prefix server",
     "db:seed": "npm run db:seed --prefix server"
   },

@@ -54,9 +54,31 @@ Check the API and database: http://localhost:5000/api/health
 ## Production build
 
 ```
-npm run build     # builds client/dist
+npm run build     # installs server + client packages, builds client/dist
 npm start         # Node serves the API and the built site on http://localhost:5000
 ```
+
+Locally, `npm run build:client` only rebuilds the website (no reinstall).
+
+## Deploy on Railway
+
+1. **New project → Deploy from GitHub repo** and pick this repository. Railway runs
+   `npm ci`, `npm run build` and `npm start` (from `package.json`) — no extra settings needed.
+2. **Add a MySQL database** to the same project (**+ New → Database → MySQL**).
+3. In the Faatix service open **Variables** and add:
+   - `NODE_ENV` = `production`
+   - `JWT_SECRET` = a long random text (at least 32 characters) — the app refuses to start without it
+   - Database: click **Add Variable Reference** and add `MYSQLHOST`, `MYSQLPORT`, `MYSQLUSER`,
+     `MYSQLPASSWORD`, `MYSQLDATABASE` from the MySQL service (or just `MYSQL_URL`).
+4. **Settings → Networking → Generate Domain** to get the public https address.
+5. Deploy. On the first start the server creates all database tables by itself
+   (log line: `Database set up: created all tables`).
+6. **Uploaded logos and product photos**: add a **Volume** to the Faatix service mounted at
+   `/app/server/uploads`, otherwise uploaded files are lost on every redeploy.
+
+Optional sample data (users from the table below): open a shell inside the running
+service with the Railway CLI (`railway ssh`) and run `npm run db:seed`.
+On a real business server, change the sample passwords or skip the seed.
 
 ## Project structure
 

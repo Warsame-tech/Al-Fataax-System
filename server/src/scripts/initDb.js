@@ -1,22 +1,18 @@
 /*
- * Runs database/schema.sql against MySQL.
+ * Runs database/schema.sql against MySQL (for the database named in DB_NAME / MYSQLDATABASE).
  * Usage (from /server): npm run db:init
+ * The server also does this automatically on start when the tables don't exist yet.
  */
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import mysql from "mysql2/promise";
 import { env } from "../config/env.js";
-
-const schemaPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../database/schema.sql");
-const sql = fs.readFileSync(schemaPath, "utf8");
+import { schemaSql } from "../config/schema.js";
 
 // Connect without selecting a database, since the script creates it.
 const { database, ...connection } = env.db;
 
 try {
   const conn = await mysql.createConnection({ ...connection, multipleStatements: true });
-  await conn.query(sql);
+  await conn.query(schemaSql(database));
   await conn.end();
   console.log(`Database ready: ${database}`);
 } catch (err) {

@@ -3,7 +3,25 @@
  * Runs at server start; each step checks information_schema first, so it is safe
  * on MySQL and MariaDB and does nothing when the table / column already exists.
  */
+import mysql from "mysql2/promise";
 import { pool } from "./db.js";
+import { env } from "./env.js";
+import { schemaSql } from "./schema.js";
+
+/* Brand-new database (e.g. a fresh Railway MySQL): create every table from schema.sql. */
+async function createSchemaIfEmpty() {
+  const [[row]] = await pool.query(
+    "SELECT COUNT(*) n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'businesses'"
+  );
+  if (row.n) return;
+  const conn = await mysql.createConnection({ ...env.db, multipleStatements: true });
+  try {
+    await conn.query(schemaSql(env.db.database));
+    console.log(`Database set up: created all tables in "${env.db.database}"`);
+  } finally {
+    await conn.end();
+  }
+}
 
 const TABLES = [
   {
@@ -33,6 +51,7 @@ const COLUMNS = [
 ];
 
 export async function migrate() {
+  await createSchemaIfEmpty();
   for (const t of TABLES) {
     const [[row]] = await pool.query(
       "SELECT COUNT(*) n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", [t.table]
