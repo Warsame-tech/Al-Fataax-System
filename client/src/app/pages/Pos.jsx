@@ -5,6 +5,7 @@ import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest, fileUrl } from "../../services/api.js";
 import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, FormError, Money, EmptyState, Loading, SearchBox, StatusBadge, DateRange, daysAgo, isoDate, Modal } from "../ui.jsx";
 import { fill, qty, date } from "../format.js";
+import { ProductForm, EMPTY as EMPTY_PRODUCT } from "./Products.jsx";
 
 export default function Pos() {
   const { t } = useLanguage();
@@ -24,93 +25,97 @@ export default function Pos() {
 }
 
 /*
- * Register (POS): cart, totals, number keypad and a big PAYMENT button on the left;
- * search / scan, the scanned-item panel and the product grid on the right.
+ * Register (POS): customer, barcode box, cart lines (− / + / ✕), totals and PAYMENT on the left;
+ * search, scan, "New product" and the product grid on the right.
+ * A compact item card appears for a few seconds after each barcode scan.
  * PAYMENT opens the payment screen (split payments, discount, rest on credit).
  */
+const SCAN_CARD_MS = 6000;
+
 function Register() {
   const { t } = useLanguage();
+  const can = usePerm();
   const m = useMoney();
   const [q, setQ] = useState("");
   const products = useApi(`/api/products?q=${encodeURIComponent(q)}`);
   const customers = useApi("/api/customers");
   const [cart, setCart] = useState([]);
-  const [selected, setSelected] = useState(null);   // highlighted cart line (product id)
-  const [buffer, setBuffer] = useState("");         // digits typed on the keypad for the highlighted line
+  const [code, setCode] = useState("");             // barcode / search box in the cart column
   const [customerId, setCustomerId] = useState("");
   const [notice, setNotice] = useState(null);
-  const [scanned, setScanned] = useState(null);     // last scanned / picked product (details panel)
+  const [scanned, setScanned] = useState(null);     // shown briefly after a scan
   const [camera, setCamera] = useState(false);
+  const [creating, setCreating] = useState(false);  // "New product" form
   const [paying, setPaying] = useState(false);
   const [done, setDone] = useState(null);
-  const searchRef = useRef(null);
+  const codeRef = useRef(null);
+  const scanTimer = useRef(null);
 
-  useEffect(() => { searchRef.current?.focus(); }, []);
+  useEffect(() => { codeRef.current?.focus(); return () => clearTimeout(scanTimer.current); }, []);
 
-  const add = (p) => {
+  const showScanned = (p) => {
+    clearTimeout(scanTimer.current);
     setScanned(p);
-    if (p.stock <= 0) { setNotice(fill(t("ui.errors.insufficientStock"), { product: p.name, available: qty(p.stock) })); return; }
+    scanTimer.current = setTimeout(() => setScanned(null), SCAN_CARD_MS);
+  };
+  const add = (p) => {
+    if (p.stock <= 0) { setNotice(fill(t("ui.errors.insufficientStock"), { product: p.name, available: qty(p.stock) })); return false; }
     setNotice(null);
     setCart((c) => {
       const found = c.find((l) => l.product.id === p.id);
       if (found) return c.map((l) => (l.product.id === p.id ? { ...l, qty: Math.min(l.qty + 1, p.stock) } : l));
       return [...c, { product: p, qty: 1 }];
     });
-    setSelected(p.id);
-    setBuffer("");
+    return true;
   };
-  const setQty = (pid, v) => setCart((c) => c.map((l) => (l.product.id === pid ? { ...l, qty: Math.max(0, Math.min(v, l.product.stock)) } : l)).filter((l) => l.qty > 0));
-  const removeLine = (pid) => {
-    setCart((c) => {
-      const next = c.filter((l) => l.product.id !== pid);
-      setSelected(next.length ? next[next.length - 1].product.id : null);
-      return next;
-    });
-    setBuffer("");
-  };
+  const setQty = (pid, v) => setCart((c) => c.map((l) => (l.product.id === pid ? { ...l, qty: Math.max(0, Math.min(Number(v) || 0, l.product.stock)) } : l)).filter((l) => l.qty > 0));
+  const removeLine = (pid) => setCart((c) => c.filter((l) => l.product.id !== pid));
 
-  /* Keypad: digits replace the highlighted line's quantity; ⌫ deletes the last digit. */
-  const press = (key) => {
-    if (!selected) return;
-    let next = buffer;
-    if (key === "back") next = buffer.slice(0, -1);
-    else if (key === ".") next = buffer.includes(".") ? buffer : (buffer || "0") + ".";
-    else next = buffer + key;
-    setBuffer(next);
-    const n = Number(next);
-    if (next && Number.isFinite(n) && n > 0) setQty(selected, n);
-  };
-
-  /* Barcode / SKU lookup — used by USB scanners (they type the code + Enter) and the camera. */
-  const lookup = async (code) => {
+  /* Barcode / SKU lookup (USB scanner, camera, or typed code); falls back to a single name match. */
+  const lookup = async (value) => {
     try {
-      const { product } = await apiRequest(`/api/products/barcode/${encodeURIComponent(code)}`);
-      add(product);
+      const { product } = await apiRequest(`/api/products/barcode/${encodeURIComponent(value)}`);
+      add(product); showScanned(product);
       return true;
     } catch {
+      try {
+        const { products: found } = await apiRequest(`/api/products?q=${encodeURIComponent(value)}`);
+        if (found.length === 1) { add(found[0]); showScanned(found[0]); return true; }
+      } catch { /* ignore */ }
       return false;
     }
   };
-  const onSearchKey = async (e) => {
-    if (e.key !== "Enter" || !q.trim()) return;
+  const onCodeKey = async (e) => {
+    if (e.key !== "Enter" || !code.trim()) return;
     e.preventDefault();
-    if (await lookup(q.trim())) { setQ(""); return; }
-    const list = products.data?.products || [];
-    if (list.length === 1) { add(list[0]); setQ(""); } else setNotice(t("ui.pos.notFound"));
+    if (await lookup(code.trim())) setCode(""); else setNotice(`${t("ui.pos.notFound")} (${code.trim()})`);
   };
-  const onCameraCode = useCallback(async (code) => {
+  const onCameraCode = useCallback(async (value) => {
     setCamera(false);
-    if (!(await lookup(code))) { setScanned(null); setNotice(`${t("ui.pos.notFound")} (${code})`); }
-    searchRef.current?.focus();
+    if (!(await lookup(value))) setNotice(`${t("ui.pos.notFound")} (${value})`);
+    codeRef.current?.focus();
   }, [t]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  /* After "New product" is saved: reload the grid and put the new product in the cart. */
+  const onProductCreated = async (result, name) => {
+    setCreating(false);
+    products.reload();
+    if (!result?.id) return;
+    try {
+      const { products: found } = await apiRequest(`/api/products?q=${encodeURIComponent(name)}`);
+      const p = found.find((x) => x.id === result.id);
+      if (p) { add(p); showScanned(p); }
+    } catch { /* the grid reload still shows it */ }
+  };
+
   const subtotal = useMemo(() => Math.round(cart.reduce((s, l) => s + l.qty * l.product.sellingPrice, 0) * 100) / 100, [cart]);
+  const itemCount = cart.reduce((s, l) => s + l.qty, 0);
   const customerList = customers.data?.customers || [];
   const customer = customerList.find((c) => String(c.id) === String(customerId)) || null;
 
   const reset = () => {
-    setCart([]); setSelected(null); setBuffer(""); setCustomerId(""); setDone(null); setPaying(false); setScanned(null); setNotice(null);
-    products.reload(); searchRef.current?.focus();
+    setCart([]); setCustomerId(""); setDone(null); setPaying(false); setScanned(null); setNotice(null); setCode("");
+    products.reload(); codeRef.current?.focus();
   };
 
   const list = products.data?.products || [];
@@ -123,57 +128,66 @@ function Register() {
           {customerList.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
 
+        <div className="pos2__code">
+          <Icon name="barcode" />
+          <input ref={codeRef} value={code} onChange={(e) => setCode(e.target.value)} onKeyDown={onCodeKey}
+            placeholder={t("ui.pos.codePh")} aria-label={t("ui.pos.codePh")} autoComplete="off" />
+        </div>
+
         <ul className="pos2__lines" aria-label={t("ui.pos.cart")}>
           {cart.length === 0 && <li className="pos2__empty"><Icon name="cart" /><span>{t("ui.pos.emptyCart")}</span></li>}
           {cart.map((l) => (
-            <li key={l.product.id}>
-              <button type="button" className={"pos2__line" + (selected === l.product.id ? " is-selected" : "")} aria-pressed={selected === l.product.id}
-                onClick={() => { setSelected(l.product.id); setBuffer(""); }}>
+            <li key={l.product.id} className="pos2__line">
+              <div className="pos2__line-top">
                 <span className="pos2__line-name">{l.product.name}</span>
                 <span className="pos2__line-total">{m(l.qty * l.product.sellingPrice)}</span>
+              </div>
+              <div className="pos2__line-bottom">
                 <small>{fill(t("ui.pos.unitsAt"), { qty: qty(l.qty), price: m(l.product.sellingPrice) })}</small>
-              </button>
+                <div className="qty-ctl">
+                  <button type="button" onClick={() => setQty(l.product.id, l.qty - 1)} aria-label="−"><Icon name="minus" /></button>
+                  <input type="number" min="0" step="any" value={l.qty} onChange={(e) => setQty(l.product.id, e.target.value)} aria-label={t("ui.common.qty")} />
+                  <button type="button" onClick={() => setQty(l.product.id, l.qty + 1)} aria-label="+"><Icon name="plus" /></button>
+                  <button type="button" className="qty-ctl__x" onClick={() => removeLine(l.product.id)} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
+                </div>
+              </div>
             </li>
           ))}
         </ul>
 
         <dl className="pos2__totals">
-          <div><dt>{t("ui.common.subtotal")}</dt><dd>{m(subtotal)}</dd></div>
+          <div><dt>{t("ui.common.subtotal")} · {fill(t("ui.pos.itemsCount"), { n: qty(itemCount) })}</dt><dd>{m(subtotal)}</dd></div>
           <div className="is-total"><dt>{t("ui.common.total")}</dt><dd>{m(subtotal)}</dd></div>
         </dl>
-
-        <div className="keypad">
-          <button type="button" className="keypad__clear" disabled={!selected} onClick={() => removeLine(selected)}>
-            <Icon name="x" /><span>{t("ui.pos.clearItem")}</span>
-          </button>
-          {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((k) => (
-            <button key={k} type="button" disabled={!selected} onClick={() => press(k)}>{k}</button>
-          ))}
-          <button type="button" disabled={!selected} onClick={() => press("back")} aria-label="⌫">⌫</button>
-          <button type="button" disabled={!selected} onClick={() => press("0")}>0</button>
-          <button type="button" disabled={!selected} onClick={() => press(".")}>.</button>
-        </div>
 
         <button type="button" className="pos2__pay" disabled={!cart.length} onClick={() => setPaying(true)}>
           <span>{t("ui.pos.payment")}</span><Icon name="arrow-right" />
         </button>
       </aside>
 
-      {/* ---------- right: search, scanner, products ---------- */}
+      {/* ---------- right: search, scan, new product, products ---------- */}
       <section className="pos2__right">
         <div className="pos2__bar">
           <Link className="pos2__home" to="/app" aria-label={t("app.dashboard")}><Icon name="grid" /></Link>
           <div className="pos2__search">
             <Icon name="search-glass" />
-            <input ref={searchRef} type="search" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={onSearchKey} placeholder={t("ui.pos.search")} aria-label={t("ui.pos.search")} />
+            <input type="search" value={q} onChange={(e) => setQ(e.target.value)} placeholder={t("ui.pos.filterPh")} aria-label={t("ui.pos.filterPh")} />
           </div>
           <button type="button" className="pos2__scan" onClick={() => { setNotice(null); setCamera(true); }}>
             <Icon name="barcode" /><span>{t("ui.pos.scan")}</span>
           </button>
+          {can("products.edit") && (
+            <button type="button" className="pos2__new" onClick={() => setCreating(true)}>
+              <Icon name="plus" /><span>{t("ui.pos.newProduct")}</span>
+            </button>
+          )}
         </div>
         {notice && <p className="form-status form-status--error" role="alert">{notice}</p>}
 
-        <ScannedItem product={scanned} inCart={cart.find((l) => l.product.id === scanned?.id)?.qty || 0} onAdd={() => add(scanned)} />
+        {scanned && (
+          <ScannedItem product={scanned} inCart={cart.find((l) => l.product.id === scanned.id)?.qty || 0}
+            onAdd={() => { add(scanned); showScanned(scanned); }} onClose={() => { clearTimeout(scanTimer.current); setScanned(null); }} />
+        )}
 
         {products.loading && !products.data ? <Loading /> : (
           <div className="pos2__grid">
@@ -191,7 +205,9 @@ function Register() {
         )}
       </section>
 
-      {camera && <CameraScanner onCode={onCameraCode} onClose={() => { setCamera(false); searchRef.current?.focus(); }} />}
+      {camera && <CameraScanner onCode={onCameraCode} onClose={() => { setCamera(false); codeRef.current?.focus(); }} />}
+
+      {creating && <ProductForm product={EMPTY_PRODUCT} onClose={() => setCreating(false)} onSaved={(result, fields) => onProductCreated(result, fields.name)} />}
 
       {paying && (
         <PaymentModal cart={cart} subtotal={subtotal} customer={customer}
@@ -332,34 +348,31 @@ function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
   );
 }
 
-/* Details of the last scanned / picked product: photo, prices and stock. */
-function ScannedItem({ product: p, inCart, onAdd }) {
+/* Compact card shown for a few seconds after a scan: photo, name, price, stock, codes, in-cart count. */
+function ScannedItem({ product: p, inCart, onAdd, onClose }) {
   const { t } = useLanguage();
   const m = useMoney();
-  if (!p) return <div className="scan-card scan-card--empty"><Icon name="barcode" /><p>{t("ui.pos.scanEmpty")}</p></div>;
-  const facts = [
-    [t("ui.products.barcode"), p.barcode], [t("ui.products.sku"), p.sku], [t("ui.common.category"), p.category],
-    [t("ui.products.brand"), p.brand], [t("ui.products.unit"), p.unit],
-    [t("ui.products.wholesalePrice"), p.wholesalePrice === null ? null : m(p.wholesalePrice)]
-  ].filter(([, v]) => v !== null && v !== undefined && v !== "");
+  const codes = [p.barcode, p.sku, p.category, p.brand].filter(Boolean).join(" · ");
   return (
-    <article className="scan-card" aria-live="polite">
-      <div className="scan-card__img">
-        {p.imagePath ? <img src={fileUrl(p.imagePath)} alt={p.name} /> : <span><Icon name="package" /><small>{t("ui.pos.noPhoto")}</small></span>}
+    <article className="scan-mini" aria-live="polite">
+      <span className="scan-mini__img">{p.imagePath ? <img src={fileUrl(p.imagePath)} alt="" /> : <Icon name="package" />}</span>
+      <div className="scan-mini__body">
+        <small className="scan-mini__label">{t("ui.pos.scanned")}</small>
+        <strong className="scan-mini__name">{p.name}</strong>
+        {codes && <small className="scan-mini__codes">{codes}</small>}
       </div>
-      <div className="scan-card__body">
-        <small className="scan-card__label">{t("ui.pos.scanned")}</small>
-        <h3>{p.name}</h3>
-        <p className="scan-card__price">{m(p.sellingPrice)}<small> / {p.unit}</small></p>
+      <div className="scan-mini__price">
+        <strong>{m(p.sellingPrice)}</strong>
+        {p.wholesalePrice !== null && <small>{t("ui.products.wholesalePrice")}: {m(p.wholesalePrice)}</small>}
+      </div>
+      <div className="scan-mini__side">
         <span className={"stock-pill" + (p.stock <= 0 ? " is-out" : p.stock <= p.minStock ? " is-low" : "")}>
           {p.stock <= 0 ? t("ui.pos.outOfStock") : fill(t("ui.pos.inStock"), { qty: qty(p.stock) })}
         </span>
-        {facts.length > 0 && <dl className="scan-card__facts">{facts.map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}</dl>}
-        <div className="scan-card__foot">
-          {inCart > 0 && <span className="scan-card__incart"><Icon name="check" />{fill(t("ui.pos.inCart"), { qty: qty(inCart) })}</span>}
-          <button type="button" className="btn btn--outline btn--sm" disabled={p.stock <= inCart} onClick={onAdd}><Icon name="plus" /><span>{t("ui.pos.addAnother")}</span></button>
-        </div>
+        {inCart > 0 && <span className="scan-mini__incart"><Icon name="check" />{fill(t("ui.pos.inCart"), { qty: qty(inCart) })}</span>}
       </div>
+      <button type="button" className="btn btn--outline btn--sm" disabled={p.stock <= inCart} onClick={onAdd}><Icon name="plus" /><span>{t("ui.pos.addAnother")}</span></button>
+      <button type="button" className="icon-btn" onClick={onClose} aria-label={t("ui.common.close")}><Icon name="x" /></button>
     </article>
   );
 }

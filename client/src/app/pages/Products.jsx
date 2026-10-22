@@ -5,7 +5,7 @@ import { apiRequest, fileUrl } from "../../services/api.js";
 import { PageHeader, useApi, usePerm, useSubmit, Modal, Field, FormError, Money, EmptyState, Loading, SearchBox, downloadCsv, parseCsv } from "../ui.jsx";
 import { fill, qty, date } from "../format.js";
 
-const EMPTY = { name: "", sku: "", barcode: "", category: "", brand: "", unit: "pcs", costPrice: "", sellingPrice: "", wholesalePrice: "", minStock: "", openingStock: "", isActive: true };
+export const EMPTY = { name: "", sku: "", barcode: "", category: "", brand: "", unit: "pcs", costPrice: "", sellingPrice: "", wholesalePrice: "", minStock: "", openingStock: "", isActive: true };
 
 export default function Products() {
   const { t, lang } = useLanguage();
@@ -86,7 +86,8 @@ export default function Products() {
   );
 }
 
-function ProductForm({ product, onClose, onSaved }) {
+/* Add / edit product form (also opened from the POS "New product" button). onSaved(result, fields): result is { id } when created. */
+export function ProductForm({ product, onClose, onSaved }) {
   const { t } = useLanguage();
   const isNew = !product.id;
   const [f, setF] = useState(isNew ? EMPTY : {
@@ -114,7 +115,7 @@ function ProductForm({ product, onClose, onSaved }) {
     if (image) fd.append("image", image);
     if (removeImage) fd.append("removeImage", "true");
     const ok = await sub.run(() => apiRequest(isNew ? "/api/products" : `/api/products/${product.id}`, { method: isNew ? "POST" : "PUT", body: fd }));
-    if (ok) onSaved();
+    if (ok) onSaved(ok, f);
   };
   const err = sub.fieldErrors;
   return (

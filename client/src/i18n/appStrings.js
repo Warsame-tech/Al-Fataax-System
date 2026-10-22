@@ -70,7 +70,8 @@ const en = {
     payTitle: "Payment", addMethod: "Click to add a payment method:", applied: "Applied payments", noApplied: "No payments added yet. Click a payment method on the left.",
     totalDue: "Total due", totalPaid: "Total paid", remaining: "Remaining", changeDue: "Change to give", confirm: "Confirm order",
     restOnCredit: "The rest stays on credit — {name} pays later.", needCustomer: "Choose a customer above to leave the rest on credit.",
-    discountLocked: "Only owners and managers can give discounts.", exact: "Exact", walkInDefault: "Walk-in customer (default)", outRibbon: "Out of stock"
+    discountLocked: "Only owners and managers can give discounts.", exact: "Exact", walkInDefault: "Walk-in customer (default)", outRibbon: "Out of stock",
+    codePh: "Scan or type barcode, then Enter", filterPh: "Search products…", newProduct: "New product", itemsCount: "{n} items"
   },
   invoices: {
     title: "Sales invoices", new: "New invoice", priceList: "Price list", retail: "Retail prices", wholesale: "Wholesale prices",
@@ -211,7 +212,8 @@ const so = {
     payTitle: "Lacag bixinta", addMethod: "Guji hab lacag bixin si aad ugu darto:", applied: "Lacagaha la bixiyay", noApplied: "Weli lacag lama darin. Guji hab lacag bixin bidixda.",
     totalDue: "Wadarta la bixinayo", totalPaid: "Wadarta la bixiyay", remaining: "Haraaga", changeDue: "Baaqiga la celinayo", confirm: "Xaqiiji iibka",
     restOnCredit: "Haraagu waa deyn — {name} ayaa bixin doona mar dambe.", needCustomer: "Kor ka dooro macmiil si haraagu deyn u noqdo.",
-    discountLocked: "Kaliya milkiilayaasha iyo maamulayaasha ayaa dhimis bixin kara.", exact: "Sax", walkInDefault: "Macmiil socod ah (caadi)", outRibbon: "Waa dhammaaday"
+    discountLocked: "Kaliya milkiilayaasha iyo maamulayaasha ayaa dhimis bixin kara.", exact: "Sax", walkInDefault: "Macmiil socod ah (caadi)", outRibbon: "Waa dhammaaday",
+    codePh: "Akhri ama qor baarkoodka, kadib Enter", filterPh: "Raadi alaab…", newProduct: "Alaab cusub", itemsCount: "{n} shay"
   },
   invoices: {
     title: "Qaansheegyada iibka", new: "Qaansheeg cusub", priceList: "Liiska qiimaha", retail: "Qiimaha tafaariiqda", wholesale: "Qiimaha jumlada",
