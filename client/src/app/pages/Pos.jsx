@@ -5,7 +5,6 @@ import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest, fileUrl } from "../../services/api.js";
 import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, FormError, Money, EmptyState, Loading, SearchBox, StatusBadge, DateRange, daysAgo, isoDate, Modal } from "../ui.jsx";
 import { fill, qty, date } from "../format.js";
-import { ProductForm, EMPTY as EMPTY_PRODUCT } from "./Products.jsx";
 
 export default function Pos() {
   const { t } = useLanguage();
@@ -26,7 +25,7 @@ export default function Pos() {
 
 /*
  * Register (POS): customer, barcode box, cart lines (− / + / ✕), totals and PAYMENT on the left;
- * search, scan, "New product" and the product grid on the right.
+ * search, scan and the product grid on the right.
  * A compact item card appears for a few seconds after each barcode scan.
  * PAYMENT opens the payment screen (split payments, discount, rest on credit).
  */
@@ -34,7 +33,6 @@ const SCAN_CARD_MS = 6000;
 
 function Register() {
   const { t } = useLanguage();
-  const can = usePerm();
   const m = useMoney();
   const [q, setQ] = useState("");
   const products = useApi(`/api/products?q=${encodeURIComponent(q)}`);
@@ -45,7 +43,6 @@ function Register() {
   const [notice, setNotice] = useState(null);
   const [scanned, setScanned] = useState(null);     // shown briefly after a scan
   const [camera, setCamera] = useState(false);
-  const [creating, setCreating] = useState(false);  // "New product" form
   const [paying, setPaying] = useState(false);
   const [done, setDone] = useState(null);
   const codeRef = useRef(null);
@@ -95,18 +92,6 @@ function Register() {
     if (!(await lookup(value))) setNotice(`${t("ui.pos.notFound")} (${value})`);
     codeRef.current?.focus();
   }, [t]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  /* After "New product" is saved: reload the grid and put the new product in the cart. */
-  const onProductCreated = async (result, name) => {
-    setCreating(false);
-    products.reload();
-    if (!result?.id) return;
-    try {
-      const { products: found } = await apiRequest(`/api/products?q=${encodeURIComponent(name)}`);
-      const p = found.find((x) => x.id === result.id);
-      if (p) { add(p); showScanned(p); }
-    } catch { /* the grid reload still shows it */ }
-  };
 
   const subtotal = useMemo(() => Math.round(cart.reduce((s, l) => s + l.qty * l.product.sellingPrice, 0) * 100) / 100, [cart]);
   const itemCount = cart.reduce((s, l) => s + l.qty, 0);
@@ -165,7 +150,7 @@ function Register() {
         </button>
       </aside>
 
-      {/* ---------- right: search, scan, new product, products ---------- */}
+      {/* ---------- right: search, scan, products ---------- */}
       <section className="pos2__right">
         <div className="pos2__bar">
           <Link className="pos2__home" to="/app" aria-label={t("app.dashboard")}><Icon name="grid" /></Link>
@@ -176,11 +161,6 @@ function Register() {
           <button type="button" className="pos2__scan" onClick={() => { setNotice(null); setCamera(true); }}>
             <Icon name="barcode" /><span>{t("ui.pos.scan")}</span>
           </button>
-          {can("products.edit") && (
-            <button type="button" className="pos2__new" onClick={() => setCreating(true)}>
-              <Icon name="plus" /><span>{t("ui.pos.newProduct")}</span>
-            </button>
-          )}
         </div>
         {notice && <p className="form-status form-status--error" role="alert">{notice}</p>}
 
@@ -206,8 +186,6 @@ function Register() {
       </section>
 
       {camera && <CameraScanner onCode={onCameraCode} onClose={() => { setCamera(false); codeRef.current?.focus(); }} />}
-
-      {creating && <ProductForm product={EMPTY_PRODUCT} onClose={() => setCreating(false)} onSaved={(result, fields) => onProductCreated(result, fields.name)} />}
 
       {paying && (
         <PaymentModal cart={cart} subtotal={subtotal} customer={customer}

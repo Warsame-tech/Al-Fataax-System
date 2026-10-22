@@ -451,15 +451,13 @@
 .pos2__search .icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); width: 17px; height: 17px; color: var(--muted); }
 .pos2__search input { width: 100%; min-height: 40px; padding: 6px 14px 6px 40px; border: 1px solid #dfe3ee; border-radius: 999px; background: #fff; font: inherit; font-size: .9rem; }
 .pos2__search input:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(35, 115, 244, .15); }
-.pos2__scan, .pos2__new {
+.pos2__scan {
   display: inline-flex; align-items: center; gap: 6px; flex: none; min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px; cursor: pointer;
   font: inherit; font-size: .88rem; font-weight: 600; white-space: nowrap;
 }
 .pos2__scan { background: var(--navy); color: #fff; }
 .pos2__scan:hover { background: var(--blue); }
-.pos2__new { background: #fff3ec; color: var(--orange-700); border: 1px solid #ffd2b8; }
-.pos2__new:hover { background: var(--orange); color: #fff; }
-.pos2__scan .icon, .pos2__new .icon { width: 17px; height: 17px; }
+.pos2__scan .icon { width: 17px; height: 17px; }
 
 /* compact card after a scan */
 .scan-mini {
@@ -559,7 +557,7 @@
 @media (max-width: 680px) {
   .paybox { grid-template-columns: 1fr; }
   .paybox__right { padding-left: 0; border-left: 0; min-height: 0; }
-  .pos2__scan span, .pos2__new span { display: none; }
+  .pos2__scan span { display: none; }
   .scan-mini { flex-wrap: wrap; }
 }
 
