@@ -73,6 +73,8 @@ const en = {
     discountLocked: "Only owners and managers can give discounts.", exact: "Exact", walkInDefault: "Walk-in customer (default)", outRibbon: "Out of stock",
     codePh: "Scan or type barcode, then Enter", filterPh: "Search products…", newProduct: "New product", itemsCount: "{n} items",
     discPercent: "Discount in percent — click to switch to an amount", discAmount: "Discount as an amount — click to switch to percent", locked: "Locked",
+    scanCamera: "Camera", scanAuto: "Automatic (back camera)", scanManual: "Or type the barcode number",
+    scanTips: "Good light, hold the barcode flat and still across the orange box, about 10–20 cm from the camera. Laptop webcams are often blurry up close — a USB barcode scanner or a phone works best.",
     noMethods: "No payment methods are switched on. The owner can add them in Settings → Payment methods."
   },
   payMethods: {
@@ -224,6 +226,8 @@ const so = {
     discountLocked: "Kaliya milkiilayaasha iyo maamulayaasha ayaa dhimis bixin kara.", exact: "Sax", walkInDefault: "Macmiil socod ah (caadi)", outRibbon: "Waa dhammaaday",
     codePh: "Akhri ama qor baarkoodka, kadib Enter", filterPh: "Raadi alaab…", newProduct: "Alaab cusub", itemsCount: "{n} shay",
     discPercent: "Dhimis boqolley ah — guji si aad ugu beddesho qaddar", discAmount: "Dhimis qaddar ah — guji si aad ugu beddesho boqolley", locked: "Xiran",
+    scanCamera: "Kamarada", scanAuto: "Toos (kamarada dambe)", scanManual: "Ama qor lambarka baarkoodka",
+    scanTips: "Iftiin fiican, baarkoodka si siman oo aan dhaqaaqin ugu hay sanduuqa oranjiga ah, qiyaastii 10–20 cm kamarada. Kamarada laptop-ka badanaa way caddayn la'dahay marka u dhow — qalabka baarkoodka USB ama taleefan ayaa ugu fiican.",
     noMethods: "Ma jiro hab lacag bixin oo shidan. Milkiiluhu wuxuu ku dari karaa Dejinta → Hababka lacag bixinta."
   },
   payMethods: {

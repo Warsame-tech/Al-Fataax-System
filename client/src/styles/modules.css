@@ -643,3 +643,16 @@
   .pm-list li { flex-wrap: wrap; }
   .pm-list__actions { width: 100%; justify-content: flex-end; }
 }
+
+/* ---------- camera scanner extras ---------- */
+.camera__laser {
+  position: absolute; left: 14%; right: 14%; top: 50%; height: 2px; border-radius: 2px;
+  background: #ff3b3b; box-shadow: 0 0 8px 1px rgba(255, 59, 59, .8); animation: laser 1.6s ease-in-out infinite;
+}
+@keyframes laser { 0%, 100% { transform: translateY(-34px); opacity: .6; } 50% { transform: translateY(34px); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .camera__laser { animation: none; } }
+.camera__pick { display: grid; gap: 4px; font-size: .84rem; font-weight: 600; color: var(--navy); }
+.camera__tips { display: flex; gap: 8px; align-items: flex-start; padding: 8px 10px; border-radius: 10px; background: var(--blue-50); color: var(--navy); font-size: .82rem; line-height: 1.5; }
+.camera__tips .icon { width: 15px; height: 15px; flex: none; margin-top: 2px; color: var(--blue); }
+.camera__manual { display: flex; gap: 8px; }
+.camera__manual .input { flex: 1; min-width: 0; }
