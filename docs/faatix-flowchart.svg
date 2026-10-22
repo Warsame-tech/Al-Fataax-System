@@ -1,0 +1,200 @@
+﻿<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="2110" viewBox="0 0 1600 2110" font-family="Segoe UI, Inter, Arial, sans-serif">
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#0b0d3d"/>
+    </marker>
+    <marker id="arrowW" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="#ffffff"/>
+    </marker>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="140%">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0b0d3d" flood-opacity="0.12"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="2110" fill="#ffffff"/>
+  <rect width="1600" height="8" fill="#ff8a4c"/>
+  <rect x="800" width="800" height="8" fill="#2373f4"/>
+
+  <!-- Title -->
+  <text x="800" y="72" text-anchor="middle" font-size="40" font-weight="800" fill="#0b0d3d">How the Faatix system runs</text>
+  <text x="800" y="108" text-anchor="middle" font-size="18" fill="#5d6079">From opening the website to saving a sale · React website · Node.js API · MySQL database “faatix”</text>
+
+  <!-- ============ 1. The four parts ============ -->
+  <rect x="40" y="140" width="1520" height="180" rx="22" fill="#f5f8ff"/>
+  <text x="70" y="178" font-size="20" font-weight="700" fill="#0b0d3d"><tspan fill="#ff8a4c">1</tspan>  The four parts</text>
+
+  <g filter="url(#shadow)">
+    <rect x="90" y="200" width="300" height="96" rx="16" fill="#fff" stroke="#2373f4" stroke-width="2"/>
+    <rect x="470" y="200" width="300" height="96" rx="16" fill="#fff" stroke="#2373f4" stroke-width="2"/>
+    <rect x="850" y="200" width="300" height="96" rx="16" fill="#fff" stroke="#2373f4" stroke-width="2"/>
+    <rect x="1230" y="200" width="300" height="96" rx="16" fill="#0b0d3d"/>
+  </g>
+  <text x="240" y="240" text-anchor="middle" font-size="20" font-weight="700" fill="#0b0d3d">Browser</text>
+  <text x="240" y="268" text-anchor="middle" font-size="15" fill="#5d6079">Owner &amp; staff on PC, tablet, phone</text>
+  <text x="620" y="240" text-anchor="middle" font-size="20" font-weight="700" fill="#0b0d3d">React website</text>
+  <text x="620" y="268" text-anchor="middle" font-size="15" fill="#5d6079">client · localhost:5173</text>
+  <text x="1000" y="240" text-anchor="middle" font-size="20" font-weight="700" fill="#0b0d3d">Node.js API (Express)</text>
+  <text x="1000" y="268" text-anchor="middle" font-size="15" fill="#5d6079">server · localhost:5000</text>
+  <text x="1380" y="240" text-anchor="middle" font-size="20" font-weight="700" fill="#ffffff">MySQL database</text>
+  <text x="1380" y="268" text-anchor="middle" font-size="15" fill="#c9ccf2">“faatix” · XAMPP · port 3306</text>
+
+  <g stroke="#0b0d3d" stroke-width="2.5" fill="none">
+    <line x1="392" y1="248" x2="466" y2="248" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <line x1="772" y1="248" x2="846" y2="248" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+    <line x1="1152" y1="248" x2="1226" y2="248" marker-start="url(#arrow)" marker-end="url(#arrow)"/>
+  </g>
+  <text x="430" y="232" text-anchor="middle" font-size="13" fill="#5d6079">clicks</text>
+  <text x="810" y="232" text-anchor="middle" font-size="13" fill="#5d6079">requests</text>
+  <text x="1190" y="232" text-anchor="middle" font-size="13" fill="#5d6079">SQL</text>
+
+  <!-- ============ 2. Signing up and signing in ============ -->
+  <text x="70" y="378" font-size="20" font-weight="700" fill="#0b0d3d"><tspan fill="#ff8a4c">2</tspan>  Signing up and signing in</text>
+
+  <rect x="620" y="392" width="360" height="58" rx="29" fill="#0b0d3d" filter="url(#shadow)"/>
+  <text x="800" y="428" text-anchor="middle" font-size="18" font-weight="600" fill="#fff">Visitor opens the Faatix website</text>
+  <line x1="800" y1="452" x2="800" y2="486" stroke="#0b0d3d" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <polygon points="800,490 960,560 800,630 640,560" fill="#fff3ec" stroke="#ff8a4c" stroke-width="2.5"/>
+  <text x="800" y="555" text-anchor="middle" font-size="17" font-weight="700" fill="#0b0d3d">Has a business</text>
+  <text x="800" y="578" text-anchor="middle" font-size="17" font-weight="700" fill="#0b0d3d">account?</text>
+
+  <!-- No branch -->
+  <path d="M640 560 H380 V646" stroke="#0b0d3d" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="510" y="548" text-anchor="middle" font-size="16" font-weight="700" fill="#c9561b">No</text>
+  <!-- Yes branch -->
+  <path d="M960 560 H1220 V646" stroke="#0b0d3d" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+  <text x="1090" y="548" text-anchor="middle" font-size="16" font-weight="700" fill="#11683f">Yes</text>
+
+  <g filter="url(#shadow)">
+    <rect x="170" y="650" width="420" height="110" rx="16" fill="#fff" stroke="#ff8a4c" stroke-width="2"/>
+    <rect x="170" y="800" width="420" height="110" rx="16" fill="#fff" stroke="#ff8a4c" stroke-width="2"/>
+    <rect x="1010" y="650" width="420" height="110" rx="16" fill="#fff" stroke="#2373f4" stroke-width="2"/>
+    <rect x="1010" y="800" width="420" height="110" rx="16" fill="#fff" stroke="#2373f4" stroke-width="2"/>
+  </g>
+  <text x="380" y="690" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0d3d">Sign up  (/register)</text>
+  <text x="380" y="718" text-anchor="middle" font-size="15" fill="#474b78">Business name, type, phone, logo,</text>
+  <text x="380" y="740" text-anchor="middle" font-size="15" fill="#474b78">owner's full name, username, password</text>
+  <line x1="380" y1="762" x2="380" y2="796" stroke="#0b0d3d" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="380" y="840" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0d3d">API saves it all at once</text>
+  <text x="380" y="868" text-anchor="middle" font-size="15" fill="#474b78">business · owner (password hashed) · settings</text>
+  <text x="380" y="890" text-anchor="middle" font-size="15" fill="#474b78">cash &amp; mobile money accounts · 15-day free trial</text>
+
+  <text x="1220" y="690" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0d3d">Sign in  (/signin)</text>
+  <text x="1220" y="718" text-anchor="middle" font-size="15" fill="#474b78">Username, email or phone</text>
+  <text x="1220" y="740" text-anchor="middle" font-size="15" fill="#474b78">+ password</text>
+  <line x1="1220" y1="762" x2="1220" y2="796" stroke="#0b0d3d" stroke-width="2.5" marker-end="url(#arrow)"/>
+  <text x="1220" y="840" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0d3d">API checks the password</text>
+  <text x="1220" y="868" text-anchor="middle" font-size="15" fill="#474b78">max 10 tries per 15 minutes</text>
+  <text x="1220" y="890" text-anchor="middle" font-size="15" fill="#474b78">suspended business → not allowed in</text>
+
+  <path d="M380 912 V990 H546" stroke="#0b0d3d" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+  <path d="M1220 912 V990 H1054" stroke="#0b0d3d" stroke-width="2.5" fill="none" marker-end="url(#arrow)"/>
+  <rect x="550" y="950" width="500" height="80" rx="16" fill="#e3f6ec" stroke="#1f9d61" stroke-width="2" filter="url(#shadow)"/>
+  <text x="800" y="985" text-anchor="middle" font-size="19" font-weight="700" fill="#0b0d3d">Secure session cookie (7 days)</text>
+  <text x="800" y="1012" text-anchor="middle" font-size="15" fill="#11683f">httpOnly · the browser keeps you signed in</text>
+  <line x1="800" y1="1032" x2="800" y2="1086" stroke="#0b0d3d" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- ============ 3. Working in the app ============ -->
+  <text x="70" y="1078" font-size="20" font-weight="700" fill="#0b0d3d"><tspan fill="#ff8a4c">3</tspan>  Working in the app</text>
+
+  <rect x="500" y="1090" width="600" height="84" rx="16" fill="#0b0d3d" filter="url(#shadow)"/>
+  <text x="800" y="1126" text-anchor="middle" font-size="20" font-weight="700" fill="#fff">Dashboard</text>
+  <text x="800" y="1154" text-anchor="middle" font-size="15" fill="#c9ccf2">Quick actions + modules · each role sees only what it may use</text>
+  <line x1="800" y1="1176" x2="800" y2="1206" stroke="#0b0d3d" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <rect x="120" y="1210" width="1360" height="150" rx="20" fill="#fff6f0" stroke="#ff8a4c" stroke-width="2" stroke-dasharray="8 6"/>
+  <g font-size="16" font-weight="600" fill="#0b0d3d" text-anchor="middle">
+    <g fill="#fff" stroke="#f2b48f" stroke-width="1.5">
+      <rect x="150" y="1232" width="200" height="46" rx="23"/><rect x="370" y="1232" width="200" height="46" rx="23"/>
+      <rect x="590" y="1232" width="200" height="46" rx="23"/><rect x="810" y="1232" width="200" height="46" rx="23"/>
+      <rect x="1030" y="1232" width="200" height="46" rx="23"/><rect x="1250" y="1232" width="200" height="46" rx="23"/>
+      <rect x="150" y="1294" width="200" height="46" rx="23"/><rect x="370" y="1294" width="200" height="46" rx="23"/>
+      <rect x="590" y="1294" width="200" height="46" rx="23"/><rect x="810" y="1294" width="200" height="46" rx="23"/>
+      <rect x="1030" y="1294" width="200" height="46" rx="23"/><rect x="1250" y="1294" width="200" height="46" rx="23"/>
+    </g>
+    <text x="250" y="1261">Sales (POS)</text><text x="470" y="1261">Invoices</text>
+    <text x="690" y="1261">Products &amp; stock</text><text x="910" y="1261">Customers</text>
+    <text x="1130" y="1261">Suppliers</text><text x="1350" y="1261">Purchases</text>
+    <text x="250" y="1323">Expenses &amp; income</text><text x="470" y="1323">Cash &amp; bank</text>
+    <text x="690" y="1323">Reports</text><text x="910" y="1323">Business overview</text>
+    <text x="1130" y="1323">Staff &amp; roles</text><text x="1350" y="1323">Settings</text>
+  </g>
+  <line x1="800" y1="1362" x2="800" y2="1426" stroke="#0b0d3d" stroke-width="2.5" marker-end="url(#arrow)"/>
+
+  <!-- ============ 4. Every request ============ -->
+  <text x="70" y="1404" font-size="20" font-weight="700" fill="#0b0d3d"><tspan fill="#ff8a4c">4</tspan>  What happens on every click that loads or saves data</text>
+
+  <g filter="url(#shadow)">
+    <rect x="90" y="1430" width="260" height="140" rx="16" fill="#fff" stroke="#2373f4" stroke-width="2"/>
+    <rect x="380" y="1430" width="260" height="140" rx="16" fill="#fff" stroke="#2373f4" stroke-width="2"/>
+    <rect x="670" y="1430" width="260" height="140" rx="16" fill="#fff" stroke="#2373f4" stroke-width="2"/>
+    <rect x="960" y="1430" width="260" height="140" rx="16" fill="#fff" stroke="#2373f4" stroke-width="2"/>
+    <rect x="1250" y="1430" width="260" height="140" rx="16" fill="#e3f6ec" stroke="#1f9d61" stroke-width="2"/>
+  </g>
+  <g font-size="14" font-weight="700" fill="#fff" text-anchor="middle">
+    <circle cx="120" cy="1460" r="16" fill="#2373f4"/><text x="120" y="1465">1</text>
+    <circle cx="410" cy="1460" r="16" fill="#2373f4"/><text x="410" y="1465">2</text>
+    <circle cx="700" cy="1460" r="16" fill="#2373f4"/><text x="700" y="1465">3</text>
+    <circle cx="990" cy="1460" r="16" fill="#2373f4"/><text x="990" y="1465">4</text>
+    <circle cx="1280" cy="1460" r="16" fill="#1f9d61"/><text x="1280" y="1465">5</text>
+  </g>
+  <g font-size="18" font-weight="700" fill="#0b0d3d">
+    <text x="146" y="1466">Safety check</text>
+    <text x="436" y="1466">Who is it?</text>
+    <text x="726" y="1466">Allowed?</text>
+    <text x="1016" y="1466">Save safely</text>
+    <text x="1306" y="1466">Answer</text>
+  </g>
+  <g font-size="14.5" fill="#474b78">
+    <text x="110" y="1500">Request must come from</text><text x="110" y="1521">the Faatix app</text><text x="110" y="1542">(blocks fake forms)</text>
+    <text x="400" y="1500">Session cookie → user</text><text x="400" y="1521">and business. Suspended</text><text x="400" y="1542">business → stopped</text>
+    <text x="690" y="1500">Role permission: owner,</text><text x="690" y="1521">manager, cashier or</text><text x="690" y="1542">stockkeeper</text>
+    <text x="980" y="1500">One database transaction,</text><text x="980" y="1521">only this business's rows,</text><text x="980" y="1542">+ activity log</text>
+    <text x="1270" y="1500">Data goes back to the</text><text x="1270" y="1521">screen and the page</text><text x="1270" y="1542">updates</text>
+  </g>
+  <g stroke="#0b0d3d" stroke-width="2.5" marker-end="url(#arrow)">
+    <line x1="352" y1="1500" x2="376" y2="1500"/>
+    <line x1="642" y1="1500" x2="666" y2="1500"/>
+    <line x1="932" y1="1500" x2="956" y2="1500"/>
+    <line x1="1222" y1="1500" x2="1246" y2="1500"/>
+  </g>
+  <rect x="380" y="1590" width="550" height="44" rx="12" fill="#fdecec"/>
+  <text x="655" y="1618" text-anchor="middle" font-size="15" font-weight="600" fill="#b42318">✕  Not signed in or not allowed → error message, nothing is saved</text>
+
+  <!-- ============ 5. Example + Super Admin ============ -->
+  <text x="70" y="1690" font-size="20" font-weight="700" fill="#0b0d3d"><tspan fill="#ff8a4c">5</tspan>  Example: one POS sale</text>
+  <rect x="90" y="1710" width="900" height="330" rx="20" fill="#f5f8ff"/>
+  <g font-size="13" font-weight="700" fill="#fff" text-anchor="middle">
+    <circle cx="128" cy="1748" r="14" fill="#ff8a4c"/><text x="128" y="1753">1</text>
+    <circle cx="128" cy="1790" r="14" fill="#ff8a4c"/><text x="128" y="1795">2</text>
+    <circle cx="128" cy="1832" r="14" fill="#ff8a4c"/><text x="128" y="1837">3</text>
+    <circle cx="128" cy="1874" r="14" fill="#2373f4"/><text x="128" y="1879">4</text>
+    <circle cx="128" cy="1916" r="14" fill="#2373f4"/><text x="128" y="1921">5</text>
+    <circle cx="128" cy="1958" r="14" fill="#2373f4"/><text x="128" y="1963">6</text>
+    <circle cx="128" cy="2000" r="14" fill="#1f9d61"/><text x="128" y="2005">7</text>
+  </g>
+  <g font-size="16.5" fill="#0b0d3d">
+    <text x="156" y="1754"><tspan font-weight="700">Scan the barcode</tspan> (camera or USB scanner) or tap a product</text>
+    <text x="156" y="1796"><tspan font-weight="700">The item shows</tspan> its photo, price and stock, and goes into the cart</text>
+    <text x="156" y="1838"><tspan font-weight="700">Choose</tspan> customer, discount and payment: cash · mobile money · bank · credit</text>
+    <text x="156" y="1880"><tspan font-weight="700">Complete sale</tspan> → the API locks the products and checks there is enough stock</text>
+    <text x="156" y="1922"><tspan font-weight="700">Saves</tspan> the sale and its items, takes the stock out, adds the money to cash / bank</text>
+    <text x="156" y="1964"><tspan font-weight="700">Gives</tspan> a receipt number and writes the activity log</text>
+    <text x="156" y="2006"><tspan font-weight="700">Receipt</tspan> is printed with the business logo · reports update right away</text>
+  </g>
+
+  <rect x="1020" y="1710" width="490" height="330" rx="20" fill="#0b0d3d" filter="url(#shadow)"/>
+  <text x="1050" y="1752" font-size="20" font-weight="700" fill="#fff">Super Admin  (/admin)</text>
+  <rect x="1050" y="1766" width="60" height="4" rx="2" fill="#ff8a4c"/>
+  <g font-size="16" fill="#e6e8f7">
+    <text x="1050" y="1808">• Separate sign-in, only for the platform</text>
+    <text x="1050" y="1846">• Sees every business and platform totals</text>
+    <text x="1050" y="1884">• Can suspend, activate or deactivate</text>
+    <text x="1066" y="1906">a business (a reason is required)</text>
+    <text x="1050" y="1944">• Suspended businesses are stopped</text>
+    <text x="1066" y="1966">at step 2 above</text>
+    <text x="1050" y="2004">• Platform activity log</text>
+  </g>
+
+  <text x="800" y="2084" text-anchor="middle" font-size="17" fill="#5d6079">Reports and the Business overview read the same saved records, so nothing is typed twice.</text>
+</svg>

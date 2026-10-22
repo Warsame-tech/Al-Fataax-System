@@ -9,6 +9,10 @@ secure business application where each registered business manages only its own 
 | Backend   | Node.js + Express             | `server/`    | http://localhost:5000   |
 | Database  | MySQL (XAMPP)                 | `database/`  | localhost:3306          |
 
+## How it runs
+
+![How the Faatix system runs](docs/faatix-flowchart.png)
+
 ## Requirements
 
 - **Node.js** 18 or newer — https://nodejs.org
