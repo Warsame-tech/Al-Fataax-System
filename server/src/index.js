@@ -23,6 +23,7 @@ import { customersRouter, suppliersRouter } from "./routes/parties.js";
 import { expensesRouter, accountsRouter } from "./routes/money.js";
 import { staffRouter, settingsRouter, profileRouter, notificationsRouter, auditRouter } from "./routes/account.js";
 import { HttpError } from "./lib/http.js";
+import { filesRouter } from "./lib/files.js";
 
 const app = express();
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -52,6 +53,7 @@ app.use("/api", (req, res, next) => {
 
 // Uploaded logos (validated on upload; served as static files only).
 app.use("/uploads", express.static(path.resolve(here, "../uploads"), { fallthrough: false, index: false }));
+app.use("/files", filesRouter);   // logos and product photos stored in the database
 
 // API routes
 app.use("/api/health", healthRoutes);

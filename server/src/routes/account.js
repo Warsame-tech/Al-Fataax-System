@@ -1,13 +1,11 @@
 import { Router } from "express";
-import fs from "node:fs";
-import path from "node:path";
 import bcrypt from "bcryptjs";
-import multer from "multer";
 import { pool } from "../config/db.js";
 import { requireAuth, audit } from "../middleware/auth.js";
 import { requirePerm, can } from "../lib/permissions.js";
 import { ah, id, text, optText, withTx, ensureOwned, badRequest, conflict, forbidden, num } from "../lib/http.js";
-import { UPLOAD_DIR, BUSINESS_TYPES } from "./auth.js";
+import { BUSINESS_TYPES } from "./auth.js";
+import { imageUpload, imageType, saveImage, removeImage } from "../lib/files.js";
 import { ensureDefaultRoles } from "../lib/roles.js";
 
 /* A role of this business (Staff & roles → Roles); the owner role is never assigned here. */
@@ -103,16 +101,6 @@ staffRouter.patch("/:id", ah(async (req, res) => {
 export const settingsRouter = Router();
 settingsRouter.use(requireAuth);
 
-const LOGO_TYPES = { "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp" };
-const upload = multer({
-  storage: multer.diskStorage({ destination: UPLOAD_DIR, filename: (req, f, cb) => cb(null, `logo-${Date.now()}-${Math.round(Math.random() * 1e9)}${LOGO_TYPES[f.mimetype]}`) }),
-  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
-  fileFilter: (req, f, cb) => cb(null, Boolean(LOGO_TYPES[f.mimetype]))
-});
-function isRealImage(file) {
-  const b = fs.readFileSync(file.path).subarray(0, 12);
-  return (b[0] === 0x89 && b[1] === 0x50) || (b[0] === 0xff && b[1] === 0xd8) || (b.toString("ascii", 0, 4) === "RIFF" && b.toString("ascii", 8, 12) === "WEBP");
-}
 
 settingsRouter.get("/", ah(async (req, res) => {
   const bid = req.business.id;
@@ -128,7 +116,7 @@ settingsRouter.get("/", ah(async (req, res) => {
 }));
 
 /* PUT /api/settings/business (multipart: name, ownerName, email, phone, businessType, address, logo?, removeLogo?) */
-settingsRouter.put("/business", requirePerm("business.edit"), upload.single("logo"), ah(async (req, res) => {
+settingsRouter.put("/business", requirePerm("business.edit"), imageUpload.single("logo"), ah(async (req, res) => {
   const b = req.body || {};
   const file = req.file;
   const d = { name: text(b.name, 150), ownerName: text(b.ownerName, 150), email: optText(b.email, 190), phone: text(b.phone, 30), type: b.businessType, address: optText(b.address, 255) };
@@ -138,17 +126,17 @@ settingsRouter.put("/business", requirePerm("business.edit"), upload.single("log
   if (d.email && !EMAIL.test(d.email)) e.email = "invalidEmail";
   if (!PHONE.test(d.phone)) e.phone = "invalidPhone";
   if (!BUSINESS_TYPES.includes(d.type)) e.businessType = "required";
-  if (file && !isRealImage(file)) e.logo = "invalidLogo";
-  if (Object.keys(e).length) { if (file) fs.promises.unlink(file.path).catch(() => {}); throw badRequest(e); }
+  if (file && !imageType(file.buffer)) e.logo = "invalidLogo";
+  if (Object.keys(e).length) throw badRequest(e);
 
   const bid = req.business.id;
   const [[cur]] = await pool.query("SELECT logo_path FROM businesses WHERE id = ?", [bid]);
   let logo = cur.logo_path;
-  if (file) logo = `/uploads/logos/${file.filename}`;
+  if (file) logo = await saveImage(pool, bid, file, "logo");
   else if (b.removeLogo === "true") logo = null;
   await pool.query("UPDATE businesses SET name = ?, owner_name = ?, email = ?, phone = ?, business_type = ?, address = ?, logo_path = ? WHERE id = ?",
     [d.name, d.ownerName, d.email, d.phone, d.type, d.address, logo, bid]);
-  if (cur.logo_path && cur.logo_path !== logo) fs.promises.unlink(path.join(UPLOAD_DIR, path.basename(cur.logo_path))).catch(() => {});
+  if (cur.logo_path && cur.logo_path !== logo) removeImage(cur.logo_path);
   await audit(null, { businessId: bid, userId: req.user.id, action: "business.updated", ip: req.ip });
   res.json({ code: "saved" });
 }));

@@ -26,6 +26,20 @@ async function createSchemaIfEmpty() {
 
 const TABLES = [
   {
+    table: "stored_files",
+    ddl: `CREATE TABLE IF NOT EXISTS stored_files (
+      id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      file_key    CHAR(32)     NOT NULL UNIQUE,
+      business_id INT UNSIGNED NULL,
+      kind        VARCHAR(20)  NOT NULL,
+      mime        VARCHAR(40)  NOT NULL,
+      size        INT UNSIGNED NOT NULL,
+      data        MEDIUMBLOB   NOT NULL,
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_files_business (business_id)
+    ) ENGINE=InnoDB`
+  },
+  {
     table: "roles",
     ddl: `CREATE TABLE IF NOT EXISTS roles (
       id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,

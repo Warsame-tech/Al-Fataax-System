@@ -737,3 +737,11 @@
   .table--stack td.row-actions > * + * { margin-left: 0; }
   .table--stack tbody tr:hover td { background: none; }
 }
+
+/* Notifications on phones: a centred panel under the top bar (never cut off at the sides) */
+@media (max-width: 600px) {
+  .bell__panel {
+    position: fixed; top: 66px; left: 12px; right: 12px; width: auto; margin-inline: auto; max-width: 420px;
+    max-height: calc(100dvh - 90px); z-index: 80;
+  }
+}

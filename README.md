@@ -73,8 +73,8 @@ Locally, `npm run build:client` only rebuilds the website (no reinstall).
 4. **Settings → Networking → Generate Domain** to get the public https address.
 5. Deploy. On the first start the server creates all database tables by itself
    (log line: `Database set up: created all tables`).
-6. **Uploaded logos and product photos**: add a **Volume** to the Faatix service mounted at
-   `/app/server/uploads`, otherwise uploaded files are lost on every redeploy.
+6. **Uploaded logos and product photos** are stored in the MySQL database, so they survive
+   redeploys — no Volume needed.
 
 Optional sample data (users from the table below): open a shell inside the running
 service with the Railway CLI (`railway ssh`) and run `npm run db:seed`.

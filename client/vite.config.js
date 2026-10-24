@@ -8,7 +8,8 @@ export default defineConfig({
     // Forward API calls to the Node.js server during development.
     proxy: {
       "/api": "http://localhost:5000",
-      "/uploads": "http://localhost:5000"
+      "/uploads": "http://localhost:5000",
+      "/files": "http://localhost:5000"
     }
   }
 });

@@ -93,6 +93,20 @@ CREATE TABLE IF NOT EXISTS roles (
   CONSTRAINT fk_role_business FOREIGN KEY (business_id) REFERENCES businesses(id)
 ) ENGINE=InnoDB;
 
+-- Uploaded images (logos, product photos) kept in the database so they survive redeploys.
+-- Served at /files/<file_key>.
+CREATE TABLE IF NOT EXISTS stored_files (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  file_key    CHAR(32)     NOT NULL UNIQUE,
+  business_id INT UNSIGNED NULL,
+  kind        VARCHAR(20)  NOT NULL,
+  mime        VARCHAR(40)  NOT NULL,
+  size        INT UNSIGNED NOT NULL,
+  data        MEDIUMBLOB   NOT NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_files_business (business_id)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS business_settings (
   business_id      INT UNSIGNED PRIMARY KEY,
   currency         CHAR(3)     NOT NULL DEFAULT 'USD',

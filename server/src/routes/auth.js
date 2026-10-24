@@ -1,39 +1,12 @@
 import { Router } from "express";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
 import bcrypt from "bcryptjs";
-import multer from "multer";
 import rateLimit from "express-rate-limit";
 import { pool } from "../config/db.js";
 import { env } from "../config/env.js";
 import { setSessionCookie, clearSessionCookie, requireAuth, audit } from "../middleware/auth.js";
+import { imageUpload, imageType, saveImage } from "../lib/files.js";
 
 const router = Router();
-
-/* ---------- logo uploads ---------- */
-export const UPLOAD_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../uploads/logos");
-fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-
-const LOGO_TYPES = { "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp" };
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: UPLOAD_DIR,
-    filename: (req, file, cb) => cb(null, `logo-${Date.now()}-${Math.round(Math.random() * 1e9)}${LOGO_TYPES[file.mimetype]}`)
-  }),
-  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
-  fileFilter: (req, file, cb) => cb(null, Boolean(LOGO_TYPES[file.mimetype]))
-});
-
-// Checks the file really is PNG / JPEG / WEBP (not just the declared type).
-function isRealImage(file) {
-  const b = fs.readFileSync(file.path).subarray(0, 12);
-  const png = b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47;
-  const jpg = b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff;
-  const webp = b.toString("ascii", 0, 4) === "RIFF" && b.toString("ascii", 8, 12) === "WEBP";
-  return png || jpg || webp;
-}
-const removeFile = (file) => file && fs.promises.unlink(file.path).catch(() => {});
 
 /* ---------- validation ---------- */
 export const BUSINESS_TYPES = ["retail", "supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "furniture",
@@ -66,34 +39,31 @@ function validateRegistration(b) {
 }
 
 /* ---------- POST /api/auth/register ---------- */
-router.post("/register", upload.single("logo"), async (req, res, next) => {
+router.post("/register", imageUpload.single("logo"), async (req, res, next) => {
   const file = req.file;
   const { data, errors } = validateRegistration(req.body || {});
-  if (file && !isRealImage(file)) errors.logo = "invalidLogo";
-  if (Object.keys(errors).length) {
-    await removeFile(file);
-    return res.status(400).json({ code: "validation", errors });
-  }
+  if (file && !imageType(file.buffer)) errors.logo = "invalidLogo";
+  if (Object.keys(errors).length) return res.status(400).json({ code: "validation", errors });
 
   const conn = await pool.getConnection();
   try {
     const [taken] = await conn.query("SELECT id FROM users WHERE username = ?", [data.username]);
-    if (taken.length) {
-      await removeFile(file);
-      return res.status(409).json({ code: "validation", errors: { username: "usernameTaken" } });
-    }
+    if (taken.length) return res.status(409).json({ code: "validation", errors: { username: "usernameTaken" } });
 
     const passwordHash = await bcrypt.hash(data.password, 12);
-    const logoPath = file ? `/uploads/logos/${file.filename}` : null;
 
     // Everything below succeeds or fails together.
     await conn.beginTransaction();
     const [biz] = await conn.query(
       `INSERT INTO businesses (name, owner_name, email, phone, business_type, address, logo_path, terms_accepted_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())`,
-      [data.businessName, data.ownerName, data.email || null, data.phone, data.businessType, data.address || null, logoPath]
+      [data.businessName, data.ownerName, data.email || null, data.phone, data.businessType, data.address || null, null]
     );
     const businessId = biz.insertId;
+    if (file) {   // the logo is saved in the same transaction, so a failed sign-up leaves nothing behind
+      const logoPath = await saveImage(conn, businessId, file, "logo");
+      await conn.query("UPDATE businesses SET logo_path = ? WHERE id = ?", [logoPath, businessId]);
+    }
     const [usr] = await conn.query(
       "INSERT INTO users (business_id, full_name, username, email, phone, password_hash) VALUES (?, ?, ?, ?, ?, ?)",
       [businessId, data.ownerName, data.username, data.email || null, data.phone, passwordHash]
@@ -113,7 +83,6 @@ router.post("/register", upload.single("logo"), async (req, res, next) => {
     res.status(201).json({ code: "registered" });
   } catch (err) {
     await conn.rollback().catch(() => {});
-    await removeFile(file);
     if (err.code === "ER_DUP_ENTRY") return res.status(409).json({ code: "validation", errors: { username: "usernameTaken" } });
     next(err);
   } finally {

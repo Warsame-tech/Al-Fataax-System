@@ -1,37 +1,20 @@
 import { Router } from "express";
-import fs from "node:fs";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import multer from "multer";
 import { pool } from "../config/db.js";
 import { requireAuth, audit } from "../middleware/auth.js";
 import { requirePerm } from "../lib/permissions.js";
 import { ah, text, optText, id, money, quantity, withTx, ensureOwned, badRequest, num } from "../lib/http.js";
 import { moveStock } from "../lib/ledger.js";
+import { imageUpload, saveImage, removeImage } from "../lib/files.js";
 
 const router = Router();
 router.use(requireAuth);
 
-/* Product photos: PNG / JPG / WEBP up to 2 MB, saved in server/uploads/products. */
-const IMAGE_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../uploads/products");
-fs.mkdirSync(IMAGE_DIR, { recursive: true });
-const IMAGE_TYPES = { "image/png": ".png", "image/jpeg": ".jpg", "image/webp": ".webp" };
-const upload = multer({
-  storage: multer.diskStorage({ destination: IMAGE_DIR, filename: (req, f, cb) => cb(null, `p-${Date.now()}-${Math.round(Math.random() * 1e9)}${IMAGE_TYPES[f.mimetype]}`) }),
-  limits: { fileSize: 2 * 1024 * 1024, files: 1 },
-  fileFilter: (req, f, cb) => cb(null, Boolean(IMAGE_TYPES[f.mimetype]))
-});
-function isRealImage(file) {
-  const b = fs.readFileSync(file.path).subarray(0, 12);
-  return (b[0] === 0x89 && b[1] === 0x50) || (b[0] === 0xff && b[1] === 0xd8) || (b.toString("ascii", 0, 4) === "RIFF" && b.toString("ascii", 8, 12) === "WEBP");
-}
-const dropFile = (file) => file && fs.promises.unlink(file.path).catch(() => {});
-const removeImage = (p) => p && fs.promises.unlink(path.join(IMAGE_DIR, path.basename(p))).catch(() => {});
-/* Validates the uploaded photo (if any); returns its public path. */
-function imageFrom(req) {
+/* Product photos: PNG / JPG / WEBP up to 2 MB, stored in the database (see lib/files.js). */
+async function imageFrom(req) {
   if (!req.file) return null;
-  if (!isRealImage(req.file)) { dropFile(req.file); throw badRequest({ image: "invalidImage" }); }
-  return `/uploads/products/${req.file.filename}`;
+  const saved = await saveImage(pool, req.business.id, req.file, "product");
+  if (!saved) throw badRequest({ image: "invalidImage" });
+  return saved;
 }
 
 const shape = (p) => ({
@@ -117,10 +100,10 @@ function duplicate(err) {
 }
 
 /* POST /api/products */
-router.post("/", requirePerm("products.edit"), upload.single("image"), ah(async (req, res) => {
+router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(async (req, res) => {
   let d;
-  try { d = readProduct(req.body || {}, { creating: true }); } catch (e) { dropFile(req.file); throw e; }
-  const image = imageFrom(req);
+  d = readProduct(req.body || {}, { creating: true });
+  const image = await imageFrom(req);
   const bid = req.business.id;
   try {
     const productId = await withTx(async (conn) => {
@@ -143,10 +126,10 @@ router.post("/", requirePerm("products.edit"), upload.single("image"), ah(async 
 
 /* PUT /api/products/:id (stock is changed only through movements, never here) */
 /* multipart: product fields + optional "image" file; removeImage=true clears the photo */
-router.put("/:id", requirePerm("products.edit"), upload.single("image"), ah(async (req, res) => {
+router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah(async (req, res) => {
   let d;
-  try { d = readProduct(req.body || {}, { creating: false }); } catch (e) { dropFile(req.file); throw e; }
-  const image = imageFrom(req);
+  d = readProduct(req.body || {}, { creating: false });
+  const image = await imageFrom(req);
   const bid = req.business.id;
   try {
     const oldImage = await withTx(async (conn) => {
