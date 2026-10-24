@@ -10,6 +10,7 @@ import bcrypt from "bcryptjs";
 import { pool } from "../config/db.js";
 import { withTx } from "../lib/http.js";
 import { moveStock, moneyMove } from "../lib/ledger.js";
+import { ensureDefaultRoles } from "../lib/roles.js";
 import { createSale } from "../routes/sales.js";
 import { createInvoice } from "../routes/invoices.js";
 import { createPurchase } from "../routes/purchases.js";
@@ -38,7 +39,7 @@ async function resetSample() {
   await withTx(async (conn) => {
     for (const t of ["return_items", "returns", "sale_items", "invoice_items", "purchase_items", "customer_payments", "supplier_payments",
       "cash_transactions", "stock_movements", "sales", "invoices", "purchases", "expenses", "other_income", "products", "categories", "brands",
-      "customers", "suppliers", "payment_methods", "cash_accounts", "bank_accounts", "notifications", "trial_records", "business_settings", "business_user_roles", "audit_logs", "users"]) {
+      "customers", "suppliers", "payment_methods", "roles", "cash_accounts", "bank_accounts", "notifications", "trial_records", "business_settings", "business_user_roles", "audit_logs", "users"]) {
       await conn.query(`DELETE FROM ${t} WHERE business_id = ?`, [b.id]);
     }
     await conn.query("DELETE FROM businesses WHERE id = ?", [b.id]);
@@ -79,6 +80,7 @@ async function main() {
     await conn.query("INSERT INTO cash_accounts (business_id, name, is_default) VALUES (?, 'Main cash', 1), (?, 'Mobile money', 0)", [bid, bid]);
     const [bank] = await conn.query("INSERT INTO bank_accounts (business_id, bank_name, account_name, account_number) VALUES (?, 'Salaam Bank', 'Hodan Supermarket', 'SAMPLE-0001')", [bid]);
     await conn.query("INSERT INTO trial_records (business_id, start_date, end_date) VALUES (?, UTC_DATE(), DATE_ADD(UTC_DATE(), INTERVAL 15 DAY))", [bid]);
+    await ensureDefaultRoles(bid, conn);   // Manager / Cashier / Stockkeeper roles, staff linked to them
     return { bid, users, bankId: bank.insertId };
   });
   const { bid, users, bankId } = ids;

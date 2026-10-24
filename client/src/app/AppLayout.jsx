@@ -57,7 +57,7 @@ export default function AppLayout() {
               <span className="app-user__avatar" aria-hidden="true"><Icon name="user" /></span>
               <span className="app-user__text">
                 <strong>{user?.fullName}</strong>
-                <small>{t(`app.roles.${user?.role}`)}</small>
+                <small>{user?.roleName || t(`app.roles.${user?.role}`)}</small>
               </span>
             </Link>
             <button type="button" className="app-signout" onClick={handleSignOut}>

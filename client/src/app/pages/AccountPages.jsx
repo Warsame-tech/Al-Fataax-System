@@ -3,7 +3,7 @@ import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { useAuth } from "../../auth/AuthContext.jsx";
 import { apiRequest, fileUrl } from "../../services/api.js";
-import { PageHeader, useApi, usePerm, useSubmit, Modal, Field, FormError, EmptyState, Loading, StatusBadge } from "../ui.jsx";
+import { PageHeader, Tabs, useApi, usePerm, useSubmit, Modal, Field, FormError, EmptyState, Loading, StatusBadge } from "../ui.jsx";
 import { fill, date, daysLeft } from "../format.js";
 
 const TYPES = ["retail", "supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "furniture", "hardware", "books", "bakery", "jewelry", "wholesale", "services", "other"];
@@ -15,33 +15,64 @@ function Saved({ show }) {
 }
 
 /* ===================== Staff & roles ===================== */
+/*
+ * Owner only. Three tabs:
+ *   Staff          — register staff and give each one a role.
+ *   Roles          — create roles first (name, description, what they can do, grouped by module).
+ *   Module access  — one grid of modules × roles to switch whole modules on or off per role.
+ * Staff, business info and settings stay with the owner and can't be given to a role.
+ */
 export function Staff() {
+  const { t } = useLanguage();
+  const [tab, setTab] = useState("staff");
+  const rolesApi = useApi("/api/roles");
+  return (
+    <div className="page">
+      <PageHeader icon="user-key" title={t("ui.staff.title")} />
+      <Tabs value={tab} onChange={setTab} tabs={[
+        { id: "staff", label: t("ui.staff.tabStaff"), icon: "users" },
+        { id: "roles", label: t("ui.staff.tabRoles"), icon: "user-key" },
+        { id: "access", label: t("ui.staff.tabAccess"), icon: "grid" }
+      ]} />
+      {tab === "staff" && <StaffList rolesApi={rolesApi} onManageRoles={() => setTab("roles")} />}
+      {tab === "roles" && <RolesList rolesApi={rolesApi} />}
+      {tab === "access" && <ModuleAccess rolesApi={rolesApi} />}
+    </div>
+  );
+}
+
+/* ---------- Staff tab ---------- */
+function StaffList({ rolesApi, onManageRoles }) {
   const { t, lang } = useLanguage();
   const list = useApi("/api/staff");
   const [adding, setAdding] = useState(false);
   const [resetting, setResetting] = useState(null);
-  const patch = async (u, body) => { try { await apiRequest(`/api/staff/${u.id}`, { method: "PATCH", body }); } finally { list.reload(); } };
+  const roles = rolesApi.data?.roles || [];
+  const patch = async (u, body) => { try { await apiRequest(`/api/staff/${u.id}`, { method: "PATCH", body }); } finally { list.reload(); rolesApi.reload(); } };
   return (
-    <div className="page">
-      <PageHeader icon="user-key" title={t("ui.staff.title")} actions={<button type="button" className="btn btn--primary" onClick={() => setAdding(true)}><Icon name="plus" /><span>{t("ui.staff.add")}</span></button>} />
-      <p className="page-help">{t("ui.staff.help")}</p>
+    <>
+      <div className="staff-bar">
+        <p className="page-help">{t("ui.staff.help2")}</p>
+        <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}><Icon name="plus" /><span>{t("ui.staff.add")}</span></button>
+      </div>
       {list.loading && !list.data ? <Loading /> : (
-        <div className="table-wrap"><table className="table">
+        <div className="table-wrap table-wrap--stack"><table className="table table--stack">
           <thead><tr><th>{t("ui.common.name")}</th><th>{t("ui.staff.username")}</th><th>{t("ui.common.role")}</th><th>{t("ui.common.status")}</th><th>{t("ui.staff.lastLogin")}</th><th /></tr></thead>
           <tbody>
             {(list.data?.users || []).map((u) => {
               const locked = u.isMe || u.role === "owner";
               return (
                 <tr key={u.id}>
-                  <td><strong>{u.fullName}</strong>{u.isMe && <small className="cell-sub">{t("ui.staff.you")}</small>}</td>
-                  <td>{u.username}</td>
-                  <td>{locked ? t(`app.roles.${u.role}`) : (
-                    <select className="input input--auto" value={u.role} onChange={(e) => patch(u, { role: e.target.value })} aria-label={t("ui.common.role")}>
-                      {["manager", "cashier", "stockkeeper"].map((r) => <option key={r} value={r}>{t(`app.roles.${r}`)}</option>)}
+                  <td data-label={t("ui.common.name")}><strong>{u.fullName}</strong>{u.isMe && <small className="cell-sub">{t("ui.staff.you")}</small>}</td>
+                  <td data-label={t("ui.staff.username")}>{u.username}</td>
+                  <td data-label={t("ui.common.role")}>{locked ? (u.roleName || t(`app.roles.${u.role}`)) : (
+                    <select className="input input--auto" value={u.roleId || ""} onChange={(e) => patch(u, { roleId: e.target.value })} aria-label={t("ui.common.role")}>
+                      {!u.roleId && <option value="">{t("ui.common.choose")}</option>}
+                      {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
                     </select>
                   )}</td>
-                  <td><StatusBadge status={u.status} /></td>
-                  <td>{u.lastLoginAt ? date(u.lastLoginAt, lang, true) : t("ui.staff.never")}</td>
+                  <td data-label={t("ui.common.status")}><StatusBadge status={u.status} /></td>
+                  <td data-label={t("ui.staff.lastLogin")}>{u.lastLoginAt ? date(u.lastLoginAt, lang, true) : t("ui.staff.never")}</td>
                   <td className="row-actions">
                     {!locked && <button type="button" className="btn btn--outline btn--sm" onClick={() => setResetting(u)}>{t("ui.staff.resetPassword")}</button>}
                     {!locked && <button type="button" className={"btn btn--sm " + (u.status === "active" ? "btn--danger" : "btn--primary")} onClick={() => patch(u, { status: u.status === "active" ? "disabled" : "active" })}>{t(u.status === "active" ? "ui.staff.disable" : "ui.staff.enable")}</button>}
@@ -52,39 +83,260 @@ export function Staff() {
           </tbody>
         </table></div>
       )}
-      {adding && <StaffForm onClose={() => setAdding(false)} onSaved={() => { setAdding(false); list.reload(); }} />}
+      {adding && <StaffForm roles={roles} groups={rolesApi.data?.catalog?.groups || []} onManageRoles={() => { setAdding(false); onManageRoles(); }} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); list.reload(); rolesApi.reload(); }} />}
       {resetting && <ResetForm user={resetting} onClose={() => setResetting(null)} />}
-    </div>
+    </>
   );
 }
 
-function StaffForm({ onClose, onSaved }) {
+/* Permission keys contain dots ("sales.create"), so they are looked up in the ui.perms object directly. */
+const permLabel = (t, key) => { const all = t("ui.perms"); return (all && typeof all === "object" && all[key]) || key; };
+
+/* Modules a role can open, for short summaries ("POS, Invoices, Customers"). */
+function roleModules(role, groups, t) {
+  return groups.filter((g) => role.permissions.includes(g.perms[0])).map((g) => t(`app.modules.${g.module}`));
+}
+
+function StaffForm({ roles, groups, onManageRoles, onClose, onSaved }) {
   const { t } = useLanguage();
-  const [f, setF] = useState({ fullName: "", username: "", phone: "", email: "", role: "cashier", password: "" });
+  const [f, setF] = useState({ fullName: "", username: "", phone: "", email: "", roleId: roles[0]?.id || "", password: "" });
   const sub = useSubmit();
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const save = async (e) => { e.preventDefault(); if (await sub.run(() => apiRequest("/api/staff", { method: "POST", body: f }))) onSaved(); };
   return (
     <Modal title={t("ui.staff.add")} onClose={onClose}>
-      <form onSubmit={save} className="form-grid form-grid--2">
-        <Field label={t("ui.staff.fullName")} error={sub.fieldErrors.fullName} full><input className="input" value={f.fullName} onChange={set("fullName")} /></Field>
-        <Field label={t("ui.staff.username")} error={sub.fieldErrors.username}><input className="input" autoCapitalize="none" value={f.username} onChange={set("username")} /></Field>
-        <Field label={t("ui.staff.password")} error={sub.fieldErrors.password}><input className="input" type="password" autoComplete="new-password" value={f.password} onChange={set("password")} /></Field>
-        <Field label={`${t("ui.common.phone")} ${t("ui.common.optional")}`} error={sub.fieldErrors.phone}><input className="input" value={f.phone} onChange={set("phone")} /></Field>
-        <Field label={`${t("ui.common.email")} ${t("ui.common.optional")}`} error={sub.fieldErrors.email}><input className="input" value={f.email} onChange={set("email")} /></Field>
-        <Field label={t("ui.common.role")} error={sub.fieldErrors.role} full>
-          <div className="role-pick">
-            {["manager", "cashier", "stockkeeper"].map((r) => (
-              <button key={r} type="button" aria-pressed={f.role === r} onClick={() => setF({ ...f, role: r })}>
-                <strong>{t(`app.roles.${r}`)}</strong><small>{t(`ui.staff.rolesHelp.${r}`)}</small>
-              </button>
-            ))}
-          </div>
-        </Field>
+      <form onSubmit={save} className="form-grid form-grid--2 sheet-form">
+        <Field label={t("ui.staff.fullName")} error={sub.fieldErrors.fullName} full><input className="input" value={f.fullName} onChange={set("fullName")} autoComplete="off" /></Field>
+        <Field label={t("ui.staff.username")} error={sub.fieldErrors.username}><input className="input" autoCapitalize="none" autoComplete="off" value={f.username} onChange={set("username")} /></Field>
+        <Field label={t("ui.staff.password")} error={sub.fieldErrors.password} hint={t("register.passwordHint")}><input className="input" type="password" autoComplete="new-password" value={f.password} onChange={set("password")} /></Field>
+        <Field label={`${t("ui.common.phone")} ${t("ui.common.optional")}`} error={sub.fieldErrors.phone}><input className="input" type="tel" value={f.phone} onChange={set("phone")} /></Field>
+        <Field label={`${t("ui.common.email")} ${t("ui.common.optional")}`} error={sub.fieldErrors.email}><input className="input" type="email" value={f.email} onChange={set("email")} /></Field>
+        <div className="ff ff--full">
+          <span className="ff__label">{t("ui.common.role")}</span>
+          {roles.length === 0 ? (
+            <p className="page-help">{t("ui.staff.noRoles")} <button type="button" className="link-btn" onClick={onManageRoles}>{t("ui.staff.manageRoles")}</button></p>
+          ) : (
+            <div className="role-pick">
+              {roles.map((r) => {
+                const mods = roleModules(r, groups, t);
+                return (
+                  <button key={r.id} type="button" aria-pressed={String(f.roleId) === String(r.id)} onClick={() => setF({ ...f, roleId: r.id })}>
+                    <strong>{r.name}</strong>
+                    <small>{r.description || (mods.length ? mods.join(", ") : t("ui.staff.noModules"))}</small>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {sub.fieldErrors.roleId && <span className="ff__error">{t("ui.errors.required")}</span>}
+          {roles.length > 0 && <button type="button" className="link-btn staff-roles-link" onClick={onManageRoles}>{t("ui.staff.manageRoles")}</button>}
+        </div>
         <FormError error={sub.formError} />
-        <div className="form-actions ff--full"><button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button><button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.common.save")}</button></div>
+        <div className="form-actions ff--full sheet-actions">
+          <button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button>
+          <button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.common.save")}</button>
+        </div>
       </form>
     </Modal>
+  );
+}
+
+/* ---------- Roles tab ---------- */
+function RolesList({ rolesApi }) {
+  const { t } = useLanguage();
+  const [editing, setEditing] = useState(null);   // role or {} for a new one
+  const [notice, setNotice] = useState(null);
+  const roles = rolesApi.data?.roles || [];
+  const groups = rolesApi.data?.catalog?.groups || [];
+  const remove = async (r) => {
+    if (!window.confirm(fill(t("ui.staff.deleteRoleConfirm"), { name: r.name }))) return;
+    setNotice(null);
+    try { await apiRequest(`/api/roles/${r.id}`, { method: "DELETE" }); rolesApi.reload(); }
+    catch (err) { setNotice(err.code === "roleInUse" ? fill(t("ui.staff.roleInUse"), { n: err.data?.count || "" }) : t("ui.errors.failed")); }
+  };
+  return (
+    <>
+      <div className="staff-bar">
+        <p className="page-help">{t("ui.staff.rolesHelp2")}</p>
+        <button type="button" className="btn btn--primary" onClick={() => setEditing({})}><Icon name="plus" /><span>{t("ui.staff.newRole")}</span></button>
+      </div>
+      {notice && <p className="form-status form-status--error" role="alert">{notice}</p>}
+      {rolesApi.loading && !rolesApi.data ? <Loading /> : (
+        <div className="role-cards">
+          <article className="role-card role-card--owner">
+            <div className="role-card__head"><strong>{t("app.roles.owner")}</strong><span className="role-card__count"><Icon name="lock" />{t("ui.staff.fullAccess")}</span></div>
+            <p className="muted">{t("ui.staff.ownerHelp")}</p>
+          </article>
+          {roles.map((r) => {
+            const mods = roleModules(r, groups, t);
+            return (
+              <article key={r.id} className="role-card">
+                <div className="role-card__head">
+                  <strong>{r.name}</strong>
+                  <span className="role-card__count"><Icon name="users" />{fill(t("ui.staff.staffCount"), { n: r.staffCount })}</span>
+                </div>
+                {r.description && <p className="muted">{r.description}</p>}
+                <div className="role-card__mods">
+                  {mods.length ? mods.map((m) => <span key={m} className="chip-mod">{m}</span>) : <span className="muted">{t("ui.staff.noModules")}</span>}
+                </div>
+                <small className="muted">{fill(t("ui.staff.permCount"), { n: r.permissions.length })}</small>
+                <div className="role-card__actions">
+                  <button type="button" className="btn btn--outline btn--sm" onClick={() => setEditing(r)}>{t("ui.common.edit")}</button>
+                  <button type="button" className="btn btn--danger btn--sm" disabled={r.staffCount > 0} title={r.staffCount > 0 ? t("ui.staff.roleInUseShort") : undefined} onClick={() => remove(r)}>{t("ui.common.delete")}</button>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      )}
+      {editing && <RoleForm role={editing} groups={groups} roles={roles} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); rolesApi.reload(); }} />}
+    </>
+  );
+}
+
+function RoleForm({ role, groups, roles, onClose, onSaved }) {
+  const { t } = useLanguage();
+  const isNew = !role.id;
+  const [f, setF] = useState({ name: role.name || "", description: role.description || "" });
+  const [perms, setPerms] = useState(new Set(role.permissions || []));
+  const sub = useSubmit();
+  const toggle = (p, on) => setPerms((s) => { const n = new Set(s); if (on) n.add(p); else n.delete(p); return n; });
+  const setModule = (g, on) => setPerms((s) => { const n = new Set(s); g.perms.forEach((p) => (on ? n.add(p) : n.delete(p))); return n; });
+  const openModule = (g, on) => setPerms((s) => { const n = new Set(s); if (on) n.add(g.perms[0]); else g.perms.forEach((p) => n.delete(p)); return n; });
+  const copyFrom = (id) => { const src = roles.find((r) => String(r.id) === String(id)); if (src) setPerms(new Set(src.permissions)); };
+  const save = async (e) => {
+    e.preventDefault();
+    const body = { ...f, permissions: [...perms] };
+    if (await sub.run(() => apiRequest(isNew ? "/api/roles" : `/api/roles/${role.id}`, { method: isNew ? "POST" : "PUT", body }))) onSaved();
+  };
+  return (
+    <Modal title={t(isNew ? "ui.staff.newRole" : "ui.staff.editRole")} onClose={onClose} wide>
+      <form onSubmit={save} className="form-grid sheet-form">
+        <div className="form-grid form-grid--2">
+          <Field label={t("ui.staff.roleName")} error={sub.fieldErrors.name === "required" ? "required" : undefined}>
+            <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={t("ui.staff.roleNamePh")} autoFocus={isNew} />
+          </Field>
+          <Field label={`${t("ui.common.description")} ${t("ui.common.optional")}`}>
+            <input className="input" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} placeholder={t("ui.staff.roleDescPh")} />
+          </Field>
+        </div>
+        {sub.fieldErrors.name === "roleNameTaken" && <p className="form-status form-status--error">{t("ui.staff.roleNameTaken")}</p>}
+        <div className="perm-tools">
+          <strong>{t("ui.staff.whatCanDo")}</strong>
+          <div className="perm-tools__btns">
+            {isNew && roles.length > 0 && (
+              <select className="input input--auto" defaultValue="" onChange={(e) => copyFrom(e.target.value)} aria-label={t("ui.staff.copyFrom")}>
+                <option value="">{t("ui.staff.copyFrom")}</option>
+                {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+              </select>
+            )}
+            <button type="button" className="btn btn--outline btn--sm" onClick={() => setPerms(new Set(groups.flatMap((g) => g.perms)))}>{t("ui.staff.selectAll")}</button>
+            <button type="button" className="btn btn--outline btn--sm" onClick={() => setPerms(new Set())}>{t("ui.staff.clearAll")}</button>
+          </div>
+        </div>
+        <div className="perm-groups">
+          {groups.map((g) => {
+            const open = perms.has(g.perms[0]);
+            return (
+              <fieldset key={g.module} className={"perm-group" + (open ? " is-open" : "")}>
+                <legend className="perm-group__head">
+                  <label className="perm-switch">
+                    <input type="checkbox" checked={open} onChange={(e) => openModule(g, e.target.checked)} />
+                    <span className="perm-switch__ui" aria-hidden="true" />
+                    <strong>{t(`app.modules.${g.module}`)}</strong>
+                  </label>
+                  {g.perms.length > 1 && <button type="button" className="link-btn" onClick={() => setModule(g, !g.perms.every((p) => perms.has(p)))}>{g.perms.every((p) => perms.has(p)) ? t("ui.staff.none") : t("ui.staff.all")}</button>}
+                </legend>
+                <ul className="perm-list">
+                  {g.perms.map((p, i) => (
+                    <li key={p}>
+                      <label className="checkbox">
+                        <input type="checkbox" checked={perms.has(p)} disabled={i > 0 && !open && p !== "sales.view"}
+                          onChange={(e) => (i === 0 ? openModule(g, e.target.checked) : toggle(p, e.target.checked))} />
+                        <span>{permLabel(t, p)}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </fieldset>
+            );
+          })}
+          <fieldset className="perm-group perm-group--locked">
+            <legend className="perm-group__head"><strong><Icon name="lock" />{t("ui.staff.ownerOnlyTitle")}</strong></legend>
+            <p className="muted">{t("ui.staff.ownerOnlyHelp")}</p>
+          </fieldset>
+        </div>
+        <FormError error={sub.fieldErrors.name === "roleNameTaken" ? null : sub.formError} />
+        <div className="form-actions sheet-actions">
+          <span className="muted perm-count">{fill(t("ui.staff.permCount"), { n: perms.size })}</span>
+          <button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button>
+          <button type="submit" className="btn btn--primary" disabled={sub.busy}>{t(sub.busy ? "ui.common.saving" : "ui.common.save")}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/* ---------- Module access tab: modules × roles grid ---------- */
+function ModuleAccess({ rolesApi }) {
+  const { t } = useLanguage();
+  const [busy, setBusy] = useState(null);
+  const [error, setError] = useState(null);
+  const roles = rolesApi.data?.roles || [];
+  const groups = rolesApi.data?.catalog?.groups || [];
+  const flip = async (role, g, on) => {
+    const set = new Set(role.permissions);
+    if (on) set.add(g.perms[0]); else g.perms.forEach((p) => set.delete(p));
+    setBusy(`${role.id}-${g.module}`); setError(null);
+    try {
+      await apiRequest(`/api/roles/${role.id}`, { method: "PUT", body: { name: role.name, description: role.description, permissions: [...set] } });
+      rolesApi.reload();
+    } catch { setError(t("ui.errors.failed")); } finally { setBusy(null); }
+  };
+  if (rolesApi.loading && !rolesApi.data) return <Loading />;
+  return (
+    <>
+      <p className="page-help">{t("ui.staff.accessHelp")}</p>
+      {error && <p className="form-status form-status--error" role="alert">{error}</p>}
+      <div className="table-wrap access-wrap">
+        <table className="table access-table">
+          <thead>
+            <tr>
+              <th>{t("ui.staff.module")}</th>
+              <th className="access-table__role">{t("app.roles.owner")}</th>
+              {roles.map((r) => <th key={r.id} className="access-table__role">{r.name}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {groups.map((g) => (
+              <tr key={g.module}>
+                <th scope="row">{t(`app.modules.${g.module}`)}<small className="cell-sub">{permLabel(t, g.perms[0])}</small></th>
+                <td className="access-table__cell"><Icon name="check" className="access-yes" /></td>
+                {roles.map((r) => {
+                  const on = r.permissions.includes(g.perms[0]);
+                  return (
+                    <td key={r.id} className="access-table__cell">
+                      <button type="button" className={"pm-switch" + (on ? " is-on" : "")} role="switch" aria-checked={on}
+                        aria-label={`${r.name} · ${t(`app.modules.${g.module}`)}`} disabled={busy === `${r.id}-${g.module}`} onClick={() => flip(r, g, !on)}>
+                        <span />
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+            {["staff", "business", "settings"].map((m) => (
+              <tr key={m} className="is-muted">
+                <th scope="row">{t(`app.modules.${m}`)}<small className="cell-sub">{t("ui.staff.ownerOnlyShort")}</small></th>
+                <td className="access-table__cell"><Icon name="check" className="access-yes" /></td>
+                {roles.map((r) => <td key={r.id} className="access-table__cell"><Icon name="lock" className="access-lock" /></td>)}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="muted">{t("ui.staff.accessDetail")}</p>
+    </>
   );
 }
 
@@ -312,7 +564,7 @@ export function Profile() {
       <div className="split-view">
         <form onSubmit={saveA} className="panel-card form-grid">
           <h2 className="panel-card__title">{t("ui.profile.details")}</h2>
-          <p className="muted">{t("ui.profile.username")}: <strong>{p.data.profile.username}</strong> · {t(`app.roles.${p.data.profile.role}`)}</p>
+          <p className="muted">{t("ui.profile.username")}: <strong>{p.data.profile.username}</strong> · {p.data.profile.roleName || t(`app.roles.${p.data.profile.role}`)}</p>
           <p className="muted">{t("ui.profile.lastLogin")}: {date(p.data.profile.lastLoginAt, lang, true)}</p>
           <Field label={t("ui.staff.fullName")} error={subA.fieldErrors.fullName}><input className="input" value={f.fullName} onChange={(e) => setF({ ...f, fullName: e.target.value })} /></Field>
           <Field label={t("ui.common.email")} error={subA.fieldErrors.email}><input className="input" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>

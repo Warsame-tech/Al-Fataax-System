@@ -8,11 +8,17 @@ import { requireAuth, audit } from "../middleware/auth.js";
 import { requirePerm, can } from "../lib/permissions.js";
 import { ah, id, text, optText, withTx, ensureOwned, badRequest, conflict, forbidden, num } from "../lib/http.js";
 import { UPLOAD_DIR, BUSINESS_TYPES } from "./auth.js";
+import { ensureDefaultRoles } from "../lib/roles.js";
+
+/* A role of this business (Staff & roles → Roles); the owner role is never assigned here. */
+async function roleOf(conn, bid, roleId) {
+  const [[r]] = roleId ? await conn.query("SELECT id, name FROM roles WHERE id = ? AND business_id = ?", [roleId, bid]) : [[null]];
+  return r || null;
+}
 
 const USERNAME = /^[a-zA-Z0-9_.]{3,30}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE = /^\+?[0-9\s-]{7,20}$/;
-const ROLES = ["manager", "cashier", "stockkeeper"]; // the owner role is never assigned here
 const strongPassword = (p) => typeof p === "string" && p.length >= 8 && /[A-Za-z]/.test(p) && /[0-9]/.test(p);
 
 /* ===================== Staff (owner only) ===================== */
@@ -20,31 +26,39 @@ export const staffRouter = Router();
 staffRouter.use(requireAuth, requirePerm("staff.manage"));
 
 staffRouter.get("/", ah(async (req, res) => {
+  await ensureDefaultRoles(req.business.id);
   const [rows] = await pool.query(
-    `SELECT u.id, u.full_name, u.username, u.email, u.phone, u.status, u.last_login_at, u.created_at, r.role
+    `SELECT u.id, u.full_name, u.username, u.email, u.phone, u.status, u.last_login_at, u.created_at, r.role, r.role_id, ro.name role_name
        FROM users u JOIN business_user_roles r ON r.user_id = u.id AND r.business_id = u.business_id
-      WHERE u.business_id = ? ORDER BY FIELD(r.role,'owner','manager','cashier','stockkeeper'), u.full_name`, [req.business.id]);
-  res.json({ users: rows.map((u) => ({ id: u.id, fullName: u.full_name, username: u.username, email: u.email, phone: u.phone, status: u.status, role: u.role, lastLoginAt: u.last_login_at, isMe: u.id === req.user.id })) });
+       LEFT JOIN roles ro ON ro.id = r.role_id AND ro.business_id = u.business_id
+      WHERE u.business_id = ? ORDER BY r.role = 'owner' DESC, ro.name, u.full_name`, [req.business.id]);
+  res.json({ users: rows.map((u) => ({
+    id: u.id, fullName: u.full_name, username: u.username, email: u.email, phone: u.phone, status: u.status,
+    role: u.role === "owner" ? "owner" : "staff", roleId: u.role_id || null, roleName: u.role_name || null,
+    lastLoginAt: u.last_login_at, isMe: u.id === req.user.id
+  })) });
 }));
 
 staffRouter.post("/", ah(async (req, res) => {
   const b = req.body || {};
-  const d = { fullName: text(b.fullName, 150), username: text(b.username, 30).toLowerCase(), email: optText(b.email, 190), phone: optText(b.phone, 30), role: b.role, password: b.password };
+  const d = { fullName: text(b.fullName, 150), username: text(b.username, 30).toLowerCase(), email: optText(b.email, 190), phone: optText(b.phone, 30), roleId: id(b.roleId), password: b.password };
   const e = {};
   if (d.fullName.length < 2) e.fullName = "required";
   if (!USERNAME.test(d.username)) e.username = "invalidUsername";
   if (d.email && !EMAIL.test(d.email)) e.email = "invalidEmail";
   if (d.phone && !PHONE.test(d.phone)) e.phone = "invalidPhone";
-  if (!ROLES.includes(d.role)) e.role = "required";
+  if (!d.roleId) e.roleId = "required";
   if (!strongPassword(d.password)) e.password = "weakPassword";
   if (Object.keys(e).length) throw badRequest(e);
+  const role = await roleOf(pool, req.business.id, d.roleId);
+  if (!role) throw badRequest({ roleId: "required" });
   const hash = await bcrypt.hash(d.password, 12);
   try {
     const newId = await withTx(async (conn) => {
       const [u] = await conn.query("INSERT INTO users (business_id, full_name, username, email, phone, password_hash) VALUES (?, ?, ?, ?, ?, ?)",
         [req.business.id, d.fullName, d.username, d.email, d.phone, hash]);
-      await conn.query("INSERT INTO business_user_roles (business_id, user_id, role) VALUES (?, ?, ?)", [req.business.id, u.insertId, d.role]);
-      await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "user.created", entity: "user", entityId: u.insertId, meta: { role: d.role }, ip: req.ip });
+      await conn.query("INSERT INTO business_user_roles (business_id, user_id, role, role_id) VALUES (?, ?, 'staff', ?)", [req.business.id, u.insertId, role.id]);
+      await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "user.created", entity: "user", entityId: u.insertId, meta: { role: role.name }, ip: req.ip });
       return u.insertId;
     });
     res.status(201).json({ id: newId });
@@ -54,7 +68,7 @@ staffRouter.post("/", ah(async (req, res) => {
   }
 }));
 
-/* PATCH /api/staff/:id { role?, status?, password? } — cannot change the owner or yourself */
+/* PATCH /api/staff/:id { roleId?, status?, password? } — cannot change the owner or yourself */
 staffRouter.patch("/:id", ah(async (req, res) => {
   const bid = req.business.id;
   const userId = id(req.params.id);
@@ -64,10 +78,11 @@ staffRouter.patch("/:id", ah(async (req, res) => {
     if (u.id === req.user.id || r.role === "owner") throw forbidden();
     const b = req.body || {};
     const changes = {};
-    if (b.role !== undefined) {
-      if (!ROLES.includes(b.role)) throw badRequest({ role: "required" });
-      await conn.query("UPDATE business_user_roles SET role = ? WHERE user_id = ? AND business_id = ?", [b.role, u.id, bid]);
-      changes.role = b.role;
+    if (b.roleId !== undefined) {
+      const role = await roleOf(conn, bid, id(b.roleId));
+      if (!role) throw badRequest({ roleId: "required" });
+      await conn.query("UPDATE business_user_roles SET role = 'staff', role_id = ? WHERE user_id = ? AND business_id = ?", [role.id, u.id, bid]);
+      changes.role = role.name;
     }
     if (b.status !== undefined) {
       if (!["active", "disabled"].includes(b.status)) throw badRequest({ status: "required" });
@@ -108,7 +123,7 @@ settingsRouter.get("/", ah(async (req, res) => {
     business: { name: b.name, ownerName: b.owner_name, email: b.email, phone: b.phone, type: b.business_type, address: b.address, logoPath: b.logo_path, createdAt: b.created_at },
     settings: { currency: s.currency, defaultLanguage: s.default_language, invoicePrefix: s.invoice_prefix, receiptPrefix: s.receipt_prefix, purchasePrefix: s.purchase_prefix, invoiceFooter: s.invoice_footer, timezone: s.timezone },
     trial: t || null,
-    canEdit: can(req.user.role, "business.edit")
+    canEdit: can(req.user, "business.edit")
   });
 }));
 
@@ -162,7 +177,7 @@ profileRouter.use(requireAuth);
 
 profileRouter.get("/", ah(async (req, res) => {
   const [[u]] = await pool.query("SELECT full_name, username, email, phone, language, last_login_at, created_at FROM users WHERE id = ? AND business_id = ?", [req.user.id, req.business.id]);
-  res.json({ profile: { fullName: u.full_name, username: u.username, email: u.email, phone: u.phone, language: u.language, role: req.user.role, lastLoginAt: u.last_login_at, createdAt: u.created_at } });
+  res.json({ profile: { fullName: u.full_name, username: u.username, email: u.email, phone: u.phone, language: u.language, role: req.user.role, roleName: req.user.roleName, lastLoginAt: u.last_login_at, createdAt: u.created_at } });
 }));
 
 profileRouter.put("/", ah(async (req, res) => {
@@ -193,7 +208,7 @@ notificationsRouter.use(requireAuth);
 
 notificationsRouter.get("/", ah(async (req, res) => {
   const bid = req.business.id;
-  const role = req.user.role;
+  const role = req.user;
   const items = [];
   if (can(role, "products.view")) {
     const [stock] = await pool.query("SELECT id, name, stock_qty, min_stock FROM products WHERE business_id = ? AND is_active = 1 AND stock_qty <= min_stock ORDER BY stock_qty LIMIT 20", [bid]);

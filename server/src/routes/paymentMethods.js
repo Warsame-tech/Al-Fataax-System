@@ -75,7 +75,7 @@ function readMethod(body, { creating }) {
 router.get("/", ah(async (req, res) => {
   const bid = req.business.id;
   await ensureDefaultMethods(bid);
-  const all = req.query.all === "1" && can(req.user.role, "settings.edit");
+  const all = req.query.all === "1" && can(req.user, "settings.edit");
   const [rows] = await pool.query(
     `SELECT * FROM payment_methods WHERE business_id = ? ${all ? "" : "AND is_active = 1"} ORDER BY sort_order, id`, [bid]
   );

@@ -180,7 +180,7 @@ function BusinessDetail() {
         </section>
         <section className="panel-card">
           <h2 className="panel-card__title">{t("ui.admin.users")}</h2>
-          <ul className="pay-list">{users.map((u) => <li key={u.id}><strong>{u.fullName}</strong> · {u.username} · {t(`app.roles.${u.role}`)} · <StatusBadge status={u.status} /></li>)}</ul>
+          <ul className="pay-list">{users.map((u) => <li key={u.id}><strong>{u.fullName}</strong> · {u.username} · {u.roleName || t(`app.roles.${u.role}`)} · <StatusBadge status={u.status} /></li>)}</ul>
         </section>
       </div>
       <section className="panel-card">

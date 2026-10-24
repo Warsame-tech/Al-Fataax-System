@@ -91,8 +91,9 @@ router.get("/businesses/:id", ah(async (req, res) => {
   const [[b]] = await pool.query("SELECT * FROM businesses WHERE id = ?", [bid || 0]);
   if (!b) return res.status(404).json({ code: "notFound" });
   const [users] = await pool.query(
-    `SELECT u.id, u.full_name, u.username, u.status, u.last_login_at, r.role FROM users u JOIN business_user_roles r ON r.user_id = u.id
-      WHERE u.business_id = ? ORDER BY FIELD(r.role,'owner','manager','cashier','stockkeeper')`, [bid]);
+    `SELECT u.id, u.full_name, u.username, u.status, u.last_login_at, r.role, ro.name role_name FROM users u JOIN business_user_roles r ON r.user_id = u.id
+       LEFT JOIN roles ro ON ro.id = r.role_id AND ro.business_id = u.business_id
+      WHERE u.business_id = ? ORDER BY r.role = 'owner' DESC, ro.name, u.full_name`, [bid]);
   const [[usage]] = await pool.query(
     `SELECT (SELECT COUNT(*) FROM products WHERE business_id = ?) products, (SELECT COUNT(*) FROM customers WHERE business_id = ?) customers,
             (SELECT COUNT(*) FROM sales WHERE business_id = ?) sales, (SELECT COUNT(*) FROM invoices WHERE business_id = ?) invoices,
@@ -104,7 +105,7 @@ router.get("/businesses/:id", ah(async (req, res) => {
   await pool.query("INSERT INTO audit_logs (platform_admin_id, business_id, action, ip) VALUES (?, ?, 'admin.viewed_business', ?)", [req.admin.id, bid, req.ip]);
   res.json({
     business: { id: b.id, name: b.name, owner: b.owner_name, phone: b.phone, email: b.email, type: b.business_type, address: b.address, logoPath: b.logo_path, status: b.status, createdAt: b.created_at },
-    users: users.map((u) => ({ id: u.id, fullName: u.full_name, username: u.username, status: u.status, role: u.role, lastLoginAt: u.last_login_at })),
+    users: users.map((u) => ({ id: u.id, fullName: u.full_name, username: u.username, status: u.status, role: u.role === 'owner' ? 'owner' : 'staff', roleName: u.role_name || null, lastLoginAt: u.last_login_at })),
     usage: Object.fromEntries(Object.entries(usage).map(([k, v]) => [k, num(v)])),
     trial: trial || null,
     activity: logs.map((l) => ({ action: l.action, at: l.created_at, user: l.full_name }))

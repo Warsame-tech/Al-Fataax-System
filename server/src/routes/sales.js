@@ -155,7 +155,7 @@ export async function createSale(conn, ctx, body) {
 }
 
 router.post("/", requirePerm("sales.create"), ah(async (req, res) => {
-  const result = await withTx((conn) => createSale(conn, { businessId: req.business.id, userId: req.user.id, role: req.user.role }, req.body || {}));
+  const result = await withTx((conn) => createSale(conn, { businessId: req.business.id, userId: req.user.id, role: req.user }, req.body || {}));
   res.status(201).json(result);
 }));
 

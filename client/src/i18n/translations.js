@@ -244,7 +244,8 @@ const translations = {
         owner: "Owner",
         manager: "Manager",
         cashier: "Cashier",
-        stockkeeper: "Stockkeeper"
+        stockkeeper: "Stockkeeper",
+        staff: "Staff"
       },
       period: {
         label: "Period",
@@ -650,7 +651,8 @@ const translations = {
         owner: "Milkiile",
         manager: "Maamule",
         cashier: "Khasnaji",
-        stockkeeper: "Kaydiye"
+        stockkeeper: "Kaydiye",
+        staff: "Shaqaale"
       },
       period: {
         label: "Muddada",

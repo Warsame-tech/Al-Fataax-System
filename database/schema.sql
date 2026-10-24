@@ -69,11 +69,28 @@ CREATE TABLE IF NOT EXISTS business_user_roles (
   id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   business_id INT UNSIGNED NOT NULL,
   user_id     INT UNSIGNED NOT NULL,
-  role        ENUM('owner','manager','cashier','stockkeeper') NOT NULL,
+  role        VARCHAR(20) NOT NULL,                -- 'owner', or 'staff' with a business role below
+  role_id     INT UNSIGNED NULL,                   -- roles.id (NULL for the owner)
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_role_user (business_id, user_id),
   CONSTRAINT fk_roles_business FOREIGN KEY (business_id) REFERENCES businesses(id),
   CONSTRAINT fk_roles_user     FOREIGN KEY (user_id)     REFERENCES users(id)
+) ENGINE=InnoDB;
+
+-- Business roles created by the owner (Staff & roles → Roles). permissions = JSON list of
+-- permission keys (see server/src/lib/permissions.js). New businesses start with
+-- Manager, Cashier and Stockkeeper (template_key keeps where a role came from).
+CREATE TABLE IF NOT EXISTS roles (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id  INT UNSIGNED NOT NULL,
+  name         VARCHAR(60)  NOT NULL,
+  description  VARCHAR(200) NULL,
+  permissions  TEXT NOT NULL,
+  template_key VARCHAR(20)  NULL,
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_role_name (business_id, name),
+  CONSTRAINT fk_role_business FOREIGN KEY (business_id) REFERENCES businesses(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS business_settings (

@@ -656,3 +656,84 @@
 .camera__tips .icon { width: 15px; height: 15px; flex: none; margin-top: 2px; color: var(--blue); }
 .camera__manual { display: flex; gap: 8px; }
 .camera__manual .input { flex: 1; min-width: 0; }
+
+/* =========================================================================
+   Staff & roles: staff list, role cards, role editor, module access grid
+   ========================================================================= */
+.staff-bar { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.staff-bar .page-help { flex: 1; min-width: 240px; margin: 0; }
+
+.role-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.role-card { display: grid; align-content: start; gap: 8px; padding: 14px; border-radius: 14px; background: #fff; border: 1px solid #e8ebf3; box-shadow: 0 10px 22px -20px rgba(11, 13, 61, .4); }
+.role-card--owner { background: linear-gradient(135deg, #fff6f0, #f5f8ff); border-color: #f6d6c3; }
+.role-card__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.role-card__head strong { font-size: 1.02rem; color: var(--navy); }
+.role-card__count { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; background: var(--soft); color: var(--ink-2); font-size: .76rem; font-weight: 600; white-space: nowrap; }
+.role-card__count .icon { width: 13px; height: 13px; }
+.role-card__mods { display: flex; flex-wrap: wrap; gap: 4px; }
+.chip-mod { padding: 2px 8px; border-radius: 999px; background: var(--blue-50); color: var(--blue); font-size: .74rem; font-weight: 600; }
+.role-card__actions { display: flex; gap: 6px; margin-top: 2px; }
+
+/* role editor */
+.perm-tools { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.perm-tools strong { color: var(--navy); }
+.perm-tools__btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.perm-groups { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 10px; }
+.perm-group { margin: 0; padding: 10px 12px 12px; border: 1px solid #e8ebf3; border-radius: 12px; background: #fafbfe; min-width: 0; }
+.perm-group.is-open { background: #fff; border-color: #c9d8fb; }
+.perm-group--locked { background: #f7f8fc; }
+.perm-group--locked .perm-group__head strong { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); }
+.perm-group--locked .icon { width: 14px; height: 14px; }
+.perm-group__head { display: flex; align-items: center; justify-content: space-between; gap: 8px; width: 100%; padding: 0; margin-bottom: 6px; float: left; }
+.perm-group__head + * { clear: both; }
+.perm-switch { display: inline-flex; align-items: center; gap: 8px; cursor: pointer; }
+.perm-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.perm-switch__ui { position: relative; flex: none; width: 34px; height: 20px; border-radius: 999px; background: #d5d9e6; transition: background-color .2s; }
+.perm-switch__ui::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0, 0, 0, .25); transition: transform .2s; }
+.perm-switch input:checked + .perm-switch__ui { background: #1f9d61; }
+.perm-switch input:checked + .perm-switch__ui::after { transform: translateX(14px); }
+.perm-switch input:focus-visible + .perm-switch__ui { outline: 2px solid var(--blue); outline-offset: 2px; }
+.perm-switch strong { color: var(--navy); font-size: .92rem; }
+.perm-list { display: grid; gap: 4px; }
+.perm-list .checkbox { align-items: flex-start; font-size: .86rem; line-height: 1.35; }
+.perm-list .checkbox input { margin-top: 2px; }
+.perm-list input:disabled + span { color: #a8adc2; }
+.perm-count { margin-right: auto; align-self: center; }
+.staff-roles-link { justify-self: start; margin-top: 4px; font-size: .86rem; }
+
+/* module access grid */
+.access-wrap { max-width: 100%; }
+.access-table th[scope="row"] { position: sticky; left: 0; z-index: 1; background: #fff; text-align: left; font-weight: 600; color: var(--navy); min-width: 170px; }
+.access-table tr.is-muted th[scope="row"] { color: var(--muted); }
+.access-table__role { text-align: center !important; white-space: nowrap; }
+.access-table__cell { text-align: center; }
+.access-table .pm-switch { padding: 0 4px; min-height: 28px; }
+.access-yes { width: 18px; height: 18px; color: #1f9d61; }
+.access-lock { width: 15px; height: 15px; color: #b8bdd0; }
+
+/* ---------- phone fixes: forms in sheets, staff list as cards ---------- */
+/* Save / Cancel stay visible at the bottom of long forms */
+.modal .sheet-actions { position: sticky; bottom: -16px; z-index: 2; margin: 0 -18px -16px; padding: 12px 18px; background: #fff; border-top: 1px solid #eef0f6; }
+@media (max-width: 760px) {
+  /* 100dvh = the visible screen height on phones (address bar excluded) */
+  .modal__box, .modal__box--wide { max-height: calc(100dvh - 8px); }
+  .modal__body { padding-bottom: 16px; }
+  .modal .sheet-actions .btn { flex: 1; }
+  .perm-groups { grid-template-columns: 1fr; }
+  .perm-tools__btns { width: 100%; }
+  .staff-bar .btn { width: 100%; }
+}
+@media (max-width: 700px) {
+  .table-wrap--stack { border: 0; background: none; overflow: visible; }
+  .table--stack thead { display: none; }
+  .table--stack, .table--stack tbody { display: block; }
+  .table--stack tr { display: grid; gap: 6px; margin-bottom: 10px; padding: 12px; border: 1px solid #e8ebf3; border-radius: 14px; background: #fff; }
+  .table--stack td { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0; border: 0; min-width: 0; }
+  .table--stack td[data-label]::before { content: attr(data-label); flex: none; color: var(--muted); font-size: .78rem; font-weight: 500; }
+  .table--stack td:first-child { font-size: 1rem; }
+  .table--stack td .input--auto { max-width: 60%; }
+  .table--stack td.row-actions { justify-content: flex-start; flex-wrap: wrap; padding-top: 6px; border-top: 1px solid #f0f2f8; white-space: normal; }
+  .table--stack td.row-actions:empty { display: none; }
+  .table--stack td.row-actions > * + * { margin-left: 0; }
+  .table--stack tbody tr:hover td { background: none; }
+}

@@ -64,7 +64,7 @@ export async function createInvoice(conn, ctx, body) {
 }
 
 router.post("/", requirePerm("invoices.create"), ah(async (req, res) => {
-  const result = await withTx((conn) => createInvoice(conn, { businessId: req.business.id, userId: req.user.id, role: req.user.role }, req.body || {}));
+  const result = await withTx((conn) => createInvoice(conn, { businessId: req.business.id, userId: req.user.id, role: req.user }, req.body || {}));
   res.status(201).json(result);
 }));
 

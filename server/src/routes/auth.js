@@ -8,7 +8,6 @@ import rateLimit from "express-rate-limit";
 import { pool } from "../config/db.js";
 import { env } from "../config/env.js";
 import { setSessionCookie, clearSessionCookie, requireAuth, audit } from "../middleware/auth.js";
-import { permissionsFor } from "../lib/permissions.js";
 
 const router = Router();
 
@@ -175,7 +174,7 @@ router.get("/me", requireAuth, async (req, res, next) => {
       "SELECT start_date, end_date, status FROM trial_records WHERE business_id = ? ORDER BY id DESC LIMIT 1",
       [req.business.id]
     );
-    res.json({ user: req.user, business: req.business, trial: trial[0] || null, permissions: permissionsFor(req.user.role) });
+    res.json({ user: req.user, business: req.business, trial: trial[0] || null, permissions: req.user.permissions });
   } catch (err) {
     next(err);
   }

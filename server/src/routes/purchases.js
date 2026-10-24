@@ -61,7 +61,7 @@ export async function createPurchase(conn, ctx, body) {
 }
 
 router.post("/", requirePerm("purchases.create"), ah(async (req, res) => {
-  const result = await withTx((conn) => createPurchase(conn, { businessId: req.business.id, userId: req.user.id, role: req.user.role }, req.body || {}));
+  const result = await withTx((conn) => createPurchase(conn, { businessId: req.business.id, userId: req.user.id, role: req.user }, req.body || {}));
   res.status(201).json(result);
 }));
 

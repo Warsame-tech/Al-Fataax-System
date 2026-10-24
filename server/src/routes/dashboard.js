@@ -109,7 +109,7 @@ router.get("/", async (req, res, next) => {
     const cogs = num(posCogs.cogs) + num(invCogs.cogs);
     const grossProfit = netSales - cogs;
 
-    const finance = can(req.user.role, "dashboard.finance");
+    const finance = can(req.user, "dashboard.finance");
     res.json({
       range,
       finance,

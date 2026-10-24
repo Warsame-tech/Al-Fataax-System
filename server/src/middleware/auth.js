@@ -1,4 +1,6 @@
 import jwt from "jsonwebtoken";
+import { ALL_PERMISSIONS, permissionsFor } from "../lib/permissions.js";
+import { parsePermissions } from "../lib/roles.js";
 import { pool } from "../config/db.js";
 import { env } from "../config/env.js";
 
@@ -41,13 +43,14 @@ export async function requireAuth(req, res, next) {
 
     const [rows] = await pool.query(
       `SELECT u.id, u.full_name, u.username, u.language, u.status AS user_status,
-              r.role,
+              r.role, r.role_id, ro.name AS role_name, ro.permissions AS role_permissions,
               b.id AS business_id, b.name AS business_name, b.status AS business_status,
               b.logo_path, b.phone, b.email, b.address, b.business_type,
               s.currency, s.invoice_prefix, s.invoice_footer
          FROM users u
          JOIN businesses b ON b.id = u.business_id
          JOIN business_user_roles r ON r.user_id = u.id AND r.business_id = b.id
+         LEFT JOIN roles ro ON ro.id = r.role_id AND ro.business_id = b.id
          LEFT JOIN business_settings s ON s.business_id = b.id
         WHERE u.id = ? AND b.id = ?`,
       [payload.uid, payload.bid]
@@ -61,7 +64,16 @@ export async function requireAuth(req, res, next) {
       return res.status(403).json({ code: "businessSuspended" });
     }
 
-    req.user = { id: row.id, fullName: row.full_name, username: row.username, role: row.role, language: row.language };
+    // Owner: everything. Staff: the permissions of their business role (none if the role is missing).
+    const isOwner = row.role === "owner";
+    const permissions = isOwner ? ALL_PERMISSIONS
+      : row.role_id ? (row.role_name ? parsePermissions(row.role_permissions) : [])
+      : permissionsFor(row.role);   // not linked yet: the old fixed role of the same name
+    req.user = {
+      id: row.id, fullName: row.full_name, username: row.username, language: row.language,
+      role: isOwner ? "owner" : row.role, roleId: row.role_id || null,
+      roleName: isOwner ? null : row.role_name || null, permissions
+    };
     req.business = {
       id: row.business_id, name: row.business_name, logoPath: row.logo_path, phone: row.phone,
       email: row.email, address: row.address, type: row.business_type,
