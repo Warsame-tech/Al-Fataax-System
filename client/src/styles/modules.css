@@ -723,20 +723,6 @@
   .perm-tools__btns { width: 100%; }
   .staff-bar .btn { width: 100%; }
 }
-@media (max-width: 700px) {
-  .table-wrap--stack { border: 0; background: none; overflow: visible; }
-  .table--stack thead { display: none; }
-  .table--stack, .table--stack tbody { display: block; }
-  .table--stack tr { display: grid; gap: 6px; margin-bottom: 10px; padding: 12px; border: 1px solid #e8ebf3; border-radius: 14px; background: #fff; }
-  .table--stack td { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0; border: 0; min-width: 0; }
-  .table--stack td[data-label]::before { content: attr(data-label); flex: none; color: var(--muted); font-size: .78rem; font-weight: 500; }
-  .table--stack td:first-child { font-size: 1rem; }
-  .table--stack td .input--auto { max-width: 60%; }
-  .table--stack td.row-actions { justify-content: flex-start; flex-wrap: wrap; padding-top: 6px; border-top: 1px solid #f0f2f8; white-space: normal; }
-  .table--stack td.row-actions:empty { display: none; }
-  .table--stack td.row-actions > * + * { margin-left: 0; }
-  .table--stack tbody tr:hover td { background: none; }
-}
 
 /* =========================================================================
    Phones: keep everything inside the screen
@@ -761,33 +747,9 @@
   .scan-mini__body { flex-basis: calc(100% - 70px); }
 }
 
-/* data tables become cards: each row is a card, each cell "Label .... value" */
+
+/* Phones: tables keep their normal layout and scroll sideways inside their box */
 @media (max-width: 700px) {
-  .app-shell .table-wrap:has(> .table:not(.access-table)) { border: 0; background: none; overflow: visible; box-shadow: none; }
-  .app-shell .table:not(.access-table) { display: block; font-size: .9rem; }
-  .app-shell .table:not(.access-table) thead { display: none; }
-  .app-shell .table:not(.access-table) tbody,
-  .app-shell .table:not(.access-table) tfoot { display: block; }
-  .app-shell .table:not(.access-table) tr {
-    display: grid; gap: 6px; margin-bottom: 10px; padding: 12px; border: 1px solid #e8ebf3; border-radius: 14px; background: #fff;
-  }
-  .app-shell .table:not(.access-table) tfoot tr { background: #f7f8fc; }
-  .app-shell .table:not(.access-table) td {
-    display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0;
-    padding: 0; border: 0; background: none; text-align: right; overflow-wrap: anywhere;
-  }
-  .app-shell .table:not(.access-table) td[data-label]::before {
-    content: attr(data-label); flex: none; max-width: 45%; color: var(--muted); font-size: .76rem; font-weight: 500; text-align: left;
-  }
-  .app-shell .table:not(.access-table) td:first-child { font-size: .98rem; }
-  .app-shell .table:not(.access-table) td:not([data-label]),
-  .app-shell .table:not(.access-table) td[data-label=""] { justify-content: flex-start; text-align: left; }
-  .app-shell .table:not(.access-table) td:empty { display: none; }
-  .app-shell .table:not(.access-table) td.row-actions { flex-wrap: wrap; justify-content: flex-start; padding-top: 6px; border-top: 1px solid #f0f2f8; white-space: normal; }
-  .app-shell .table:not(.access-table) td.row-actions:empty { display: none; }
-  .app-shell .table:not(.access-table) td.row-actions > * + * { margin-left: 0; }
-  .app-shell .table:not(.access-table) td .input { max-width: 60%; }
-  .app-shell .table:not(.access-table) .prod-cell { justify-content: flex-end; text-align: left; }
-  .app-shell .table:not(.access-table) tbody tr:hover td { background: none; }
-  .app-shell .table:not(.access-table) tr.is-clickable { cursor: pointer; }
+  .app-shell .table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; }
+  .app-shell .table th, .app-shell .table td { white-space: nowrap; }
 }
