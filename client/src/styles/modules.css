@@ -199,7 +199,7 @@
 @media (max-width: 560px) {
   .scan-card { grid-template-columns: 1fr; }
   .scan-card__img { max-width: 220px; }
-  .pos__scanbtn span { display: none; }
+  .pos__scanbtn > span:not(.icon) { display: none; }
 }
 .pos__products { display: grid; gap: 12px; }
 .pos__search { position: relative; }
@@ -557,7 +557,7 @@
 @media (max-width: 680px) {
   .paybox { grid-template-columns: 1fr; }
   .paybox__right { padding-left: 0; border-left: 0; min-height: 0; }
-  .pos2__scan span { display: none; }
+  .pos2__scan > span:not(.icon) { display: none; }
   .scan-mini { flex-wrap: wrap; }
 }
 
@@ -738,10 +738,56 @@
   .table--stack tbody tr:hover td { background: none; }
 }
 
-/* Notifications on phones: a centred panel under the top bar (never cut off at the sides) */
-@media (max-width: 600px) {
+/* =========================================================================
+   Phones: keep everything inside the screen
+   ========================================================================= */
+/* grid / flex children may shrink to the screen instead of growing to their widest content */
+.split-view > *, .pos2 > *, .dash-panels > *, .paybox > *, .form-grid > *, .page > * { min-width: 0; }
+
+/* notifications: centred panel under the top bar on phones and small tablets */
+@media (max-width: 900px) {
   .bell__panel {
     position: fixed; top: 66px; left: 12px; right: 12px; width: auto; margin-inline: auto; max-width: 420px;
     max-height: calc(100dvh - 90px); z-index: 80;
   }
+}
+
+/* POS top bar: icon-only buttons, search takes the rest */
+@media (max-width: 680px) {
+  .pos2__bar { gap: 6px; }
+  .pos2__scan { flex: none; width: 40px; padding: 0; justify-content: center; }
+  .pos2__scan > span:not(.icon) { display: none; }
+  .scan-mini { flex-wrap: wrap; }
+  .scan-mini__body { flex-basis: calc(100% - 70px); }
+}
+
+/* data tables become cards: each row is a card, each cell "Label .... value" */
+@media (max-width: 700px) {
+  .app-shell .table-wrap:has(> .table:not(.access-table)) { border: 0; background: none; overflow: visible; box-shadow: none; }
+  .app-shell .table:not(.access-table) { display: block; font-size: .9rem; }
+  .app-shell .table:not(.access-table) thead { display: none; }
+  .app-shell .table:not(.access-table) tbody,
+  .app-shell .table:not(.access-table) tfoot { display: block; }
+  .app-shell .table:not(.access-table) tr {
+    display: grid; gap: 6px; margin-bottom: 10px; padding: 12px; border: 1px solid #e8ebf3; border-radius: 14px; background: #fff;
+  }
+  .app-shell .table:not(.access-table) tfoot tr { background: #f7f8fc; }
+  .app-shell .table:not(.access-table) td {
+    display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0;
+    padding: 0; border: 0; background: none; text-align: right; overflow-wrap: anywhere;
+  }
+  .app-shell .table:not(.access-table) td[data-label]::before {
+    content: attr(data-label); flex: none; max-width: 45%; color: var(--muted); font-size: .76rem; font-weight: 500; text-align: left;
+  }
+  .app-shell .table:not(.access-table) td:first-child { font-size: .98rem; }
+  .app-shell .table:not(.access-table) td:not([data-label]),
+  .app-shell .table:not(.access-table) td[data-label=""] { justify-content: flex-start; text-align: left; }
+  .app-shell .table:not(.access-table) td:empty { display: none; }
+  .app-shell .table:not(.access-table) td.row-actions { flex-wrap: wrap; justify-content: flex-start; padding-top: 6px; border-top: 1px solid #f0f2f8; white-space: normal; }
+  .app-shell .table:not(.access-table) td.row-actions:empty { display: none; }
+  .app-shell .table:not(.access-table) td.row-actions > * + * { margin-left: 0; }
+  .app-shell .table:not(.access-table) td .input { max-width: 60%; }
+  .app-shell .table:not(.access-table) .prod-cell { justify-content: flex-end; text-align: left; }
+  .app-shell .table:not(.access-table) tbody tr:hover td { background: none; }
+  .app-shell .table:not(.access-table) tr.is-clickable { cursor: pointer; }
 }

@@ -22,6 +22,7 @@ export default function AppLayout() {
   }, [user?.id]);
 
   useEffect(() => { window.scrollTo(0, 0); }, [pathname]);
+  useTableLabels();
 
   const changeLang = (code) => { setLang(code); saveLanguage(code); };
   const handleSignOut = async () => { await signOut(); navigate("/signin", { replace: true }); };
@@ -72,6 +73,37 @@ export default function AppLayout() {
       </main>
     </div>
   );
+}
+
+/*
+ * On phones every data table is shown as a list of cards ("Category: Food"), so no column is
+ * hidden off the side of the screen. The card labels come from each table header; this keeps
+ * data-label set on every cell as pages load and data changes (see .app-shell .table in modules.css).
+ */
+function useTableLabels() {
+  useEffect(() => {
+    const root = document.getElementById("app-main");
+    if (!root) return undefined;
+    let frame = 0;
+    const label = () => {
+      frame = 0;
+      root.querySelectorAll("table.table").forEach((table) => {
+        const heads = [...table.querySelectorAll("thead th")].map((th) => th.textContent.trim());
+        table.querySelectorAll("tbody tr, tfoot tr").forEach((tr) => {
+          let col = 0;
+          [...tr.children].forEach((cell) => {
+            const text = heads[col] || "";
+            if (text && cell.getAttribute("data-label") !== text) cell.setAttribute("data-label", text);
+            col += Number(cell.getAttribute("colspan")) || 1;
+          });
+        });
+      });
+    };
+    const observer = new MutationObserver(() => { if (!frame) frame = requestAnimationFrame(label); });
+    observer.observe(root, { childList: true, subtree: true, characterData: true });
+    label();
+    return () => { observer.disconnect(); cancelAnimationFrame(frame); };
+  }, []);
 }
 
 /** Notification bell: low stock, invoices due / overdue, supplier payables (refreshed on open). */
