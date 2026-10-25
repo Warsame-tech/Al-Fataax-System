@@ -963,3 +963,14 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 .vat-switch input:checked + .vat-switch__ui::after { transform: translateX(14px); }
 .vat-switch input:focus-visible + .vat-switch__ui { outline: 2px solid var(--blue); outline-offset: 2px; }
 .paybox__vat dt { font-weight: 400; }
+
+/* VAT: a plain checkbox (replaces the switch look) */
+.vat-switch input { position: static; opacity: 1; width: 18px; height: 18px; margin: 0; accent-color: var(--blue); cursor: pointer; }
+.vat-switch__ui { display: none; }
+
+/* invoice items: smaller text */
+.invoice__table { font-size: .84rem; }
+.invoice__table th { padding: 8px 10px; font-size: .8rem; }
+.invoice__table td { padding: 9px 10px; }
+.invoice__table td small { font-size: .72rem; }
+.invoice__barcode { font-size: .8rem; }

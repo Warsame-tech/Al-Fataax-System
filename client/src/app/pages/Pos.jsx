@@ -296,7 +296,6 @@ function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
               <dt>
                 <label className="vat-switch">
                   <input type="checkbox" checked={addVat} onChange={(e) => setAddVat(e.target.checked)} />
-                  <span className="vat-switch__ui" aria-hidden="true" />
                   {fill(t("ui.pos.addVat"), { rate: VAT_RATE })}
                 </label>
               </dt>

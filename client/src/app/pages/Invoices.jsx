@@ -139,7 +139,6 @@ export function InvoiceForm() {
           <div className="ff ff--full">
             <label className="vat-switch">
               <input type="checkbox" checked={f.vat} onChange={(e) => setF((x) => ({ ...x, vat: e.target.checked }))} />
-              <span className="vat-switch__ui" aria-hidden="true" />
               {fill(t("ui.pos.addVat"), { rate: VAT_RATE })}
             </label>
             <span className="ff__hint">{t("ui.invoices.vatHint")}</span>

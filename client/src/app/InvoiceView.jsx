@@ -131,7 +131,7 @@ export default function InvoiceView({ preview = false }) {
         <table className="invoice__table">
           <thead>
             <tr>
-              <th>#</th><th>{t("invoice.item")}</th><th>{t("invoice.barcode")}</th><th className="num">{t("invoice.qty")}</th>
+              <th>#</th><th>{t("invoice.barcode")}</th><th>{t("invoice.item")}</th><th className="num">{t("invoice.qty")}</th>
               <th className="num">{t("invoice.price")}</th><th className="num">{t("invoice.amount")}</th>
             </tr>
           </thead>
@@ -139,8 +139,8 @@ export default function InvoiceView({ preview = false }) {
             {data.items.map((it, i) => (
               <tr key={i}>
                 <td>{i + 1}</td>
-                <td>{it.name}{it.sku && <small>{it.sku}</small>}</td>
                 <td className="invoice__barcode">{it.barcode || "—"}</td>
+                <td>{it.name}{it.sku && <small>{it.sku}</small>}</td>
                 <td className="num">{qty(it.qty)}</td>
                 <td className="num">{m(it.unitPrice)}</td>
                 <td className="num">{m(it.total)}</td>
