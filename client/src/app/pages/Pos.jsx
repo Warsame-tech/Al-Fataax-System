@@ -39,6 +39,8 @@ function Register() {
   const products = useApi(`/api/products?location=default&q=${encodeURIComponent(q)}`);
   const customers = useApi("/api/customers");
   const [cart, setCart] = useState([]);
+  const [active, setActive] = useState(null);       // highlighted cart line: the product just scanned / picked
+  const [pulse, setPulse] = useState(0);            // re-runs the highlight animation on every scan
   const [code, setCode] = useState("");             // barcode / search box in the cart column
   const [customerId, setCustomerId] = useState("");
   const [notice, setNotice] = useState(null);
@@ -64,6 +66,8 @@ function Register() {
       if (found) return c.map((l) => (l.product.id === p.id ? { ...l, qty: Math.min(l.qty + 1, p.stock) } : l));
       return [...c, { product: p, qty: 1 }];
     });
+    setActive(p.id);
+    setPulse((n) => n + 1);
     return true;
   };
   const setQty = (pid, v) => setCart((c) => c.map((l) => (l.product.id === pid ? { ...l, qty: Math.max(0, Math.min(Number(v) || 0, l.product.stock)) } : l)).filter((l) => l.qty > 0));
@@ -100,7 +104,7 @@ function Register() {
   const customer = customerList.find((c) => String(c.id) === String(customerId)) || null;
 
   const reset = () => {
-    setCart([]); setCustomerId(""); setDone(null); setPaying(false); setScanned(null); setNotice(null); setCode("");
+    setCart([]); setActive(null); setCustomerId(""); setDone(null); setPaying(false); setScanned(null); setNotice(null); setCode("");
     products.reload(); codeRef.current?.focus();
   };
 
@@ -123,7 +127,8 @@ function Register() {
         <ul className="pos2__lines" aria-label={t("ui.pos.cart")}>
           {cart.length === 0 && <li className="pos2__empty"><Icon name="cart" /><span>{t("ui.pos.emptyCart")}</span></li>}
           {cart.map((l) => (
-            <li key={l.product.id} className="pos2__line">
+            <li key={active === l.product.id ? `${l.product.id}-${pulse}` : l.product.id} className={"pos2__line" + (active === l.product.id ? " is-active" : "")}
+              onClick={() => setActive(l.product.id)} aria-current={active === l.product.id ? "true" : undefined}>
               <div className="pos2__line-top">
                 <span className="pos2__line-name">{l.product.name}</span>
                 <span className="pos2__line-total">{m(l.qty * l.product.sellingPrice)}</span>

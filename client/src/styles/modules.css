@@ -889,3 +889,9 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 
 /* form fields keep their natural height when a neighbour shows a hint */
 .ff { align-content: start; }
+
+/* POS cart: the product just scanned / picked is highlighted (light blue) with a short pulse */
+.pos2__line { cursor: pointer; transition: background-color .2s, border-color .2s, box-shadow .2s; }
+.pos2__line.is-active { background: #eaf2fe; border-color: #9dbcf8; box-shadow: inset 4px 0 0 var(--blue); animation: line-pulse .9s ease; }
+@keyframes line-pulse { 0% { background: #cfe0fd; } 100% { background: #eaf2fe; } }
+@media (prefers-reduced-motion: reduce) { .pos2__line.is-active { animation: none; } }
