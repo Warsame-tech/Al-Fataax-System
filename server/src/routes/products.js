@@ -50,7 +50,7 @@ const withLocation = (loc) => (loc
       LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.location_id = ${Number(loc)}`
   : SELECT);
 
-const SORTS = { name: "p.name, p.size", size: "p.size", sku: "p.sku", category: "c.name", brand: "b.name", cost: "p.cost_price", price: "p.selling_price", stock: "p.stock_qty", updated: "p.updated_at" };
+const SORTS = { name: "p.name, p.size", size: "p.size", value: "(p.stock_qty * p.cost_price)", sku: "p.sku", category: "c.name", brand: "b.name", cost: "p.cost_price", price: "p.selling_price", stock: "p.stock_qty", updated: "p.updated_at" };
 const STATUS_WHERE = {
   in: "p.stock_qty > p.min_stock", low: "p.stock_qty > 0 AND p.stock_qty <= p.min_stock",
   out: "p.stock_qty = 0", negative: "p.stock_qty < 0", lowOrOut: "p.stock_qty <= p.min_stock"

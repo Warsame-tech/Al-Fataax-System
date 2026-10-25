@@ -97,7 +97,8 @@ export default function Products() {
             <thead><tr>
               <Th by="name">{t("ui.common.name")}</Th><Th by="size">{t("ui.products.size")}</Th><Th by="sku">{t("ui.products.sku")}</Th><Th by="brand">{t("ui.products.brand")}</Th><Th by="category">{t("ui.common.category")}</Th>
               <Th by="cost" num>{t("ui.products.costPrice")}</Th><Th by="price" num>{t("ui.products.sellingPrice")}</Th>
-              <th className="num">{t("ui.products.wholesalePrice")}</th><Th by="stock" num>{t("ui.stock.current")}</Th><th />
+              <th className="num">{t("ui.products.wholesalePrice")}</th><Th by="stock" num>{t("ui.stock.current")}</Th><th>{t("ui.products.unit")}</th>
+              <th className="num">{t("ui.products.lowStockShort")}</th><Th by="value" num>{t("ui.products.stockValue")}</Th><th />
             </tr></thead>
             <tbody>
               {products.map((p) => (
@@ -116,9 +117,11 @@ export default function Products() {
                   <td className="num"><Money value={p.sellingPrice} /></td>
                   <td className="num">{p.wholesalePrice === null ? "—" : <Money value={p.wholesalePrice} />}</td>
                   <td className="num">
-                    <span className={"stock-pill" + (p.stockStatus === "low" ? " is-low" : p.stockStatus === "in" ? "" : " is-out")} title={t(`ui.stock.status.${p.stockStatus}`)}>{qty(p.stock)} {p.unit}</span>
-                    <small className="cell-sub">{fill(t("ui.products.alertAt"), { n: qty(p.minStock) })}</small>
+                    <span className={"stock-pill" + (p.stockStatus === "low" ? " is-low" : p.stockStatus === "in" ? "" : " is-out")} title={t(`ui.stock.status.${p.stockStatus}`)}>{qty(p.stock)}</span>
                   </td>
+                  <td>{p.unit}</td>
+                  <td className="num">{qty(p.minStock)}</td>
+                  <td className="num"><Money value={Math.round(p.stock * p.costPrice * 100) / 100} /></td>
                   <td className="row-actions">
                     <button type="button" className="icon-btn" title={t("ui.products.history")} onClick={() => setHistory(p)}><Icon name="history" /></button>
                     {can("stock.adjust") && <Link className="icon-btn" title={t("ui.stock.adjust")} to={`/app/m/stock?tab=adjust&product=${p.id}`}><Icon name="swap" /></Link>}

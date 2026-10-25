@@ -115,7 +115,7 @@ router.get("/:id", requirePerm("invoices.view"), ah(async (req, res) => {
       WHERE i.id = ? AND i.business_id = ?`, [invId, bid]);
   if (!inv) return res.status(404).json({ code: "notFound" });
   const [items] = await pool.query(
-    `SELECT ii.qty, ii.unit_price, ii.discount, ii.line_total, COALESCE(ii.description, CONCAT_WS(' ', p.name, NULLIF(p.size, ''))) name, p.sku
+    `SELECT ii.qty, ii.unit_price, ii.discount, ii.line_total, COALESCE(ii.description, CONCAT_WS(' ', p.name, NULLIF(p.size, ''))) name, p.sku, p.barcode
        FROM invoice_items ii JOIN products p ON p.id = ii.product_id AND p.business_id = ii.business_id
       WHERE ii.invoice_id = ? AND ii.business_id = ? ORDER BY ii.id`, [invId, bid]);
   const [payments] = await pool.query("SELECT amount, method, paid_at, reference FROM customer_payments WHERE invoice_id = ? AND business_id = ? ORDER BY paid_at, id", [invId, bid]);
@@ -127,7 +127,7 @@ router.get("/:id", requirePerm("invoices.view"), ah(async (req, res) => {
       balance: round2(num(inv.total) - num(inv.amount_paid)), notes: inv.notes, customerId: inv.customer_id,
       customer: { name: inv.customer_name, phone: inv.bill_phone || inv.customer_phone, email: inv.customer_email, address: inv.bill_address || inv.customer_address }
     },
-    items: items.map((i) => ({ name: i.name, sku: i.sku, qty: num(i.qty), unitPrice: num(i.unit_price), discount: num(i.discount), total: num(i.line_total) })),
+    items: items.map((i) => ({ name: i.name, sku: i.sku, barcode: i.barcode || null, qty: num(i.qty), unitPrice: num(i.unit_price), discount: num(i.discount), total: num(i.line_total) })),
     payments: payments.map((p) => ({ amount: num(p.amount), method: p.method, at: p.paid_at, reference: p.reference }))
   });
 }));

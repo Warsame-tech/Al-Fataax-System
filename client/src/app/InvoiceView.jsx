@@ -131,7 +131,7 @@ export default function InvoiceView({ preview = false }) {
         <table className="invoice__table">
           <thead>
             <tr>
-              <th>#</th><th>{t("invoice.item")}</th><th className="num">{t("invoice.qty")}</th>
+              <th>#</th><th>{t("invoice.item")}</th><th>{t("invoice.barcode")}</th><th className="num">{t("invoice.qty")}</th>
               <th className="num">{t("invoice.price")}</th><th className="num">{t("invoice.discount")}</th><th className="num">{t("invoice.amount")}</th>
             </tr>
           </thead>
@@ -140,6 +140,7 @@ export default function InvoiceView({ preview = false }) {
               <tr key={i}>
                 <td>{i + 1}</td>
                 <td>{it.name}{it.sku && <small>{it.sku}</small>}</td>
+                <td className="invoice__barcode">{it.barcode || "—"}</td>
                 <td className="num">{qty(it.qty)}</td>
                 <td className="num">{m(it.unitPrice)}</td>
                 <td className="num">{it.discount ? m(it.discount) : "—"}</td>
@@ -181,7 +182,6 @@ export default function InvoiceView({ preview = false }) {
           </div>
           <div className="invoice__sign-box">
             <span className="invoice__stamp" aria-hidden="true">{t("invoice.stampHere")}</span>
-            <small>{t("invoice.stamp")}</small>
           </div>
         </section>
 
