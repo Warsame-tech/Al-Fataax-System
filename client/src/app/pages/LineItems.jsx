@@ -13,7 +13,7 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
   const { t } = useLanguage();
   const m = useMoney();
   const [pick, setPick] = useState("");
-  const products = useApi("/api/products");
+  const products = useApi("/api/products?location=default");
   const all = products.data?.products || [];
 
   const priceOf = (p) => (mode === "buy" ? p.costPrice : priceList === "wholesale" && p.wholesalePrice !== null ? p.wholesalePrice : p.sellingPrice);

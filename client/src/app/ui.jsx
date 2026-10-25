@@ -41,7 +41,7 @@ export function useErrorText() {
     const code = typeof err === "string" ? err : err.code;
     if (code === "insufficientStock") return fill(t("ui.errors.insufficientStock"), { product: err.data?.product, available: err.data?.available });
     const msg = t(`ui.errors.${code}`);
-    return msg.startsWith("ui.errors.") ? t("ui.errors.failed") : msg;
+    return msg.startsWith("ui.errors.") ? t("ui.errors.failed") : fill(msg, (typeof err === "object" && err.data) || {});
   };
 }
 

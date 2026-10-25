@@ -11,6 +11,7 @@ import Invoices from "./pages/Invoices.jsx";
 import Purchases from "./pages/Purchases.jsx";
 import Reports from "./pages/Reports.jsx";
 import Overview from "./pages/Overview.jsx";
+import Stock from "./pages/Stock.jsx";
 import { Expenses, Cashbook } from "./pages/MoneyPages.jsx";
 import { Staff, BusinessInfo, Settings, Profile, Subscription, Audit } from "./pages/AccountPages.jsx";
 
@@ -22,6 +23,7 @@ const SCREENS = {
   suppliers: () => <Parties kind="suppliers" />,
   purchases: Purchases,
   products: Products,
+  stock: Stock,
   expenses: Expenses,
   cashbook: Cashbook,
   reports: Reports,

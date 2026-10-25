@@ -200,7 +200,16 @@ notificationsRouter.get("/", ah(async (req, res) => {
   const items = [];
   if (can(role, "products.view")) {
     const [stock] = await pool.query("SELECT id, name, stock_qty, min_stock FROM products WHERE business_id = ? AND is_active = 1 AND stock_qty <= min_stock ORDER BY stock_qty LIMIT 20", [bid]);
-    stock.forEach((p) => items.push({ type: num(p.stock_qty) <= 0 ? "outOfStock" : "lowStock", ref: p.name, link: "/app/m/products", amount: num(p.stock_qty) }));
+    const link = can(role, "stock.view") ? "/app/m/stock" : "/app/m/products";
+    stock.forEach((p) => items.push({ type: num(p.stock_qty) <= 0 ? "outOfStock" : "lowStock", ref: p.name, link, amount: num(p.stock_qty) }));
+    // locations with their own alert level (e.g. a shop that needs 20 even when the warehouse has plenty)
+    const [atLocations] = await pool.query(
+      `SELECT p.name, l.name location, ps.qty FROM product_stock ps
+         JOIN products p ON p.id = ps.product_id AND p.business_id = ps.business_id
+         JOIN stock_locations l ON l.id = ps.location_id AND l.is_active = 1
+        WHERE ps.business_id = ? AND p.is_active = 1 AND ps.alert_level IS NOT NULL AND ps.qty <= ps.alert_level
+        ORDER BY ps.qty LIMIT 20`, [bid]);
+    atLocations.forEach((r) => items.push({ type: num(r.qty) <= 0 ? "outOfStock" : "lowStock", ref: `${r.name} · ${r.location}`, link, amount: num(r.qty) }));
   }
   if (can(role, "invoices.view")) {
     const [inv] = await pool.query(

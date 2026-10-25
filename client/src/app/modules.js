@@ -10,6 +10,7 @@ export const MODULES = [
   { id: "suppliers",    icon: "store",       color: "#7c3aed", perm: "suppliers.view" },
   { id: "purchases",    icon: "truck",       color: "#f2712f", perm: "purchases.view" },
   { id: "products",     icon: "package",     color: "#d97706", perm: "products.view" },
+  { id: "stock",        icon: "layers",      color: "#0f766e", perm: "stock.view" },
   { id: "expenses",     icon: "wallet",      color: "#dc2626", perm: "expenses.view" },
   { id: "cashbook",     icon: "book-open",   color: "#2373f4", perm: "cash.view" },
   { id: "reports",      icon: "file-chart",  color: "#0f9488", perm: "reports.view" },
@@ -25,6 +26,7 @@ export const QUICK_ACTIONS = [
   { key: "newSale",        to: "/app/m/pos",        icon: "cart",    tone: "orange", perm: "sales.create" },
   { key: "newInvoice",     to: "/app/invoices/new", icon: "receipt", tone: "blue",   perm: "invoices.create" },
   { key: "addProduct",     to: "/app/m/products",   icon: "package", tone: "navy",   perm: "products.edit" },
+  { key: "addStock",       to: "/app/m/stock?tab=add", icon: "layers", tone: "green", perm: "stock.add" },
   { key: "recordPurchase", to: "/app/m/purchases",  icon: "truck",   tone: "green",  perm: "purchases.create" },
   { key: "addExpense",     to: "/app/m/expenses",   icon: "wallet",  tone: "red",    perm: "expenses.create" }
 ];

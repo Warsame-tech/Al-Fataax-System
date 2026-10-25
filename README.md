@@ -169,7 +169,8 @@ The chosen language is remembered in the browser; `?lang=so` in a URL forces Som
 |---|---|---|
 | POS | `/app/m/pos` | Barcode search (Enter), cart, discount, cash / mobile money / bank / credit, change, printable receipt with the Faatix logo, cancel & refund |
 | Invoices | `/app/m/invoices`, `/app/invoices/new` | Retail or wholesale prices, due dates, partial payments, overdue status, cancel (unpaid only) |
-| Products & stock | `/app/m/products` | Categories, units, barcodes, low-stock alerts, stock adjustments with a reason, movement history, CSV import/export |
+| Products | `/app/m/products` | Brand, category, subcategory, unit list, Low Stock Alert Level, photos, barcode check (no duplicates), filters, sorting, pages, CSV import/export |
+| Stock management | `/app/m/stock` | Locations (shops / warehouses), current stock, opening stock, add stock (scan many products), adjust (quantity or verified count, with preview), transfers, movement ledger with reversals, low stock, valuation, stock reports |
 | Customers / Suppliers | `/app/m/customers`, `/app/m/suppliers` | Balances, statements, payments (allocated oldest-first) |
 | Purchases | `/app/m/purchases` | Receive stock, updates cost price, supplier payments |
 | Expenses & income | `/app/m/expenses` | Categories, totals by category |

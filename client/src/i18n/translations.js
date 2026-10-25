@@ -279,6 +279,7 @@ const translations = {
         newSale: "New sale",
         newInvoice: "New invoice",
         addProduct: "Add product",
+        addStock: "Add stock",
         recordPurchase: "Record purchase",
         addExpense: "Add expense"
       },
@@ -315,6 +316,7 @@ const translations = {
         suppliers: "Suppliers",
         purchases: "Purchases",
         products: "Products",
+        stock: "Stock management",
         expenses: "Expenses & income",
         cashbook: "Cash & bank",
         reports: "Reports",
@@ -686,6 +688,7 @@ const translations = {
         newSale: "Iib cusub",
         newInvoice: "Qaansheeg cusub",
         addProduct: "Ku dar alaab",
+        addStock: "Ku dar kayd",
         recordPurchase: "Diiwaan geli iibsi",
         addExpense: "Ku dar kharash"
       },
@@ -722,6 +725,7 @@ const translations = {
         suppliers: "Alaab-qeybiyeyaasha",
         purchases: "Iibsiga",
         products: "Alaabta",
+        stock: "Maamulka kaydka",
         expenses: "Kharashyada & dakhliga",
         cashbook: "Lacagta & bangiga",
         reports: "Warbixinnada",

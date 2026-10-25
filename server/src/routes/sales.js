@@ -131,9 +131,9 @@ export async function createSale(conn, ctx, body) {
 
   const receiptNo = await nextNumber(conn, businessId, "receipt");
   const [s] = await conn.query(
-    `INSERT INTO sales (business_id, receipt_no, customer_id, user_id, subtotal, discount, total, amount_paid, payment_method, sold_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, UTC_TIMESTAMP()))`,
-    [businessId, receiptNo, customerId, userId, subtotal, discount, total, paid, method, ctx.at || null]
+    `INSERT INTO sales (business_id, receipt_no, customer_id, user_id, subtotal, discount, total, amount_paid, change_amount, payment_method, sold_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, UTC_TIMESTAMP()))`,
+    [businessId, receiptNo, customerId, userId, subtotal, discount, total, paid, change, method, ctx.at || null]
   );
   const saleId = s.insertId;
   for (const l of lines) {
@@ -189,7 +189,7 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
       WHERE cp.sale_id = ? AND cp.business_id = ? ORDER BY cp.id`, [s.id, bid]);
   res.json({
     business: req.business,
-    sale: { id: s.id, number: s.receipt_no, at: s.sold_at, status: s.status, method: s.payment_method, subtotal: num(s.subtotal), discount: num(s.discount), total: num(s.total), paid: num(s.amount_paid), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
+    sale: { id: s.id, number: s.receipt_no, at: s.sold_at, status: s.status, method: s.payment_method, subtotal: num(s.subtotal), discount: num(s.discount), total: num(s.total), paid: num(s.amount_paid), change: num(s.change_amount || 0), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
     items: items.map((i) => ({ name: i.name, sku: i.sku, qty: num(i.qty), unitPrice: num(i.unit_price), total: num(i.line_total) })),
     payments: payments.map((p) => ({ amount: num(p.amount), method: p.method, label: p.pm_name ? (p.pm_number ? `${p.pm_name} (${p.pm_number})` : p.pm_name) : null, at: p.paid_at }))
   });

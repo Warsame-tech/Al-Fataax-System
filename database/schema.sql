@@ -155,7 +155,9 @@ CREATE TABLE IF NOT EXISTS products (
   business_id     INT UNSIGNED NOT NULL,
   category_id     INT UNSIGNED NULL,
   brand_id        INT UNSIGNED NULL,
+  subcategory     VARCHAR(120) NULL,
   name            VARCHAR(190) NOT NULL,
+  description     TEXT NULL,
   sku             VARCHAR(80)  NULL,
   barcode         VARCHAR(80)  NULL,
   image_path      VARCHAR(255) NULL,                 -- product photo, /uploads/products/...
@@ -164,7 +166,7 @@ CREATE TABLE IF NOT EXISTS products (
   selling_price   DECIMAL(14,2) NOT NULL DEFAULT 0,
   wholesale_price DECIMAL(14,2) NULL,
   stock_qty       DECIMAL(14,3) NOT NULL DEFAULT 0,  -- maintained only inside stock-movement transactions
-  min_stock       DECIMAL(14,3) NOT NULL DEFAULT 0,
+  min_stock       DECIMAL(14,3) NOT NULL DEFAULT 0,  -- Low Stock Alert Level (per location: product_stock.alert_level)
   is_active       TINYINT(1) NOT NULL DEFAULT 1,
   created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -176,18 +178,64 @@ CREATE TABLE IF NOT EXISTS products (
   CONSTRAINT fk_products_brand    FOREIGN KEY (brand_id)    REFERENCES brands(id)
 ) ENGINE=InnoDB;
 
-CREATE TABLE IF NOT EXISTS stock_movements (
-  id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+-- Stock locations (shops, warehouses). Every business has one default location;
+-- sales, invoices and purchases use it.
+CREATE TABLE IF NOT EXISTS stock_locations (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id INT UNSIGNED NOT NULL,
+  name        VARCHAR(100) NOT NULL,
+  kind        VARCHAR(20)  NOT NULL DEFAULT 'shop',   -- shop | warehouse | other
+  address     VARCHAR(200) NULL,
+  is_default  TINYINT(1) NOT NULL DEFAULT 0,
+  is_active   TINYINT(1) NOT NULL DEFAULT 1,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_location_name (business_id, name),
+  CONSTRAINT fk_location_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+) ENGINE=InnoDB;
+
+-- Stock per product and location. products.stock_qty = SUM(qty) (kept in step by the API).
+CREATE TABLE IF NOT EXISTS product_stock (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   business_id INT UNSIGNED NOT NULL,
   product_id  INT UNSIGNED NOT NULL,
-  type        ENUM('opening','purchase','sale','invoice','adjustment','return_in','return_out','purchase_return') NOT NULL,
-  qty_change  DECIMAL(14,3) NOT NULL,            -- + into stock, − out of stock
-  ref_type    VARCHAR(30) NULL,
-  ref_id      BIGINT UNSIGNED NULL,
-  note        VARCHAR(255) NULL,
-  user_id     INT UNSIGNED NULL,
-  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  location_id INT UNSIGNED NOT NULL,
+  qty         DECIMAL(14,3) NOT NULL DEFAULT 0,
+  alert_level DECIMAL(14,3) NULL,                 -- own low-stock level at this location (NULL = product level)
+  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_product_location (product_id, location_id),
+  INDEX idx_stock_business (business_id, location_id),
+  CONSTRAINT fk_ps_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+  CONSTRAINT fk_ps_product  FOREIGN KEY (product_id)  REFERENCES products(id),
+  CONSTRAINT fk_ps_location FOREIGN KEY (location_id) REFERENCES stock_locations(id)
+) ENGINE=InnoDB;
+
+-- Stock movement ledger: every stock change, never edited or deleted (mistakes are reversed).
+-- type: opening, purchase, sale, invoice, return_in, return_out, purchase_return, stock_in,
+--       transfer_out, transfer_in, damaged, adjustment, count, reversal
+CREATE TABLE IF NOT EXISTS stock_movements (
+  id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id    INT UNSIGNED NOT NULL,
+  product_id     INT UNSIGNED NOT NULL,
+  location_id    INT UNSIGNED NULL,
+  type           VARCHAR(30) NOT NULL,
+  qty_change     DECIMAL(14,3) NOT NULL,          -- + into stock, − out of stock
+  balance_before DECIMAL(14,3) NULL,              -- location balance before / after
+  balance_after  DECIMAL(14,3) NULL,
+  unit           VARCHAR(20) NULL,
+  unit_cost      DECIMAL(14,2) NULL,              -- cost price at the time (valuation of gains / losses)
+  ref_type       VARCHAR(30) NULL,                -- sale, invoice, purchase, stock (manual), transfer
+  ref_id         BIGINT UNSIGNED NULL,
+  reason         VARCHAR(120) NULL,
+  reference      VARCHAR(80) NULL,
+  supplier_id    INT UNSIGNED NULL,
+  transfer_ref   VARCHAR(40) NULL,                -- links the two lines of a transfer
+  reversal_of    BIGINT UNSIGNED NULL,            -- the movement this one reverses
+  note           VARCHAR(255) NULL,
+  user_id        INT UNSIGNED NULL,
+  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_moves_product (business_id, product_id, created_at),
+  INDEX idx_moves_location (business_id, location_id, created_at),
+  INDEX idx_moves_reversal (reversal_of),
   CONSTRAINT fk_moves_business FOREIGN KEY (business_id) REFERENCES businesses(id),
   CONSTRAINT fk_moves_product  FOREIGN KEY (product_id)  REFERENCES products(id)
 ) ENGINE=InnoDB;
@@ -294,6 +342,7 @@ CREATE TABLE IF NOT EXISTS sales (
   discount       DECIMAL(14,2) NOT NULL DEFAULT 0,
   total          DECIMAL(14,2) NOT NULL,
   amount_paid    DECIMAL(14,2) NOT NULL DEFAULT 0,  -- informational; money in = customer_payments
+  change_amount  DECIMAL(14,2) NOT NULL DEFAULT 0,  -- change given back (receipt)
   payment_method ENUM('cash','mobile_money','bank','credit') NOT NULL,
   status         ENUM('completed','cancelled','returned','partially_returned') NOT NULL DEFAULT 'completed',
   sold_at        DATETIME NOT NULL,

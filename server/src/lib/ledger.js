@@ -3,6 +3,7 @@
  * so callers keep sales / invoices / purchases atomic.
  */
 import { badRequest, HttpError, notFound } from "./http.js";
+import { defaultLocationId, lockStockRow } from "./stock.js";
 
 /* ---------- document numbers (serialized by locking the settings row) ---------- */
 const NUMBERING = {
@@ -65,15 +66,32 @@ export async function lockProducts(conn, businessId, ids) {
 }
 
 /** Changes stock and records the movement. Refuses to go below zero. */
-export async function moveStock(conn, { businessId, userId, product, qtyChange, type, refType = null, refId = null, note = null }) {
-  const current = Number(product.stock_qty);
-  const next = Math.round((current + qtyChange) * 1000) / 1000;
-  if (next < 0) throw new HttpError(409, "insufficientStock", null, { product: product.name, available: current });
-  await conn.query("UPDATE products SET stock_qty = ? WHERE id = ? AND business_id = ?", [next, product.id, businessId]);
-  await conn.query(
-    `INSERT INTO stock_movements (business_id, product_id, type, qty_change, ref_type, ref_id, note, user_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [businessId, product.id, type, qtyChange, refType, refId, note, userId]
+/*
+ * The only way stock changes. Works on one location (default: the business default location),
+ * never lets that location go below zero, keeps products.stock_qty (total of all locations) in step,
+ * and writes one ledger row with the balances before / after.
+ * Returns { id, before, after } (the location balances).
+ */
+export async function moveStock(conn, {
+  businessId, userId, product, qtyChange, type, refType = null, refId = null, note = null,
+  locationId = null, reason = null, reference = null, supplierId = null, transferRef = null, reversalOf = null
+}) {
+  const loc = locationId || (await defaultLocationId(conn, businessId));
+  const row = await lockStockRow(conn, businessId, product.id, loc);
+  const before = Number(row.qty);
+  const after = Math.round((before + qtyChange) * 1000) / 1000;
+  if (after < 0) throw new HttpError(409, "insufficientStock", null, { product: product.name, available: before });
+  const total = Math.round((Number(product.stock_qty) + qtyChange) * 1000) / 1000;
+  await conn.query("UPDATE product_stock SET qty = ? WHERE id = ?", [after, row.id]);
+  await conn.query("UPDATE products SET stock_qty = ? WHERE id = ? AND business_id = ?", [total, product.id, businessId]);
+  const [m] = await conn.query(
+    `INSERT INTO stock_movements (business_id, product_id, location_id, type, qty_change, balance_before, balance_after, unit, unit_cost,
+       ref_type, ref_id, reason, reference, supplier_id, transfer_ref, reversal_of, note, user_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [businessId, product.id, loc, type, qtyChange, before, after, product.unit || null,
+      product.cost_price === undefined ? null : product.cost_price,
+      refType, refId, reason, reference, supplierId, transferRef, reversalOf, note, userId]
   );
-  product.stock_qty = next; // keep the in-memory row in sync for repeated lines
+  product.stock_qty = total; // keep the in-memory row in sync for repeated lines
+  return { id: m.insertId, before, after };
 }
