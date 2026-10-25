@@ -895,3 +895,55 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 .pos2__line.is-active { background: #eaf2fe; border-color: #9dbcf8; box-shadow: inset 4px 0 0 var(--blue); animation: line-pulse .9s ease; }
 @keyframes line-pulse { 0% { background: #cfe0fd; } 100% { background: #eaf2fe; } }
 @media (prefers-reduced-motion: reduce) { .pos2__line.is-active { animation: none; } }
+
+/* ---------- searchable dropdown ---------- */
+.sselect { position: relative; min-width: 0; }
+.sselect__btn { width: 100%; display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer; background: #fff; }
+.sselect__btn:disabled { cursor: default; background: var(--soft); }
+.sselect.is-open .sselect__btn { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(35, 115, 244, .15); }
+.sselect__icon { width: 17px; height: 17px; flex: none; color: var(--muted); }
+.sselect__value { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink); }
+.sselect__value.is-placeholder { color: var(--muted); }
+.sselect__chev { width: 16px; height: 16px; flex: none; color: var(--muted); transition: transform .15s; }
+.sselect.is-open .sselect__chev { transform: rotate(180deg); }
+.sselect__panel {
+  position: absolute; z-index: 40; top: calc(100% + 6px); left: 0; right: 0; min-width: 260px; display: grid; gap: 6px; padding: 8px;
+  border-radius: 14px; background: #fff; border: 1px solid #e3e6ef; box-shadow: 0 24px 40px -22px rgba(11, 13, 61, .5);
+}
+.sselect__search { position: relative; }
+.sselect__search .icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); width: 16px; height: 16px; color: var(--muted); }
+.sselect__search input { width: 100%; min-height: 38px; padding: 6px 10px 6px 34px; border: 1px solid #dfe3ee; border-radius: 10px; font: inherit; font-size: .9rem; }
+.sselect__search input:focus { outline: none; border-color: var(--blue); }
+.sselect__list { max-height: 260px; overflow: auto; display: grid; gap: 2px; }
+.sselect__list li { display: grid; gap: 1px; padding: 8px 10px; border-radius: 8px; cursor: pointer; font-size: .92rem; color: var(--ink); }
+.sselect__list li small { color: var(--muted); font-size: .76rem; }
+.sselect__list li.is-hover { background: #f1f3f6; }
+.sselect__list li[aria-selected="true"] { background: #eaf2fe; font-weight: 600; }
+.sselect__list li.is-disabled { opacity: .45; cursor: not-allowed; }
+.sselect__empty { color: var(--muted); cursor: default !important; }
+.sselect__create { display: flex !important; align-items: center; gap: 8px; margin-top: 4px; border-top: 1px solid #eef0f6; color: var(--blue) !important; font-weight: 600; }
+.sselect__create .icon { width: 16px; height: 16px; }
+
+/* ---------- invoice: centred brand, centred title, signature + stamp ---------- */
+.invoice__brand { display: grid; justify-items: center; gap: 4px; text-align: center; padding-top: 6px; }
+.invoice__brand-logo { max-width: 120px; max-height: 80px; object-fit: contain; margin-bottom: 4px; }
+.invoice__brand-name { font-size: 1.35rem; font-weight: 700; color: var(--navy); }
+.invoice__brand-lines { display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 14px; margin: 0; color: var(--muted); font-size: .9rem; }
+.invoice__titlebar--center { justify-content: center; text-align: center; margin-top: 18px; padding-top: 14px; border-top: 2px solid #eef0f6; }
+.invoice__titlebar--center h1 { letter-spacing: .3em; }
+.invoice__sign { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px; margin-top: 40px; }
+.invoice__sign-box { display: grid; justify-items: center; align-content: end; gap: 8px; min-height: 120px; text-align: center; }
+.invoice__sign-box small { color: var(--muted); font-size: .82rem; text-transform: uppercase; letter-spacing: .08em; }
+.invoice__sign-line { width: 80%; border-bottom: 1.5px solid #9aa0b8; }
+.invoice__stamp {
+  display: grid; place-items: center; width: 120px; height: 120px; border: 2px dashed #b8bdd0; border-radius: 50%;
+  color: #b8bdd0; font-size: .74rem; text-transform: uppercase; letter-spacing: .1em;
+}
+@media print {
+  .invoice__stamp { color: transparent; }   /* empty circle for the real stamp */
+  .invoice__sign { break-inside: avoid; }
+}
+@media (max-width: 560px) {
+  .invoice__sign { gap: 16px; }
+  .invoice__stamp { width: 96px; height: 96px; }
+}

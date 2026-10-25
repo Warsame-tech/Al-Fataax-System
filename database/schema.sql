@@ -379,11 +379,14 @@ CREATE TABLE IF NOT EXISTS invoices (
   business_id INT UNSIGNED NOT NULL,
   invoice_no  VARCHAR(30) NOT NULL,
   customer_id INT UNSIGNED NOT NULL,
+  bill_phone   VARCHAR(30)  NULL,    -- customer business phone / address printed on this invoice
+  bill_address VARCHAR(255) NULL,
   user_id     INT UNSIGNED NOT NULL,
   issue_date  DATE NOT NULL,
   due_date    DATE NULL,
   subtotal    DECIMAL(14,2) NOT NULL,
   discount    DECIMAL(14,2) NOT NULL DEFAULT 0,
+  discount_label VARCHAR(80) NULL,  -- e.g. "10%" or "Eid offer"
   total       DECIMAL(14,2) NOT NULL,
   amount_paid DECIMAL(14,2) NOT NULL DEFAULT 0,  -- sum of linked customer_payments, updated in the same transaction
   status      ENUM('draft','unpaid','partially_paid','paid','overdue','cancelled') NOT NULL DEFAULT 'unpaid',

@@ -1,8 +1,8 @@
-import { useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { useApi, useMoney } from "../ui.jsx";
 import { qty } from "../format.js";
+import SearchSelect from "../SearchSelect.jsx";
 
 /*
  * Editable product lines for invoices and purchases.
@@ -12,7 +12,6 @@ import { qty } from "../format.js";
 export default function LineItems({ lines, onChange, mode = "sell", priceList = "retail", allowPrice = false, errors = {} }) {
   const { t } = useLanguage();
   const m = useMoney();
-  const [pick, setPick] = useState("");
   const products = useApi("/api/products?location=default");
   const all = products.data?.products || [];
 
@@ -22,24 +21,20 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
     if (!p) return;
     if (lines.some((l) => l.product.id === p.id)) return;
     onChange([...lines, { product: p, qty: 1, price: priceOf(p) }]);
-    setPick("");
   };
+  const options = all.map((p) => ({
+    value: p.id,
+    label: p.name,
+    sub: [p.sku, p.barcode, `${mode === "buy" ? m(p.costPrice) : m(priceOf(p))} · ${qty(p.stock)} ${p.unit}`].filter(Boolean).join(" · "),
+    disabled: (mode === "sell" && p.stock <= 0) || lines.some((l) => l.product.id === p.id)
+  }));
   const update = (i, patch) => onChange(lines.map((l, k) => (k === i ? { ...l, ...patch } : l)));
   const total = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
 
   return (
     <div className="lines">
-      <div className="lines__add">
-        <Icon name="search-glass" />
-        <select className="input" value={pick} onChange={(e) => add(e.target.value)} aria-label={t("ui.invoices.addItem")}>
-          <option value="">{t("ui.invoices.addItem")}…</option>
-          {all.map((p) => (
-            <option key={p.id} value={p.id} disabled={mode === "sell" && p.stock <= 0}>
-              {p.name}{p.sku ? ` (${p.sku})` : ""} — {mode === "buy" ? m(p.costPrice) : m(priceOf(p))} · {qty(p.stock)} {p.unit}
-            </option>
-          ))}
-        </select>
-      </div>
+      <SearchSelect options={options} value="" onChange={add} clearOnPick icon="search-glass"
+        placeholder={`${t("ui.invoices.addItem")}…`} searchPlaceholder={t("ui.products.searchPh")} invalid={Boolean(errors.items)} />
       {errors.items && <span className="ff__error">{t("ui.errors.required")}</span>}
       {lines.length > 0 && (
         <div className="table-wrap">

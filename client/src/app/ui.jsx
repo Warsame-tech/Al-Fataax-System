@@ -15,8 +15,8 @@ export function useApi(path) {
   const load = useCallback(async () => {
     if (!path) return;
     setState((s) => ({ ...s, loading: true }));
-    try { setState({ data: await apiRequest(path), error: null, loading: false }); }
-    catch (err) { setState({ data: null, error: err, loading: false }); }
+    try { const data = await apiRequest(path); setState({ data, error: null, loading: false }); return data; }
+    catch (err) { setState({ data: null, error: err, loading: false }); return null; }
   }, [path]);
   useEffect(() => { load(); }, [load]);
   return { ...state, reload: load };

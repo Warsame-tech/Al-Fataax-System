@@ -34,7 +34,7 @@ const en = {
     notReversible: "This movement can't be reversed here. Sales, invoices and purchases are corrected in their own modules.",
     alreadyReversed: "This movement was already reversed.", locationNameTaken: "Another location already has this name.",
     barcodeTaken: "This barcode already belongs to {product}.", sameLocation: "Choose two different locations.",
-    noChange: "The counted quantity equals the recorded stock — nothing to adjust.", inactiveProduct: "An inactive product can't receive stock.", imageTooLarge: "Photo must be 2 MB or smaller.",
+    noChange: "The counted quantity equals the recorded stock — nothing to adjust.", invalidDiscount: "Discount must be an amount (e.g. 5) or a percentage (e.g. 10%).", inactiveProduct: "An inactive product can't receive stock.", imageTooLarge: "Photo must be 2 MB or smaller.",
     importErrors: "Some rows have errors. Fix them and try again.", serverOffline: "Cannot reach the server.", failed: "Something went wrong. Please try again.",
     validation: "Please check the highlighted fields.", notFound: "Not found.", mismatch: "Passwords don't match."
   },
@@ -154,6 +154,10 @@ const en = {
     title: "Sales invoices", new: "New invoice", priceList: "Price list", retail: "Retail prices", wholesale: "Wholesale prices",
     issueDate: "Issue date", dueDate: "Due date", addItem: "Add product", payNow: "Payment received now (optional)", create: "Create invoice",
     recordPayment: "Record payment", cancelInvoice: "Cancel invoice",
+    chooseCustomer: "Choose or search a customer", searchCustomer: "Search customers by name, phone or address", newCustomer: "New customer", saveCustomer: "Save customer",
+    businessPhone: "Business phone", businessAddress: "Business address", phonePh: "e.g. +252 61 …", addressPh: "Street, district, city",
+    discountPh: "e.g. 5 or 10%", discountHint: "An amount, or a percentage like 10%.", discountIs: "= {amount} off",
+    discountLabel: "Discount reason", discountLabelPh: "e.g. Eid offer, loyal customer",
     cancelHelp: "Only invoices without payments can be cancelled. Stock will be returned.", empty: "No invoices in this period."
   },
   purchases: {
@@ -281,7 +285,7 @@ const so = {
     notReversible: "Dhaqdhaqaaqan halkan laguma celin karo. Iibka, qaansheegyada iyo iibsiga waxaa lagu saxaa qaybahooda.",
     alreadyReversed: "Dhaqdhaqaaqan horey ayaa loo celiyay.", locationNameTaken: "Goob kale ayaa magacan leh.",
     barcodeTaken: "Baarkoodkan wuxuu horey u leeyahay {product}.", sameLocation: "Dooro laba goobood oo kala duwan.",
-    noChange: "Tirada la tiriyay waxay la mid tahay kaydka diiwaansan — waxba lama hagaajinayo.", inactiveProduct: "Alaab dansan kayd lama siin karo.", imageTooLarge: "Sawirku waa inuu ka yaraadaa 2 MB.",
+    noChange: "Tirada la tiriyay waxay la mid tahay kaydka diiwaansan — waxba lama hagaajinayo.", invalidDiscount: "Dhimistu waa inay noqotaa qaddar (tusaale 5) ama boqolley (tusaale 10%).", inactiveProduct: "Alaab dansan kayd lama siin karo.", imageTooLarge: "Sawirku waa inuu ka yaraadaa 2 MB.",
     importErrors: "Safaf qaar ayaa khalad leh. Sax oo isku day mar kale.", serverOffline: "Lama gaari karo server-ka.", failed: "Wax baa khaldamay. Isku day mar kale.",
     validation: "Fadlan hubi goobaha la calaamadeeyay.", notFound: "Lama helin.", mismatch: "Furayaasha sirta ah isma mid aha."
   },
@@ -401,6 +405,10 @@ const so = {
     title: "Qaansheegyada iibka", new: "Qaansheeg cusub", priceList: "Liiska qiimaha", retail: "Qiimaha tafaariiqda", wholesale: "Qiimaha jumlada",
     issueDate: "Taariikhda", dueDate: "Taariikhda bixinta", addItem: "Ku dar alaab", payNow: "Lacag hadda la helay (ikhtiyaari)", create: "Samee qaansheeg",
     recordPayment: "Diiwaan geli lacag-bixin", cancelInvoice: "Jooji qaansheegta",
+    chooseCustomer: "Dooro ama raadi macmiil", searchCustomer: "Ku raadi macaamiisha magac, taleefan ama cinwaan", newCustomer: "Macmiil cusub", saveCustomer: "Kaydi macmiilka",
+    businessPhone: "Taleefanka ganacsiga", businessAddress: "Cinwaanka ganacsiga", phonePh: "tusaale +252 61 …", addressPh: "Waddo, degmo, magaalo",
+    discountPh: "tusaale 5 ama 10%", discountHint: "Qaddar, ama boqolley sida 10%.", discountIs: "= {amount} dhimis ah",
+    discountLabel: "Sababta dhimista", discountLabelPh: "tusaale dalab Ciid, macmiil daacad ah",
     cancelHelp: "Kaliya qaansheegyada aan lacag laga bixin ayaa la joojin karaa. Kaydka waa la celin doonaa.", empty: "Muddadan qaansheeg ma jiro."
   },
   purchases: {

@@ -14,9 +14,26 @@ router.use(requireAuth);
 const STATUS_SQL = `CASE WHEN i.status IN ('unpaid','partially_paid') AND i.due_date IS NOT NULL AND i.due_date < UTC_DATE() THEN 'overdue' ELSE i.status END`;
 
 /*
+ * Discount (optional): an amount ("5", "5.50") or a percentage of the subtotal ("10%").
+ * Returns { amount } or { error } — empty means no discount.
+ */
+export function readDiscount(value, subtotal) {
+  const raw = String(value ?? "").trim().replace(",", ".");
+  if (!raw) return { amount: 0 };
+  const pct = /^(\d+(?:\.\d+)?)\s*%$/.exec(raw);
+  if (pct) {
+    const p = Number(pct[1]);
+    if (!(p >= 0 && p <= 100)) return { error: "invalidAmount" };
+    return { amount: round2((subtotal * p) / 100), percent: p };
+  }
+  const amount = money(raw);
+  return Number.isNaN(amount) ? { error: "invalidDiscount" } : { amount };
+}
+
+/*
  * Creates a wholesale invoice in one transaction.
- * body: { customerId, items:[{productId, qty, unitPrice?}], priceList: retail|wholesale, discount?, issueDate?, dueDate?,
- *         notes?, amountPaid?, method?, bankAccountId? }
+ * body: { customerId, billPhone?, billAddress?, items:[{productId, qty, unitPrice?}], priceList: retail|wholesale,
+ *         discount? ("5" or "10%"), discountLabel?, issueDate?, dueDate?, notes?, amountPaid?, method?, bankAccountId? }
  */
 export async function createInvoice(conn, ctx, body) {
   const { businessId, userId, role } = ctx;
@@ -26,9 +43,6 @@ export async function createInvoice(conn, ctx, body) {
   const items = Array.isArray(body.items) ? body.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: x?.qty, unitPrice: x?.unitPrice })) : [];
   if (!items.length) throw badRequest({ items: "required" });
 
-  const discount = body.discount ? money(body.discount) : 0;
-  if (Number.isNaN(discount)) throw badRequest({ discount: "invalidAmount" });
-  if (discount > 0 && !can(role, "sales.discount")) throw badRequest({ discount: "forbidden" });
   const issueDate = isDate(body.issueDate) ? body.issueDate : today();
   const dueDate = isDate(body.dueDate) ? body.dueDate : null;
   if (dueDate && dueDate < issueDate) throw badRequest({ dueDate: "beforeIssue" });
@@ -36,8 +50,13 @@ export async function createInvoice(conn, ctx, body) {
   const products = await lockProducts(conn, businessId, items.map((i) => i.productId).filter(Boolean));
   const lines = priceLines(items, products, { allowCustomPrice: can(role, "sales.discount"), priceList: body.priceList === "wholesale" ? "wholesale" : "retail" });
   const subtotal = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
+  const disc = readDiscount(body.discount, subtotal);
+  if (disc.error) throw badRequest({ discount: disc.error });
+  const discount = disc.amount;
+  if (discount > 0 && !can(role, "sales.discount")) throw badRequest({ discount: "forbidden" });
   if (discount > subtotal) throw badRequest({ discount: "tooLarge" });
   const total = round2(subtotal - discount);
+  const discountLabel = discount > 0 ? optText(body.discountLabel, 80) || (disc.percent !== undefined ? `${disc.percent}%` : null) : null;
 
   const amountPaid = body.amountPaid ? money(body.amountPaid) : 0;
   if (Number.isNaN(amountPaid) || amountPaid > total) throw badRequest({ amountPaid: "invalidAmount" });
@@ -45,9 +64,9 @@ export async function createInvoice(conn, ctx, body) {
 
   const number = await nextNumber(conn, businessId, "invoice");
   const [r] = await conn.query(
-    `INSERT INTO invoices (business_id, invoice_no, customer_id, user_id, issue_date, due_date, subtotal, discount, total, amount_paid, status, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'unpaid', ?)`,
-    [businessId, number, customerId, userId, issueDate, dueDate, subtotal, discount, total, optText(body.notes, 255)]
+    `INSERT INTO invoices (business_id, invoice_no, customer_id, bill_phone, bill_address, user_id, issue_date, due_date, subtotal, discount, discount_label, total, amount_paid, status, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'unpaid', ?)`,
+    [businessId, number, customerId, optText(body.billPhone, 30), optText(body.billAddress, 255), userId, issueDate, dueDate, subtotal, discount, discountLabel, total, optText(body.notes, 255)]
   );
   for (const l of lines) {
     await conn.query(
@@ -104,9 +123,9 @@ router.get("/:id", requirePerm("invoices.view"), ah(async (req, res) => {
     business: req.business,
     invoice: {
       id: inv.id, number: inv.invoice_no, issueDate: inv.issue_date, dueDate: inv.due_date, status: inv.computed_status,
-      subtotal: num(inv.subtotal), discount: num(inv.discount), total: num(inv.total), paid: num(inv.amount_paid),
+      subtotal: num(inv.subtotal), discount: num(inv.discount), discountLabel: inv.discount_label || null, total: num(inv.total), paid: num(inv.amount_paid),
       balance: round2(num(inv.total) - num(inv.amount_paid)), notes: inv.notes, customerId: inv.customer_id,
-      customer: { name: inv.customer_name, phone: inv.customer_phone, email: inv.customer_email, address: inv.customer_address }
+      customer: { name: inv.customer_name, phone: inv.bill_phone || inv.customer_phone, email: inv.customer_email, address: inv.bill_address || inv.customer_address }
     },
     items: items.map((i) => ({ name: i.name, sku: i.sku, qty: num(i.qty), unitPrice: num(i.unit_price), discount: num(i.discount), total: num(i.line_total) })),
     payments: payments.map((p) => ({ amount: num(p.amount), method: p.method, at: p.paid_at, reference: p.reference }))

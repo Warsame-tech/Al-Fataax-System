@@ -5,6 +5,7 @@ import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest } from "../../services/api.js";
 import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, Field, FormError, Money, EmptyState, Loading, SearchBox, PaymentFields, StatusBadge, DateRange, daysAgo, isoDate, Modal, ReasonModal } from "../ui.jsx";
 import LineItems from "./LineItems.jsx";
+import SearchSelect from "../SearchSelect.jsx";
 import { PaymentModal } from "./Parties.jsx";
 import { qty, date } from "../format.js";
 
@@ -113,12 +114,12 @@ function PurchaseForm({ onDone }) {
   return (
     <form onSubmit={save} className="doc-form">
       <section className="panel-card form-grid form-grid--2">
-        <Field label={t("ui.common.supplier")} error={sub.fieldErrors.supplierId}>
-          <select className="input" value={f.supplierId} onChange={(e) => setF({ ...f, supplierId: e.target.value })}>
-            <option value="">{t("ui.common.choose")}</option>
-            {(suppliers.data?.suppliers || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </Field>
+        <div className="ff">
+          <span className="ff__label">{t("ui.common.supplier")}</span>
+          <SearchSelect value={f.supplierId} onChange={(v) => setF({ ...f, supplierId: v })} searchPlaceholder={t("ui.common.searchPh")} invalid={Boolean(sub.fieldErrors.supplierId)}
+            options={(suppliers.data?.suppliers || []).map((s) => ({ value: s.id, label: s.name, sub: [s.phone, s.address].filter(Boolean).join(" · ") }))} />
+          {sub.fieldErrors.supplierId && <span className="ff__error">{t("ui.errors.required")}</span>}
+        </div>
         <p className="modal__help">{t("ui.purchases.note")}</p>
       </section>
       <section className="panel-card"><LineItems lines={lines} onChange={setLines} mode="buy" errors={sub.fieldErrors} /></section>

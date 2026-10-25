@@ -72,19 +72,16 @@ export default function InvoiceView({ preview = false }) {
         {preview && <span className="invoice__watermark" aria-hidden="true">SAMPLE</span>}
         <div className="invoice__bar" aria-hidden="true" />
 
-        <header className="invoice__head">
-          <div className="invoice__biz">
-            {biz.logoPath && <img className="invoice__blogo" src={fileUrl(biz.logoPath)} alt="" />}
-            <div>
-              <strong>{biz.name}</strong>
-              {biz.address && <span>{biz.address}</span>}
-              {biz.phone && <span dir="ltr">{biz.phone}</span>}
-              {biz.email && <span>{biz.email}</span>}
-            </div>
-          </div>
+        {/* business: logo above the name, centred */}
+        <header className="invoice__brand">
+          {biz.logoPath && <img className="invoice__brand-logo" src={fileUrl(biz.logoPath)} alt="" />}
+          <strong className="invoice__brand-name">{biz.name}</strong>
+          <p className="invoice__brand-lines">
+            {[biz.address, biz.phone, biz.email].filter(Boolean).map((v, i) => <span key={i} dir={v === biz.phone ? "ltr" : undefined}>{v}</span>)}
+          </p>
         </header>
 
-        <div className="invoice__titlebar">
+        <div className="invoice__titlebar invoice__titlebar--center">
           <h1>{t("invoice.title")}</h1>
           <span className={`invoice__status invoice__status--${inv.status}`}>{t(`invoice.statuses.${inv.status}`)}</span>
         </div>
@@ -142,11 +139,23 @@ export default function InvoiceView({ preview = false }) {
           </div>
           <dl className="invoice__totals">
             <div><dt>{t("invoice.subtotal")}</dt><dd>{m(inv.subtotal)}</dd></div>
-            {inv.discount > 0 && <div><dt>{t("invoice.discount")}</dt><dd>− {m(inv.discount)}</dd></div>}
+            {inv.discount > 0 && <div><dt>{t("invoice.discount")}{inv.discountLabel ? ` (${inv.discountLabel})` : ""}</dt><dd>− {m(inv.discount)}</dd></div>}
             <div className="is-total"><dt>{t("invoice.total")}</dt><dd>{m(inv.total)}</dd></div>
             <div><dt>{t("invoice.paid")}</dt><dd>{m(inv.paid)}</dd></div>
             <div className="is-balance"><dt>{t("invoice.balance")}</dt><dd>{m(inv.balance)}</dd></div>
           </dl>
+        </section>
+
+        {/* signature and company stamp */}
+        <section className="invoice__sign">
+          <div className="invoice__sign-box">
+            <span className="invoice__sign-line" />
+            <small>{t("invoice.signature")}</small>
+          </div>
+          <div className="invoice__sign-box">
+            <span className="invoice__stamp" aria-hidden="true">{t("invoice.stampHere")}</span>
+            <small>{t("invoice.stamp")}</small>
+          </div>
         </section>
 
         <footer className="invoice__foot">

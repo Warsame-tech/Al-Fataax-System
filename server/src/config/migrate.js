@@ -120,6 +120,9 @@ const COLUMNS = [
   { table: "customer_payments", column: "payment_method_id", ddl: "ALTER TABLE customer_payments ADD COLUMN payment_method_id INT UNSIGNED NULL AFTER method" },
   { table: "business_user_roles", column: "role_id", ddl: "ALTER TABLE business_user_roles ADD COLUMN role_id INT UNSIGNED NULL AFTER role" },
   // product master data
+  { table: "invoices", column: "bill_phone", ddl: "ALTER TABLE invoices ADD COLUMN bill_phone VARCHAR(30) NULL AFTER customer_id" },
+  { table: "invoices", column: "bill_address", ddl: "ALTER TABLE invoices ADD COLUMN bill_address VARCHAR(255) NULL AFTER bill_phone" },
+  { table: "invoices", column: "discount_label", ddl: "ALTER TABLE invoices ADD COLUMN discount_label VARCHAR(80) NULL AFTER discount" },
   { table: "products", column: "size", ddl: "ALTER TABLE products ADD COLUMN size VARCHAR(40) NULL AFTER name" },
   { table: "products", column: "subcategory", ddl: "ALTER TABLE products ADD COLUMN subcategory VARCHAR(120) NULL AFTER brand_id" },
   { table: "products", column: "description", ddl: "ALTER TABLE products ADD COLUMN description TEXT NULL AFTER name" },
