@@ -947,3 +947,7 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
   .invoice__sign { gap: 16px; }
   .invoice__stamp { width: 96px; height: 96px; }
 }
+
+/* invoice while it is being turned into a PDF: flat, no screen-only decoration */
+.invoice.is-exporting { box-shadow: none; border-radius: 0; }
+.invoice.is-exporting .invoice__stamp { color: transparent; }

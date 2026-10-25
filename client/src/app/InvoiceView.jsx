@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
@@ -24,6 +24,8 @@ export default function InvoiceView({ preview = false }) {
   const [state, setState] = useState({ status: preview ? "ready" : "loading", data: null });
   const [modal, setModal] = useState(null);
   const [version, setVersion] = useState(0);
+  const [savingPdf, setSavingPdf] = useState(false);
+  const sheetRef = useRef(null);
   const can = usePerm();
 
   useEffect(() => {
@@ -49,6 +51,28 @@ export default function InvoiceView({ preview = false }) {
   const cur = biz.currency || "USD";
   const m = (v) => money(v, cur, lang);
 
+  /* Save as PDF: builds the PDF file in the browser and downloads it (no print dialog). */
+  const savePdf = async () => {
+    if (!sheetRef.current || savingPdf) return;
+    setSavingPdf(true);
+    const el = sheetRef.current;
+    el.classList.add("is-exporting");
+    try {
+      const { default: html2pdf } = await import("html2pdf.js");
+      await html2pdf().set({
+        margin: [8, 8, 8, 8],
+        filename: `${inv.number}.pdf`,
+        image: { type: "jpeg", quality: 0.96 },
+        html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["css", "legacy"], avoid: [".invoice__sign", ".invoice__totals", "tr"] }
+      }).from(el).save();
+    } finally {
+      el.classList.remove("is-exporting");
+      setSavingPdf(false);
+    }
+  };
+
   return (
     <div className="invoice-page">
       <div className="invoice-toolbar no-print">
@@ -60,15 +84,18 @@ export default function InvoiceView({ preview = false }) {
           {!preview && can("payments.receive") && ["unpaid", "partially_paid", "overdue"].includes(inv.status) && inv.balance > 0 && (
             <button type="button" className="btn btn--navy" onClick={() => setModal("pay")}><Icon name="wallet" /><span>{t("ui.invoices.recordPayment")}</span></button>
           )}
-          <button type="button" className="btn btn--primary" onClick={() => window.print()}>
-            <Icon name="printer" /><span>{t("invoice.print")}</span>
+          <button type="button" className="btn btn--outline" onClick={() => window.print()}>
+            <Icon name="printer" /><span>{t("invoice.printOnly")}</span>
+          </button>
+          <button type="button" className="btn btn--primary" onClick={savePdf} disabled={savingPdf}>
+            <Icon name="download" /><span>{t(savingPdf ? "invoice.savingPdf" : "invoice.savePdf")}</span>
           </button>
         </div>
       </div>
 
       {preview && <p className="invoice-sample no-print" role="note"><Icon name="info" />{t("invoice.sample")}</p>}
 
-      <article className="invoice" aria-label={`${t("invoice.title")} ${inv.number}`}>
+      <article className="invoice" ref={sheetRef} aria-label={`${t("invoice.title")} ${inv.number}`}>
         {preview && <span className="invoice__watermark" aria-hidden="true">SAMPLE</span>}
         <div className="invoice__bar" aria-hidden="true" />
 
