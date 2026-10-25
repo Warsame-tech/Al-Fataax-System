@@ -82,7 +82,7 @@ router.get("/", async (req, res, next) => {
                WHERE business_id = ? AND status = 'completed' AND total > amount_paid) v`, [bid, bid]),
       one(`SELECT COALESCE(SUM(total - amount_paid),0) v FROM purchases
             WHERE business_id = ? AND status = 'received' AND total > amount_paid`, [bid]),
-      many(`SELECT id, name, stock_qty, min_stock, unit FROM products
+      many(`SELECT id, CONCAT_WS(' ', name, NULLIF(size, '')) name, stock_qty, min_stock, unit FROM products
              WHERE business_id = ? AND is_active = 1 AND stock_qty <= min_stock
              ORDER BY (stock_qty <= 0) DESC, stock_qty ASC LIMIT 8`, [bid]),
       many(`(SELECT 'sale' kind, receipt_no ref, total amount, sold_at at FROM sales WHERE business_id = ?)
@@ -91,7 +91,7 @@ router.get("/", async (req, res, next) => {
             UNION ALL (SELECT 'expense', category, amount, CAST(expense_date AS DATETIME) FROM expenses WHERE business_id = ?)
             UNION ALL (SELECT 'payment', COALESCE(reference, ''), amount, paid_at FROM customer_payments WHERE business_id = ?)
             ORDER BY at DESC LIMIT 8`, [bid, bid, bid, bid, bid]),
-      many(`SELECT p.id, p.name, SUM(x.qty) qty, SUM(x.line_total) revenue FROM (
+      many(`SELECT p.id, CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, SUM(x.qty) qty, SUM(x.line_total) revenue FROM (
               SELECT si.product_id, si.qty, si.line_total FROM sale_items si
                 JOIN sales s ON s.id = si.sale_id AND s.business_id = si.business_id
                WHERE si.business_id = ? AND s.status <> 'cancelled' AND s.sold_at BETWEEN ? AND ?
@@ -100,7 +100,7 @@ router.get("/", async (req, res, next) => {
                 JOIN invoices i ON i.id = ii.invoice_id AND i.business_id = ii.business_id
                WHERE ii.business_id = ? AND i.status NOT IN ('draft','cancelled') AND i.issue_date BETWEEN ? AND ?
             ) x JOIN products p ON p.id = x.product_id AND p.business_id = ?
-            GROUP BY p.id, p.name ORDER BY qty DESC LIMIT 5`, [bid, start, end, bid, range.from, range.to, bid]),
+            GROUP BY p.id ORDER BY qty DESC LIMIT 5`, [bid, start, end, bid, range.from, range.to, bid]),
       one(`SELECT (SELECT COUNT(*) FROM products WHERE business_id = ?) products,
                   (SELECT COUNT(*) FROM customers WHERE business_id = ?) customers`, [bid, bid])
     ]);

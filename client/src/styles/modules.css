@@ -886,3 +886,6 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
   .stock-lines__name { flex-basis: calc(100% - 50px); }
   .filters .input--auto { max-width: none; flex: 1 1 45%; }
 }
+
+/* form fields keep their natural height when a neighbour shows a hint */
+.ff { align-content: start; }

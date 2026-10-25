@@ -9,7 +9,7 @@ import CameraScanner from "../CameraScanner.jsx";
 import { FoundCard } from "../ProductPicker.jsx";
 
 /* Product master data only — stock quantities are entered in the Stock module (opening stock, add stock). */
-export const EMPTY = { name: "", description: "", sku: "", barcode: "", category: "", subcategory: "", brand: "", unit: "pcs", costPrice: "", sellingPrice: "", wholesalePrice: "", minStock: "", isActive: true };
+export const EMPTY = { name: "", size: "", description: "", sku: "", barcode: "", category: "", subcategory: "", brand: "", unit: "pcs", costPrice: "", sellingPrice: "", wholesalePrice: "", minStock: "", isActive: true };
 
 /* Units of measurement offered in the product form (a unit already saved on a product stays selectable). */
 export const UNITS = ["pcs", "bottle", "box", "pack", "carton", "kg", "g", "liter", "ml", "meter", "yard", "roll", "pair", "dozen"];
@@ -44,8 +44,8 @@ export default function Products() {
   );
 
   const exportCsv = () => downloadCsv("products.csv",
-    ["name", "sku", "barcode", "brand", "category", "subcategory", "unit", "costPrice", "sellingPrice", "wholesalePrice", "lowStockAlertLevel", "stock"],
-    products.map((p) => [p.name, p.sku, p.barcode, p.brand, p.category, p.subcategory, p.unit, p.costPrice, p.sellingPrice, p.wholesalePrice ?? "", p.minStock, p.stock]));
+    ["name", "size", "sku", "barcode", "brand", "category", "subcategory", "unit", "costPrice", "sellingPrice", "wholesalePrice", "lowStockAlertLevel", "stock"],
+    products.map((p) => [p.baseName ?? p.name, p.size, p.sku, p.barcode, p.brand, p.category, p.subcategory, p.unit, p.costPrice, p.sellingPrice, p.wholesalePrice ?? "", p.minStock, p.stock]));
 
   return (
     <div className="page">
@@ -95,9 +95,9 @@ export default function Products() {
         <div className="table-wrap">
           <table className="table">
             <thead><tr>
-              <Th by="name">{t("ui.common.name")}</Th><Th by="sku">{t("ui.products.sku")}</Th><Th by="brand">{t("ui.products.brand")}</Th><Th by="category">{t("ui.common.category")}</Th>
+              <Th by="name">{t("ui.common.name")}</Th><Th by="size">{t("ui.products.size")}</Th><Th by="sku">{t("ui.products.sku")}</Th><Th by="brand">{t("ui.products.brand")}</Th><Th by="category">{t("ui.common.category")}</Th>
               <Th by="cost" num>{t("ui.products.costPrice")}</Th><Th by="price" num>{t("ui.products.sellingPrice")}</Th>
-              <th className="num">{t("ui.products.wholesalePrice")}</th><Th by="stock" num>{t("ui.products.stock")}</Th><th />
+              <th className="num">{t("ui.products.wholesalePrice")}</th><Th by="stock" num>{t("ui.stock.current")}</Th><th />
             </tr></thead>
             <tbody>
               {products.map((p) => (
@@ -108,6 +108,7 @@ export default function Products() {
                       <div><strong>{p.name}</strong>{p.barcode && <small className="cell-sub"><Icon name="barcode" /> {p.barcode}</small>}</div>
                     </div>
                   </td>
+                  <td>{p.size || "—"}</td>
                   <td>{p.sku || "—"}</td>
                   <td>{p.brand || "—"}</td>
                   <td>{p.category || "—"}{p.subcategory && <small className="cell-sub">{p.subcategory}</small>}</td>
@@ -153,7 +154,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
   const can = usePerm();
   const isNew = !product.id;
   const [f, setF] = useState(isNew ? EMPTY : {
-    ...EMPTY, ...product, description: product.description || "", category: product.category || "", subcategory: product.subcategory || "",
+    ...EMPTY, ...product, name: product.baseName ?? product.name, size: product.size || "", description: product.description || "", category: product.category || "", subcategory: product.subcategory || "",
     brand: product.brand || "", sku: product.sku || "", barcode: product.barcode || "", wholesalePrice: product.wholesalePrice ?? "", minStock: product.minStock
   });
   const sub = useSubmit();
@@ -237,7 +238,10 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
           )}
         </div>
 
-        <Field label={t("ui.common.name")} error={err.name} full><input className="input" value={f.name} onChange={set("name")} /></Field>
+        <Field label={t("ui.common.name")} error={err.name}><input className="input" value={f.name} onChange={set("name")} placeholder={t("ui.products.namePh")} /></Field>
+        <Field label={`${t("ui.products.size")} ${t("ui.common.optional")}`} error={err.size} hint={f.name && f.size ? fill(t("ui.products.showsAs"), { name: `${f.name} ${f.size}` }) : t("ui.products.sizeHint")}>
+          <input className="input" value={f.size} onChange={set("size")} placeholder={t("ui.products.sizePh")} />
+        </Field>
         <Field label={`${t("ui.common.description")} ${t("ui.common.optional")}`} full><textarea className="input" rows={2} value={f.description} onChange={set("description")} /></Field>
         <Field label={t("ui.products.sku")} error={err.sku}><input className="input" value={f.sku} onChange={set("sku")} /></Field>
         <Field label={t("ui.products.brand")}><input className="input" value={f.brand} onChange={set("brand")} list="brand-options" /></Field>

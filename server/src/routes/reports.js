@@ -63,7 +63,7 @@ const REPORTS = {
 
   async inventory(bid) {
     const [rows] = await pool.query(
-      `SELECT p.name, p.sku, c.name category, p.stock_qty, p.unit, p.cost_price, p.selling_price FROM products p
+      `SELECT CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, p.sku, c.name category, p.stock_qty, p.unit, p.cost_price, p.selling_price FROM products p
          LEFT JOIN categories c ON c.id = p.category_id WHERE p.business_id = ? AND p.is_active = 1 ORDER BY p.name`, [bid]);
     const list = rows.map((p) => ({ name: p.name, sku: p.sku, category: p.category, stock: num(p.stock_qty), unit: p.unit,
       costValue: round2(num(p.stock_qty) * num(p.cost_price)), retailValue: round2(num(p.stock_qty) * num(p.selling_price)) }));
@@ -76,7 +76,7 @@ const REPORTS = {
 
   async lowStock(bid) {
     const [rows] = await pool.query(
-      `SELECT name, sku, stock_qty, min_stock, unit FROM products WHERE business_id = ? AND is_active = 1 AND stock_qty <= min_stock
+      `SELECT CONCAT_WS(' ', name, NULLIF(size, '')) name, sku, stock_qty, min_stock, unit FROM products WHERE business_id = ? AND is_active = 1 AND stock_qty <= min_stock
         ORDER BY (stock_qty <= 0) DESC, stock_qty`, [bid]);
     return {
       columns: [["name", "text"], ["sku", "text"], ["stock", "qty"], ["minStock", "qty"], ["status", "status"]],
@@ -148,12 +148,12 @@ const REPORTS = {
 
   async bestSellers(bid, r) {
     const [rows] = await pool.query(
-      `SELECT p.name, p.sku, SUM(x.qty) qty, SUM(x.line_total) revenue, SUM(x.line_total - x.qty * x.unit_cost) profit FROM (
+      `SELECT CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, p.sku, SUM(x.qty) qty, SUM(x.line_total) revenue, SUM(x.line_total - x.qty * x.unit_cost) profit FROM (
          SELECT si.product_id, si.qty, si.line_total, si.unit_cost FROM sale_items si JOIN sales s ON s.id = si.sale_id
           WHERE si.business_id = ? AND s.status <> 'cancelled' AND s.sold_at BETWEEN ? AND ?
          UNION ALL SELECT ii.product_id, ii.qty, ii.line_total, ii.unit_cost FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id
           WHERE ii.business_id = ? AND i.status NOT IN ('draft','cancelled') AND i.issue_date BETWEEN ? AND ?
-       ) x JOIN products p ON p.id = x.product_id AND p.business_id = ? GROUP BY p.id, p.name, p.sku ORDER BY qty DESC LIMIT 50`,
+       ) x JOIN products p ON p.id = x.product_id AND p.business_id = ? GROUP BY p.id ORDER BY qty DESC LIMIT 50`,
       [bid, r.start, r.end, bid, r.from, r.to, bid]);
     return {
       columns: [["name", "text"], ["sku", "text"], ["qty", "qty"], ["revenue", "money"], ["profit", "money"]],

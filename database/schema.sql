@@ -156,7 +156,8 @@ CREATE TABLE IF NOT EXISTS products (
   category_id     INT UNSIGNED NULL,
   brand_id        INT UNSIGNED NULL,
   subcategory     VARCHAR(120) NULL,
-  name            VARCHAR(190) NOT NULL,
+  name            VARCHAR(190) NOT NULL,          -- names may repeat; size / barcode / SKU tell products apart
+  size            VARCHAR(40)  NULL,              -- e.g. 400ml, 1kg — shown after the name everywhere
   description     TEXT NULL,
   sku             VARCHAR(80)  NULL,
   barcode         VARCHAR(80)  NULL,

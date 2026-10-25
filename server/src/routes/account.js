@@ -199,12 +199,12 @@ notificationsRouter.get("/", ah(async (req, res) => {
   const role = req.user;
   const items = [];
   if (can(role, "products.view")) {
-    const [stock] = await pool.query("SELECT id, name, stock_qty, min_stock FROM products WHERE business_id = ? AND is_active = 1 AND stock_qty <= min_stock ORDER BY stock_qty LIMIT 20", [bid]);
+    const [stock] = await pool.query("SELECT id, CONCAT_WS(' ', name, NULLIF(size, '')) name, stock_qty, min_stock FROM products WHERE business_id = ? AND is_active = 1 AND stock_qty <= min_stock ORDER BY stock_qty LIMIT 20", [bid]);
     const link = can(role, "stock.view") ? "/app/m/stock" : "/app/m/products";
     stock.forEach((p) => items.push({ type: num(p.stock_qty) <= 0 ? "outOfStock" : "lowStock", ref: p.name, link, amount: num(p.stock_qty) }));
     // locations with their own alert level (e.g. a shop that needs 20 even when the warehouse has plenty)
     const [atLocations] = await pool.query(
-      `SELECT p.name, l.name location, ps.qty FROM product_stock ps
+      `SELECT CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, l.name location, ps.qty FROM product_stock ps
          JOIN products p ON p.id = ps.product_id AND p.business_id = ps.business_id
          JOIN stock_locations l ON l.id = ps.location_id AND l.is_active = 1
         WHERE ps.business_id = ? AND p.is_active = 1 AND ps.alert_level IS NOT NULL AND ps.qty <= ps.alert_level

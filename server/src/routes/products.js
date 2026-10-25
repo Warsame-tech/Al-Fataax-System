@@ -6,6 +6,7 @@ import { ah, text, optText, id, money, quantity, withTx, ensureOwned, badRequest
 import { moveStock } from "../lib/ledger.js";
 import { imageUpload, saveImage, removeImage } from "../lib/files.js";
 import { defaultLocationId } from "../lib/stock.js";
+import { productName } from "../lib/productName.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -24,7 +25,7 @@ async function imageFrom(req) {
  * and totalStock keeps the total.
  */
 const shape = (p) => ({
-  id: p.id, name: p.name, description: p.description || "", sku: p.sku, barcode: p.barcode, unit: p.unit, imagePath: p.image_path || null,
+  id: p.id, name: productName(p), baseName: p.name, size: p.size || "", description: p.description || "", sku: p.sku, barcode: p.barcode, unit: p.unit, imagePath: p.image_path || null,
   categoryId: p.category_id, category: p.category_name || null, brandId: p.brand_id, brand: p.brand_name || null, subcategory: p.subcategory || null,
   costPrice: num(p.cost_price), sellingPrice: num(p.selling_price),
   wholesalePrice: p.wholesale_price === null ? null : num(p.wholesale_price),
@@ -49,7 +50,7 @@ const withLocation = (loc) => (loc
       LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.location_id = ${Number(loc)}`
   : SELECT);
 
-const SORTS = { name: "p.name", sku: "p.sku", category: "c.name", brand: "b.name", cost: "p.cost_price", price: "p.selling_price", stock: "p.stock_qty", updated: "p.updated_at" };
+const SORTS = { name: "p.name, p.size", size: "p.size", sku: "p.sku", category: "c.name", brand: "b.name", cost: "p.cost_price", price: "p.selling_price", stock: "p.stock_qty", updated: "p.updated_at" };
 const STATUS_WHERE = {
   in: "p.stock_qty > p.min_stock", low: "p.stock_qty > 0 AND p.stock_qty <= p.min_stock",
   out: "p.stock_qty = 0", negative: "p.stock_qty < 0", lowOrOut: "p.stock_qty <= p.min_stock"
@@ -67,7 +68,7 @@ router.get("/", requirePerm("products.view"), ah(async (req, res) => {
   const where = ["p.business_id = ?"];
   const params = [bid];
   const q = text(req.query.q, 80);
-  if (q) { where.push("(p.name LIKE ? OR p.sku LIKE ? OR p.barcode = ?)"); params.push(`%${q}%`, `%${q}%`, q); }
+  if (q) { where.push("(CONCAT_WS(' ', p.name, NULLIF(p.size, '')) LIKE ? OR p.sku LIKE ? OR p.barcode = ?)"); params.push(`%${q}%`, `%${q}%`, q); }
   if (id(req.query.categoryId)) { where.push("p.category_id = ?"); params.push(id(req.query.categoryId)); }
   if (id(req.query.brandId)) { where.push("p.brand_id = ?"); params.push(id(req.query.brandId)); }
   const sub = text(req.query.subcategory, 120);
@@ -150,7 +151,7 @@ async function brandId(conn, bid, name) {
 
 function readProduct(body, { creating }) {
   const d = {
-    name: text(body.name, 190), sku: optText(body.sku, 80), barcode: optText(body.barcode, 80),
+    name: text(body.name, 190), size: optText(body.size, 40), sku: optText(body.sku, 80), barcode: optText(body.barcode, 80),
     subcategory: optText(body.subcategory, 120), description: optText(body.description, 2000),
     unit: text(body.unit, 20) || "pcs", category: text(body.category, 120), brand: text(body.brand, 120),
     costPrice: money(body.costPrice), sellingPrice: money(body.sellingPrice),
@@ -189,9 +190,9 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
   try {
     const productId = await withTx(async (conn) => {
       const [r] = await conn.query(
-        `INSERT INTO products (business_id, category_id, brand_id, subcategory, name, description, sku, barcode, image_path, unit, cost_price, selling_price, wholesale_price, min_stock, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [bid, await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.description, d.sku, d.barcode, image, d.unit,
+        `INSERT INTO products (business_id, category_id, brand_id, subcategory, name, size, description, sku, barcode, image_path, unit, cost_price, selling_price, wholesale_price, min_stock, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [bid, await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.size, d.description, d.sku, d.barcode, image, d.unit,
           d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.isActive ? 1 : 0]
       );
       // A product can exist with zero stock. Opening stock is normally entered in Stock → Opening stock.
@@ -218,9 +219,9 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
       const p = await ensureOwned(conn, "products", id(req.params.id), bid, true);
       const next = image || (req.body?.removeImage === "true" ? null : p.image_path);
       await conn.query(
-        `UPDATE products SET category_id = ?, brand_id = ?, subcategory = ?, name = ?, description = ?, sku = ?, barcode = ?, image_path = ?, unit = ?, cost_price = ?, selling_price = ?,
+        `UPDATE products SET category_id = ?, brand_id = ?, subcategory = ?, name = ?, size = ?, description = ?, sku = ?, barcode = ?, image_path = ?, unit = ?, cost_price = ?, selling_price = ?,
                 wholesale_price = ?, min_stock = ?, is_active = ? WHERE id = ? AND business_id = ?`,
-        [await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.description, d.sku, d.barcode, next, d.unit, d.costPrice,
+        [await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.size, d.description, d.sku, d.barcode, next, d.unit, d.costPrice,
           d.sellingPrice, d.wholesalePrice, d.minStock, d.isActive ? 1 : 0, p.id, bid]
       );
       await audit(conn, { businessId: bid, userId: req.user.id, action: "product.updated", entity: "product", entityId: p.id, ip: req.ip });
@@ -275,9 +276,9 @@ router.post("/import", requirePerm("products.edit"), ah(async (req, res) => {
       for (const r of rows) {
         const d = readProduct(r, { creating: true });
         const [ins] = await conn.query(
-          `INSERT INTO products (business_id, category_id, name, sku, barcode, unit, cost_price, selling_price, wholesale_price, min_stock)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [bid, await categoryId(conn, bid, d.category), d.name, d.sku, d.barcode, d.unit, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock]
+          `INSERT INTO products (business_id, category_id, name, size, sku, barcode, unit, cost_price, selling_price, wholesale_price, min_stock)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [bid, await categoryId(conn, bid, d.category), d.name, d.size, d.sku, d.barcode, d.unit, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock]
         );
         if (d.openingStock > 0) {
           await moveStock(conn, { businessId: bid, userId: req.user.id, product: { id: ins.insertId, name: d.name, stock_qty: 0, unit: d.unit, cost_price: d.costPrice }, qtyChange: d.openingStock, type: "opening", refType: "stock", reason: "opening", note: "Imported opening stock" });

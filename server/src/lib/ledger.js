@@ -4,6 +4,7 @@
  */
 import { badRequest, HttpError, notFound } from "./http.js";
 import { defaultLocationId, lockStockRow } from "./stock.js";
+import { productName } from "./productName.js";
 
 /* ---------- document numbers (serialized by locking the settings row) ---------- */
 const NUMBERING = {
@@ -80,7 +81,7 @@ export async function moveStock(conn, {
   const row = await lockStockRow(conn, businessId, product.id, loc);
   const before = Number(row.qty);
   const after = Math.round((before + qtyChange) * 1000) / 1000;
-  if (after < 0) throw new HttpError(409, "insufficientStock", null, { product: product.name, available: before });
+  if (after < 0) throw new HttpError(409, "insufficientStock", null, { product: productName(product), available: before });
   const total = Math.round((Number(product.stock_qty) + qtyChange) * 1000) / 1000;
   await conn.query("UPDATE product_stock SET qty = ? WHERE id = ?", [after, row.id]);
   await conn.query("UPDATE products SET stock_qty = ? WHERE id = ? AND business_id = ?", [total, product.id, businessId]);
