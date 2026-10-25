@@ -7,6 +7,7 @@ import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, F
 import { fill, qty, date } from "../format.js";
 import CameraScanner from "../CameraScanner.jsx";
 import { VAT_RATE, vatOf } from "../vat.js";
+import { useDraft, DraftBar } from "../Drafts.jsx";
 
 export default function Pos() {
   const { t } = useLanguage();
@@ -40,6 +41,8 @@ function Register() {
   const products = useApi(`/api/products?location=default&q=${encodeURIComponent(q)}`);
   const customers = useApi("/api/customers");
   const [cart, setCart] = useState([]);
+  const [addVat, setAddVat] = useState(false);      // optional 5% VAT, shown in the cart total and the payment screen
+  const draft = useDraft("pos");
   const [active, setActive] = useState(null);       // highlighted cart line: the product just scanned / picked
   const [pulse, setPulse] = useState(0);            // re-runs the highlight animation on every scan
   const [code, setCode] = useState("");             // barcode / search box in the cart column
@@ -104,7 +107,9 @@ function Register() {
   const customerList = customers.data?.customers || [];
   const customer = customerList.find((c) => String(c.id) === String(customerId)) || null;
 
+  const cartVat = vatOf(addVat, subtotal);
   const reset = () => {
+    setAddVat(false);
     setCart([]); setActive(null); setCustomerId(""); setDone(null); setPaying(false); setScanned(null); setNotice(null); setCode("");
     products.reload(); codeRef.current?.focus();
   };
@@ -149,8 +154,17 @@ function Register() {
 
         <dl className="pos2__totals">
           <div><dt>{t("ui.common.subtotal")} · {fill(t("ui.pos.itemsCount"), { n: qty(itemCount) })}</dt><dd>{m(subtotal)}</dd></div>
-          <div className="is-total"><dt>{t("ui.common.total")}</dt><dd>{m(subtotal)}</dd></div>
+          <div>
+            <dt><label className="vat-switch vat-switch--small"><input type="checkbox" checked={addVat} onChange={(e) => setAddVat(e.target.checked)} />{fill(t("ui.pos.addVat"), { rate: VAT_RATE })}</label></dt>
+            <dd>{addVat ? m(cartVat) : "—"}</dd>
+          </div>
+          <div className="is-total"><dt>{t("ui.common.total")}</dt><dd>{m(Math.round((subtotal + cartVat) * 100) / 100)}</dd></div>
         </dl>
+
+        <DraftBar draft={draft} compact canSave={cart.length > 0}
+          title={`${customer?.name || t("ui.pos.walkInDefault")} · ${fill(t("ui.pos.itemsCount"), { n: qty(itemCount) })} · ${m(subtotal)}`}
+          getData={() => ({ customerId, addVat, cart: cart.map((l) => ({ product: l.product, qty: l.qty })) })}
+          onLoad={(d) => { setCustomerId(d.customerId || ""); setAddVat(Boolean(d.addVat)); setCart(d.cart || []); setActive(null); }} />
 
         <button type="button" className="pos2__pay" disabled={!cart.length} onClick={() => setPaying(true)}>
           <span>{t("ui.pos.payment")}</span><Icon name="arrow-right" />
@@ -195,8 +209,8 @@ function Register() {
       {camera && <CameraScanner onCode={onCameraCode} onClose={() => { setCamera(false); codeRef.current?.focus(); }} />}
 
       {paying && (
-        <PaymentModal cart={cart} subtotal={subtotal} customer={customer}
-          onClose={() => setPaying(false)} onDone={(result) => { setPaying(false); setDone(result); }} />
+        <PaymentModal cart={cart} subtotal={subtotal} customer={customer} addVat={addVat} setAddVat={setAddVat}
+          onClose={() => setPaying(false)} onDone={(result) => { setPaying(false); setDone(result); draft.finish(); }} />
       )}
 
       {done && (
@@ -224,7 +238,7 @@ function Register() {
  * Paying more than the total gives change from cash; paying less leaves the rest
  * on credit for the chosen customer.
  */
-function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
+function PaymentModal({ cart, subtotal, customer, addVat, setAddVat, onClose, onDone }) {
   const { t } = useLanguage();
   const can = usePerm();
   const m = useMoney();
@@ -238,7 +252,6 @@ function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
   const r2 = (v) => Math.round(v * 100) / 100;
   const discValue = Math.max(Number(discount) || 0, 0);
   const disc = discMode === "percent" ? r2(subtotal * Math.min(discValue, 100) / 100) : Math.min(discValue, subtotal);
-  const [addVat, setAddVat] = useState(false);            // optional 5% VAT
   const vat = vatOf(addVat, r2(subtotal - disc));
   const total = r2(subtotal - disc + vat);
   const paid = r2(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0));
@@ -299,7 +312,7 @@ function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
                   {fill(t("ui.pos.addVat"), { rate: VAT_RATE })}
                 </label>
               </dt>
-              <dd>{addVat ? m(vat) : "—"}</dd>
+              <dd>{addVat ? m(vat) : "—"}{addVat && <small className="paybox__vat-base">{fill(t("ui.pos.vatOf"), { rate: VAT_RATE, amount: m(r2(subtotal - disc)) })}</small>}</dd>
             </div>
             <div><dt>{t("ui.pos.totalDue")}</dt><dd>{m(total)}</dd></div>
             <div><dt>{t("ui.pos.totalPaid")}</dt><dd>{m(paid)}</dd></div>

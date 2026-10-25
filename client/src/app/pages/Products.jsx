@@ -7,6 +7,7 @@ import { PageHeader, useApi, usePerm, useSubmit, Modal, Field, FormError, Money,
 import { fill, qty, date } from "../format.js";
 import CameraScanner from "../CameraScanner.jsx";
 import { FoundCard } from "../ProductPicker.jsx";
+import { useDraft, DraftBar } from "../Drafts.jsx";
 
 /* Product master data only — stock quantities are entered in the Stock module (opening stock, add stock). */
 export const EMPTY = { name: "", size: "", description: "", sku: "", barcode: "", category: "", subcategory: "", brand: "", unit: "pcs", costPrice: "", sellingPrice: "", wholesalePrice: "", minStock: "", isActive: true };
@@ -130,6 +131,17 @@ export default function Products() {
                 </tr>
               ))}
             </tbody>
+            {list.data.summary && (
+              <tfoot className="table-summary">
+                <tr>
+                  <td colSpan="8"><strong>{fill(t("ui.products.totalProducts"), { n: list.data.summary.count })}</strong>{list.data.total > PAGE_SIZE && <small className="cell-sub">{t("ui.products.totalAllPages")}</small>}</td>
+                  <td className="num"><strong>{qty(list.data.summary.units)}</strong></td>
+                  <td colSpan="2" />
+                  <td className="num"><strong><Money value={list.data.summary.stockValue} /></strong></td>
+                  <td />
+                </tr>
+              </tfoot>
+            )}
           </table>
         </div>
       )}
@@ -161,6 +173,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     brand: product.brand || "", sku: product.sku || "", barcode: product.barcode || "", wholesalePrice: product.wholesalePrice ?? "", minStock: product.minStock
   });
   const sub = useSubmit();
+  const draft = useDraft("product");
   const [image, setImage] = useState(null);            // newly chosen File
   const [preview, setPreview] = useState(null);
   const [removeImage, setRemoveImage] = useState(false);
@@ -198,13 +211,20 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     if (image) fd.append("image", image);
     if (removeImage) fd.append("removeImage", "true");
     const ok = await sub.run(() => apiRequest(isNew ? "/api/products" : `/api/products/${product.id}`, { method: isNew ? "POST" : "PUT", body: fd }));
-    if (ok) onSaved(ok, f);
+    if (ok) { if (isNew) await draft.finish(); onSaved(ok, f); }
   };
   const err = sub.fieldErrors;
   const usedBy = sub.formError?.data?.usedBy;
   return (
     <Modal title={t(isNew ? "ui.products.add" : "ui.products.edit")} onClose={onClose} wide>
       <form onSubmit={save} className="form-grid form-grid--2 sheet-form">
+        {isNew && (
+          <div className="ff ff--full">
+            <DraftBar draft={draft} canSave={Boolean(f.name || f.barcode)} title={[f.name, f.size].filter(Boolean).join(" ") || f.barcode}
+              getData={() => ({ f })} onLoad={(d) => { setOwner(null); setF({ ...EMPTY, ...d.f }); }} />
+            {image && <small className="ff__hint">{t("ui.drafts.noPhoto")}</small>}
+          </div>
+        )}
         <div className="ff ff--full prod-photo">
           <span className="ff__label">{t("ui.products.image")}</span>
           <div className="prod-photo__row">

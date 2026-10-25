@@ -92,11 +92,15 @@ router.get("/", requirePerm("products.view"), ah(async (req, res) => {
   const [rows] = await pool.query(`${base} ORDER BY ${sort} ${dir}, p.name ASC, p.id ASC LIMIT ? OFFSET ?`,
     [...params, paged ? pageSize : 500, paged ? (page - 1) * pageSize : 0]);
   let total = rows.length;
+  let summary;
   if (paged) {
-    const [[c]] = await pool.query(`SELECT COUNT(*) n FROM products p WHERE ${where.join(" AND ")}`, params);
+    const [[c]] = await pool.query(
+      `SELECT COUNT(*) n, COALESCE(SUM(p.stock_qty), 0) units, COALESCE(SUM(p.stock_qty * p.cost_price), 0) value
+         FROM products p WHERE ${where.join(" AND ")}`, params);
     total = Number(c.n);
+    summary = { count: total, units: num(c.units), stockValue: Math.round(num(c.value) * 100) / 100 };
   }
-  res.json({ products: rows.map(shape), total, page: paged ? page : 1, pageSize: paged ? pageSize : rows.length });
+  res.json({ products: rows.map(shape), total, summary, page: paged ? page : 1, pageSize: paged ? pageSize : rows.length });
 }));
 
 /* GET /api/products/filters — options for the filter dropdowns */

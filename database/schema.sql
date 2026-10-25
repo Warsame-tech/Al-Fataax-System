@@ -107,6 +107,22 @@ CREATE TABLE IF NOT EXISTS stored_files (
   INDEX idx_files_business (business_id)
 ) ENGINE=InnoDB;
 
+-- Unfinished work saved to continue later (POS cart, invoice, purchase, stock entry, transfer, new product).
+-- Belongs to the user who saved it; data = the form state as JSON. Nothing is posted until the real form is submitted.
+CREATE TABLE IF NOT EXISTS drafts (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id INT UNSIGNED NOT NULL,
+  user_id     INT UNSIGNED NOT NULL,
+  module      VARCHAR(30)  NOT NULL,
+  title       VARCHAR(120) NOT NULL,
+  data        MEDIUMTEXT   NOT NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_drafts_user (business_id, user_id, module, updated_at),
+  CONSTRAINT fk_drafts_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+  CONSTRAINT fk_drafts_user FOREIGN KEY (user_id) REFERENCES users(id)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS business_settings (
   business_id      INT UNSIGNED PRIMARY KEY,
   currency         CHAR(3)     NOT NULL DEFAULT 'USD',

@@ -27,6 +27,22 @@ async function createSchemaIfEmpty() {
 
 const TABLES = [
   {
+    table: "drafts",
+    ddl: `CREATE TABLE IF NOT EXISTS drafts (
+      id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id INT UNSIGNED NOT NULL,
+      user_id     INT UNSIGNED NOT NULL,
+      module      VARCHAR(30)  NOT NULL,
+      title       VARCHAR(120) NOT NULL,
+      data        MEDIUMTEXT   NOT NULL,
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_drafts_user (business_id, user_id, module, updated_at),
+      CONSTRAINT fk_drafts_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+      CONSTRAINT fk_drafts_user FOREIGN KEY (user_id) REFERENCES users(id)
+    ) ENGINE=InnoDB`
+  },
+  {
     table: "app_migrations",
     ddl: `CREATE TABLE IF NOT EXISTS app_migrations (
       name       VARCHAR(60) PRIMARY KEY,

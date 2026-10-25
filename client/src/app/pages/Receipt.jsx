@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest, fileUrl } from "../../services/api.js";
 import { useApi, usePerm, useMoney, Loading, EmptyState, ReasonModal, StatusBadge } from "../ui.jsx";
 import { qty, date, fill } from "../format.js";
+import { savePdf } from "../pdf.js";
 
 const PAPER_KEY = "faatix.receiptPaper";
 
@@ -20,6 +21,8 @@ export default function Receipt() {
   const m = useMoney();
   const r = useApi(`/api/sales/${id}`);
   const [cancelling, setCancelling] = useState(false);
+  const [savingPdf, setSavingPdf] = useState(false);
+  const sheetRef = useRef(null);
   const [paper, setPaper] = useState(() => { try { return localStorage.getItem(PAPER_KEY) === "58" ? "58" : "80"; } catch { return "80"; } });
   const choosePaper = (v) => { setPaper(v); try { localStorage.setItem(PAPER_KEY, v); } catch { /* optional */ } };
 
@@ -31,6 +34,14 @@ export default function Receipt() {
     document.head.appendChild(style);
     return () => style.remove();
   }, [paper]);
+
+  /* PDF the same width as the receipt paper (58 / 80 mm), as long as the receipt */
+  const exportPdf = async () => {
+    if (savingPdf) return;
+    setSavingPdf(true);
+    try { await savePdf(sheetRef.current, `${r.data.sale.number}.pdf`, { paperWidth: Number(paper) }); }
+    finally { setSavingPdf(false); }
+  };
 
   if (r.loading && !r.data) return <Loading />;
   if (r.error) return <EmptyState text={t("ui.errors.notFound")} />;
@@ -51,11 +62,12 @@ export default function Receipt() {
             {["58", "80"].map((w) => <button key={w} type="button" aria-pressed={paper === w} onClick={() => choosePaper(w)}>{w} mm</button>)}
           </div>
           {can("sales.cancel") && s.status === "completed" && <button type="button" className="btn btn--danger" onClick={() => setCancelling(true)}><Icon name="x" /><span>{t("ui.pos.cancelSale")}</span></button>}
-          <button type="button" className="btn btn--primary" onClick={() => window.print()}><Icon name="printer" /><span>{t("ui.common.print")}</span></button>
+          <button type="button" className="btn btn--outline" onClick={() => window.print()}><Icon name="printer" /><span>{t("invoice.printOnly")}</span></button>
+          <button type="button" className="btn btn--primary" onClick={exportPdf} disabled={savingPdf}><Icon name="download" /><span>{t(savingPdf ? "invoice.savingPdf" : "invoice.savePdf")}</span></button>
         </div>
       </div>
 
-      <article className={`thermal thermal--${paper}`} aria-label={`${t("ui.pos.receipt")} ${s.number}`}>
+      <article ref={sheetRef} className={`thermal thermal--${paper}`} aria-label={`${t("ui.pos.receipt")} ${s.number}`}>
         {/* header */}
         <header className="thermal__head">
           {b.logoPath && <img className="thermal__logo" src={fileUrl(b.logoPath)} alt="" />}

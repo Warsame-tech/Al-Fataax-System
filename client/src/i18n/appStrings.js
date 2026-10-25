@@ -44,6 +44,11 @@ const en = {
     received: "Received", active: "Active", disabled: "Disabled", suspended: "Suspended", deactivated: "Deactivated", draft: "Draft",
     returned: "Returned", expired: "Expired", converted: "Converted"
   },
+  drafts: {
+    save: "Save as draft", update: "Update draft", saved: "Draft saved", list: "Drafts ({n})", title: "Saved drafts", none: "No drafts yet.",
+    open: "open now", untitled: "Draft", saveHint: "Keep this work to continue later. Nothing is posted until you finish it.",
+    updateHint: "Save the changes to the draft you opened.", noPhoto: "The photo is not kept in a draft. Choose it again when you finish."
+  },
   products: {
     title: "Products & inventory", add: "Add product", edit: "Edit product", sku: "SKU", barcode: "Barcode", brand: "Brand", unit: "Unit",
     costPrice: "Cost price", sellingPrice: "Retail price", wholesalePrice: "Wholesale price", minStock: "Minimum stock", openingStock: "Opening stock",
@@ -52,7 +57,7 @@ const en = {
     qtyChange: "Quantity change", history: "Stock history", import: "Import CSV",
     importHelp: "CSV columns: name, size, sku, barcode, category, unit, costPrice, sellingPrice, wholesalePrice, minStock, openingStock",
     importDone: "{n} products imported.",
-    stockValue: "Stock value", lowStockShort: "Low stock alert", size: "Size", sizePh: "e.g. 400ml, 1kg, 250g, XL", sizeHint: "Shown after the name everywhere, e.g. DOP Shampoo 400ml.", showsAs: "Shows as: {name}", namePh: "e.g. DOP Shampoo",
+    stockValue: "Stock value", totalProducts: "Total: {n} products", totalAllPages: "All filtered products, every page", lowStockShort: "Low stock alert", size: "Size", sizePh: "e.g. 400ml, 1kg, 250g, XL", sizeHint: "Shown after the name everywhere, e.g. DOP Shampoo 400ml.", showsAs: "Shows as: {name}", namePh: "e.g. DOP Shampoo",
     searchPh: "Search name, size, SKU or barcode", allBrands: "All brands", allCategories: "All categories", allSubcategories: "All subcategories",
     anyLocation: "Any location", stockAt: "In stock at {location}", allSuppliers: "All suppliers", resetFilters: "Reset filters ({n})",
     alertAt: "alert at {n}", subcategory: "Subcategory", barcodePh: "Scan or type the barcode", openExisting: "Open this product",
@@ -87,7 +92,7 @@ const en = {
     totalDue: "Total due", totalPaid: "Total paid", remaining: "Remaining", changeDue: "Change to give", confirm: "Confirm order",
     restOnCredit: "The rest stays on credit — {name} pays later.", needCustomer: "Choose a customer above to leave the rest on credit.",
     discountLocked: "Only owners and managers can give discounts.", exact: "Exact", walkInDefault: "Walk-in customer (default)", outRibbon: "Out of stock",
-    addVat: "Add VAT ({rate}%)", vatLine: "VAT ({rate}%)",
+    addVat: "Add VAT ({rate}%)", vatLine: "VAT ({rate}%)", vatOf: "{rate}% of {amount}",
     codePh: "Scan or type barcode, then Enter", filterPh: "Search products…", newProduct: "New product", itemsCount: "{n} items",
     discPercent: "Discount in percent — click to switch to an amount", discAmount: "Discount as an amount — click to switch to percent", locked: "Locked",
     scanCamera: "Camera", scanAuto: "Automatic (back camera)", scanManual: "Or type the barcode number",
@@ -296,6 +301,11 @@ const so = {
     received: "La helay", active: "Firfircoon", disabled: "La damiyay", suspended: "La hakiyay", deactivated: "La xiray", draft: "Qabyo",
     returned: "La soo celiyay", expired: "Dhacay", converted: "La beddelay"
   },
+  drafts: {
+    save: "Kaydi qabyo ahaan", update: "Cusbooneysii qabyada", saved: "Qabyada waa la kaydiyay", list: "Qabyooyin ({n})", title: "Qabyooyinka la kaydiyay", none: "Weli qabyo ma jirto.",
+    open: "hadda furan", untitled: "Qabyo", saveHint: "Kaydi shaqadan si aad markale u sii wadato. Waxba lama diiwaangelinayo ilaa aad dhammeyso.",
+    updateHint: "Ku kaydi isbeddellada qabyada aad furtay.", noPhoto: "Sawirka laguma kaydiyo qabyada. Dib u dooro marka aad dhammeyso."
+  },
   products: {
     title: "Alaabta & kaydka", add: "Ku dar alaab", edit: "Wax ka beddel alaabta", sku: "SKU", barcode: "Baarkood", brand: "Calaamad", unit: "Cabbir",
     costPrice: "Qiimaha iibsiga", sellingPrice: "Qiimaha tafaariiqda", wholesalePrice: "Qiimaha jumlada", minStock: "Kaydka ugu yar", openingStock: "Kaydka bilowga",
@@ -304,7 +314,7 @@ const so = {
     qtyChange: "Isbeddelka tirada", history: "Taariikhda kaydka", import: "Soo geli CSV",
     importHelp: "Tiirarka CSV: name, size, sku, barcode, category, unit, costPrice, sellingPrice, wholesalePrice, minStock, openingStock",
     importDone: "{n} alaab ayaa la soo geliyay.",
-    stockValue: "Qiimaha kaydka", lowStockShort: "Digniinta kayd yar", size: "Cabbirka", sizePh: "tusaale 400ml, 1kg, 250g, XL", sizeHint: "Wuxuu ka muuqdaa magaca kadib meel kasta, tusaale DOP Shampoo 400ml.", showsAs: "Wuxuu u muuqdaa: {name}", namePh: "tusaale DOP Shampoo",
+    stockValue: "Qiimaha kaydka", totalProducts: "Wadarta: {n} alaab", totalAllPages: "Dhammaan alaabta la shaandheeyay, bog kasta", lowStockShort: "Digniinta kayd yar", size: "Cabbirka", sizePh: "tusaale 400ml, 1kg, 250g, XL", sizeHint: "Wuxuu ka muuqdaa magaca kadib meel kasta, tusaale DOP Shampoo 400ml.", showsAs: "Wuxuu u muuqdaa: {name}", namePh: "tusaale DOP Shampoo",
     searchPh: "Raadi magac, cabbir, SKU ama baarkood", allBrands: "Dhammaan astaamaha", allCategories: "Dhammaan qaybaha", allSubcategories: "Dhammaan qaybaha hoose",
     anyLocation: "Goob kasta", stockAt: "Kayd ku jira {location}", allSuppliers: "Dhammaan alaab-qeybiyeyaasha", resetFilters: "Nadiifi shaandhada ({n})",
     alertAt: "digniin {n}", subcategory: "Qayb hoose", barcodePh: "Akhri ama qor baarkoodka", openExisting: "Fur alaabtan",
@@ -339,7 +349,7 @@ const so = {
     totalDue: "Wadarta la bixinayo", totalPaid: "Wadarta la bixiyay", remaining: "Haraaga", changeDue: "Baaqiga la celinayo", confirm: "Xaqiiji iibka",
     restOnCredit: "Haraagu waa deyn — {name} ayaa bixin doona mar dambe.", needCustomer: "Kor ka dooro macmiil si haraagu deyn u noqdo.",
     discountLocked: "Kaliya milkiilayaasha iyo maamulayaasha ayaa dhimis bixin kara.", exact: "Sax", walkInDefault: "Macmiil socod ah (caadi)", outRibbon: "Waa dhammaaday",
-    addVat: "Ku dar VAT ({rate}%)", vatLine: "VAT ({rate}%)",
+    addVat: "Ku dar VAT ({rate}%)", vatLine: "VAT ({rate}%)", vatOf: "{rate}% oo ah {amount}",
     codePh: "Akhri ama qor baarkoodka, kadib Enter", filterPh: "Raadi alaab…", newProduct: "Alaab cusub", itemsCount: "{n} shay",
     discPercent: "Dhimis boqolley ah — guji si aad ugu beddesho qaddar", discAmount: "Dhimis qaddar ah — guji si aad ugu beddesho boqolley", locked: "Xiran",
     scanCamera: "Kamarada", scanAuto: "Toos (kamarada dambe)", scanManual: "Ama qor lambarka baarkoodka",

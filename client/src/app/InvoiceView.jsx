@@ -8,6 +8,7 @@ import usePageTitle from "../hooks/usePageTitle.js";
 import { money, qty, date, fill } from "./format.js";
 import { usePerm, ReasonModal } from "./ui.jsx";
 import { PaymentModal } from "./pages/Parties.jsx";
+import { savePdf } from "./pdf.js";
 
 /*
  * Printable invoice (Print / Save as PDF from the browser).
@@ -52,25 +53,11 @@ export default function InvoiceView({ preview = false }) {
   const m = (v) => money(v, cur, lang);
 
   /* Save as PDF: builds the PDF file in the browser and downloads it (no print dialog). */
-  const savePdf = async () => {
+  const exportPdf = async () => {
     if (!sheetRef.current || savingPdf) return;
     setSavingPdf(true);
-    const el = sheetRef.current;
-    el.classList.add("is-exporting");
-    try {
-      const { default: html2pdf } = await import("html2pdf.js");
-      await html2pdf().set({
-        margin: [8, 8, 8, 8],
-        filename: `${inv.number}.pdf`,
-        image: { type: "jpeg", quality: 0.96 },
-        html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"], avoid: [".invoice__sign", ".invoice__totals", "tr"] }
-      }).from(el).save();
-    } finally {
-      el.classList.remove("is-exporting");
-      setSavingPdf(false);
-    }
+    try { await savePdf(sheetRef.current, `${inv.number}.pdf`, { avoid: [".invoice__sign", ".invoice__totals", "tr"] }); }
+    finally { setSavingPdf(false); }
   };
 
   return (
@@ -87,7 +74,7 @@ export default function InvoiceView({ preview = false }) {
           <button type="button" className="btn btn--outline" onClick={() => window.print()}>
             <Icon name="printer" /><span>{t("invoice.printOnly")}</span>
           </button>
-          <button type="button" className="btn btn--primary" onClick={savePdf} disabled={savingPdf}>
+          <button type="button" className="btn btn--primary" onClick={exportPdf} disabled={savingPdf}>
             <Icon name="download" /><span>{t(savingPdf ? "invoice.savingPdf" : "invoice.savePdf")}</span>
           </button>
         </div>

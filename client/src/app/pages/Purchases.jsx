@@ -8,6 +8,7 @@ import LineItems from "./LineItems.jsx";
 import SearchSelect from "../SearchSelect.jsx";
 import { PaymentModal } from "./Parties.jsx";
 import { qty, date } from "../format.js";
+import { useDraft, DraftBar } from "../Drafts.jsx";
 
 export default function Purchases() {
   const { t } = useLanguage();
@@ -104,15 +105,19 @@ function PurchaseForm({ onDone }) {
   const suppliers = useApi("/api/suppliers");
   const [f, setF] = useState({ supplierId: "", amountPaid: "", method: "cash", bankAccountId: "", reference: "" });
   const [lines, setLines] = useState([]);
+  const draft = useDraft("purchase");
   const sub = useSubmit();
   const total = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
   const save = async (e) => {
     e.preventDefault();
     const body = { ...f, items: lines.map((l) => ({ productId: l.product.id, qty: l.qty, unitCost: l.price })) };
-    if (await sub.run(() => apiRequest("/api/purchases", { method: "POST", body }))) onDone();
+    if (await sub.run(() => apiRequest("/api/purchases", { method: "POST", body }))) { await draft.finish(); onDone(); }
   };
   return (
     <form onSubmit={save} className="doc-form">
+      <DraftBar draft={draft} canSave={lines.length > 0 || Boolean(f.supplierId)}
+        title={`${(suppliers.data?.suppliers || []).find((x) => String(x.id) === String(f.supplierId))?.name || t("ui.purchases.title")} · ${m(total)}`}
+        getData={() => ({ f, lines })} onLoad={(d) => { setF((x) => ({ ...x, ...d.f })); setLines(d.lines || []); }} />
       <section className="panel-card form-grid form-grid--2">
         <div className="ff">
           <span className="ff__label">{t("ui.common.supplier")}</span>

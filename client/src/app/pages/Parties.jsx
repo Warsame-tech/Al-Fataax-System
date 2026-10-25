@@ -1,10 +1,11 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest } from "../../services/api.js";
 import { PageHeader, useApi, usePerm, useSubmit, Modal, Field, FormError, Money, EmptyState, Loading, SearchBox, PaymentFields, StatusBadge } from "../ui.jsx";
 import { date } from "../format.js";
+import { savePdf } from "../pdf.js";
 
 /** Customers (kind="customers") and suppliers (kind="suppliers") share this screen. */
 export default function Parties({ kind }) {
@@ -96,6 +97,14 @@ function Statement({ kind, party, onClose }) {
   const [paying, setPaying] = useState(false);
   const canPay = can(isCustomer ? "payments.receive" : "purchases.pay");
   const balance = st.data?.balance || 0;
+  const sheetRef = useRef(null);
+  const [savingPdf, setSavingPdf] = useState(false);
+  const exportPdf = async () => {
+    if (savingPdf) return;
+    setSavingPdf(true);
+    try { await savePdf(sheetRef.current, `${t("ui.parties.statement")} - ${party.name}.pdf`); }
+    finally { setSavingPdf(false); }
+  };
   const linkFor = (l) => (l.kind === "invoice" ? `/app/invoices/${l.id}` : l.kind === "sale" ? `/app/sales/${l.id}` : null);
 
   return (
@@ -103,13 +112,19 @@ function Statement({ kind, party, onClose }) {
       <div className="statement-foot">
         <span>{t(isCustomer ? "ui.parties.owesYou" : "ui.parties.youOwe")}: <Money value={balance} className="strong" /></span>
         <div className="form-actions">
-          <button type="button" className="btn btn--outline" onClick={() => window.print()}><Icon name="printer" /><span>{t("ui.common.print")}</span></button>
+          <button type="button" className="btn btn--outline" onClick={() => window.print()}><Icon name="printer" /><span>{t("invoice.printOnly")}</span></button>
+          <button type="button" className="btn btn--outline" onClick={exportPdf} disabled={savingPdf || !(st.data?.lines || []).length}><Icon name="download" /><span>{t(savingPdf ? "invoice.savingPdf" : "invoice.savePdf")}</span></button>
           {canPay && balance > 0 && <button type="button" className="btn btn--primary" onClick={() => setPaying(true)}><Icon name="wallet" /><span>{t(isCustomer ? "ui.parties.receivePayment" : "ui.parties.paySupplier")}</span></button>}
         </div>
       </div>
     }>
       {st.loading && !st.data ? <Loading /> : (st.data?.lines || []).length === 0 ? <EmptyState text={t("ui.common.noResults")} /> : (
-        <div className="table-wrap">
+        <div className="table-wrap pdf-sheet" ref={sheetRef}>
+          <div className="pdf-only pdf-sheet__head">
+            <strong>{t("ui.parties.statement")} · {party.name}</strong>
+            <span>{[party.phone, party.address].filter(Boolean).join(" · ")}</span>
+            <span>{t(isCustomer ? "ui.parties.owesYou" : "ui.parties.youOwe")}: <Money value={balance} /> · {date(new Date(), lang)}</span>
+          </div>
           <table className="table table--compact">
             <thead><tr><th>{t("ui.common.date")}</th><th>{t("ui.common.description")}</th><th className="num">{t("ui.parties.debit")}</th><th className="num">{t("ui.parties.credit")}</th><th className="num">{t("ui.parties.runningBalance")}</th></tr></thead>
             <tbody>

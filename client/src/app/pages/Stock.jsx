@@ -6,6 +6,7 @@ import { apiRequest, fileUrl } from "../../services/api.js";
 import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, Modal, Field, FormError, Money, EmptyState, Loading, SearchBox, DateRange, ReasonModal, daysAgo, isoDate, downloadCsv } from "../ui.jsx";
 import { fill, qty, date } from "../format.js";
 import ProductPicker, { FoundCard } from "../ProductPicker.jsx";
+import { useDraft, DraftBar } from "../Drafts.jsx";
 
 /*
  * Stock Management module. Tabs (shown by permission):
@@ -129,7 +130,7 @@ function CurrentStock({ locationsApi, go }) {
         <div className="table-wrap"><table className="table">
           <thead><tr>
             <th>{t("ui.common.product")}</th><th>{t("ui.stock.location")}</th><th className="num">{t("ui.stock.current")}</th>
-            <th className="num">{t("ui.stock.available")}</th><th>{t("ui.stock.stockStatus")}</th><th className="num">{t("ui.stock.alertLevel")}</th>
+            <th className="num">{t("ui.stock.available")}</th><th>{t("ui.products.unit")}</th><th>{t("ui.stock.stockStatus")}</th><th className="num">{t("ui.stock.alertLevel")}</th>
             <th>{t("ui.stock.lastMovement")}</th><th />
           </tr></thead>
           <tbody>
@@ -140,8 +141,9 @@ function CurrentStock({ locationsApi, go }) {
                   <div><strong>{r.name}</strong><small className="cell-sub">{[r.sku, r.barcode].filter(Boolean).join(" · ")}</small></div>
                 </div></td>
                 <td>{r.location}</td>
-                <td className="num">{qty(r.qty)} {r.unit}</td>
+                <td className="num">{qty(r.qty)}</td>
                 <td className="num">{qty(r.available)}</td>
+                <td>{r.unit}</td>
                 <td><StatusPill status={r.status} /></td>
                 <td className="num">{qty(r.alertLevel)}<small className="cell-sub">{t(`ui.stock.alertFrom.${r.alertSource}`)}</small></td>
                 <td>{r.lastMovementAt ? date(r.lastMovementAt, lang, true) : "—"}</td>
@@ -192,6 +194,7 @@ function AddStock({ locationsApi }) {
   const suppliers = useApi("/api/suppliers");
   const [f, setF] = useState({ locationId: "", type: "purchase", reference: "", supplierId: "", notes: "" });
   const [lines, setLines] = useState([]);           // [{ product, qty }]
+  const draft = useDraft("stock_add");
   const [flash, setFlash] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(null);
@@ -216,11 +219,14 @@ function AddStock({ locationsApi }) {
     const body = { ...f, locationId, supplierId: f.type === "purchase" ? f.supplierId || null : null, items: lines.map((l) => ({ productId: l.product.id, qty: Number(l.qty) })) };
     const r = await sub.run(() => apiRequest("/api/stock/add", { method: "POST", body }));
     setConfirming(false);
-    if (r) { setDone(fill(t("ui.stock.addDone"), { n: r.count, location: locationName })); setLines([]); setF((x) => ({ ...x, reference: "", notes: "" })); }
+    if (r) { draft.finish(); setDone(fill(t("ui.stock.addDone"), { n: r.count, location: locationName })); setLines([]); setF((x) => ({ ...x, reference: "", notes: "" })); }
   };
 
   return (
     <div className="stock-form">
+      <DraftBar draft={draft} canSave={lines.length > 0}
+        title={`${t(`ui.stock.types.${f.type}`)} · ${locationName} · ${fill(t("ui.stock.linesSummary"), { n: lines.length, units: qty(totalUnits) })}`}
+        getData={() => ({ f, lines })} onLoad={(d) => { setDone(null); setF((x) => ({ ...x, ...d.f })); setLines(d.lines || []); }} />
       <section className="panel-card form-grid form-grid--2">
         <LocationSelect locationsApi={locationsApi} value={locationId} onChange={(v) => setF({ ...f, locationId: v })} error={sub.fieldErrors.locationId} />
         <Field label={t("ui.stock.transactionType")} error={sub.fieldErrors.type}>
@@ -468,6 +474,7 @@ function TransferStock({ locationsApi }) {
   const locs = activeLocations(locationsApi);
   const [f, setF] = useState({ fromLocationId: "", toLocationId: "", reference: "", notes: "" });
   const [lines, setLines] = useState([]);    // [{ product, qty, available }]
+  const draft = useDraft("stock_transfer");
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(null);
   const sub = useSubmit();
@@ -489,11 +496,15 @@ function TransferStock({ locationsApi }) {
   const save = async () => {
     const r = await sub.run(() => apiRequest("/api/stock/transfer", { method: "POST", body: { fromLocationId: from, toLocationId: to, reference: f.reference, notes: f.notes, items: lines.map((l) => ({ productId: l.product.id, qty: Number(l.qty) })) } }));
     setConfirming(false);
-    if (r) { setDone(fill(t("ui.stock.transferDone"), { n: r.count, from: nameOf(from), to: nameOf(to), ref: r.transferRef })); setLines([]); }
+    if (r) { draft.finish(); setDone(fill(t("ui.stock.transferDone"), { n: r.count, from: nameOf(from), to: nameOf(to), ref: r.transferRef })); setLines([]); }
   };
   if (locs.length < 2) return <EmptyState icon="store" text={t("ui.stock.needTwoLocations")} />;
   return (
     <div className="stock-form">
+      <DraftBar draft={draft} canSave={lines.length > 0}
+        title={`${nameOf(from)} → ${nameOf(to)} · ${lines.length}`}
+        getData={() => ({ f, lines: lines.map((l) => ({ product: l.product, qty: l.qty })) })}
+        onLoad={(d) => { setDone(null); setF((x) => ({ ...x, ...d.f })); setLines((d.lines || []).map((l) => ({ ...l, available: null, availableAt: null }))); }} />
       <section className="panel-card form-grid form-grid--2">
         <LocationSelect locationsApi={locationsApi} label={t("ui.stock.fromLocation")} value={from} onChange={(v) => setF({ ...f, fromLocationId: v })} />
         <Field label={t("ui.stock.toLocation")} error={sub.fieldErrors.toLocationId && t("ui.errors.sameLocation")}>
@@ -609,13 +620,14 @@ function LowStock({ go }) {
     <>
       <p className="page-help"><Icon name="info" /> {t("ui.stock.lowHelp")}</p>
       <div className="table-wrap"><table className="table">
-        <thead><tr><th>{t("ui.common.product")}</th><th>{t("ui.stock.location")}</th><th className="num">{t("ui.stock.current")}</th><th className="num">{t("ui.stock.alertLevel")}</th><th>{t("ui.stock.stockStatus")}</th><th /></tr></thead>
+        <thead><tr><th>{t("ui.common.product")}</th><th>{t("ui.stock.location")}</th><th className="num">{t("ui.stock.current")}</th><th>{t("ui.products.unit")}</th><th className="num">{t("ui.stock.alertLevel")}</th><th>{t("ui.stock.stockStatus")}</th><th /></tr></thead>
         <tbody>
           {items.map((r) => (
             <tr key={`${r.productId}-${r.locationId}`}>
               <td><strong>{r.name}</strong>{r.sku && <small className="cell-sub">{r.sku}</small>}</td>
               <td>{r.location}</td>
-              <td className="num">{qty(r.qty)} {r.unit}</td>
+              <td className="num">{qty(r.qty)}</td>
+              <td>{r.unit}</td>
               <td className="num">{qty(r.alertLevel)}<small className="cell-sub">{t(`ui.stock.alertFrom.${r.alertSource}`)}</small></td>
               <td><StatusPill status={r.status} /></td>
               <td className="row-actions">{can("stock.add") && <button type="button" className="btn btn--outline btn--sm" onClick={() => go("add")}>{t("ui.stock.tabs.add")}</button>}</td>
@@ -658,9 +670,9 @@ function Valuation({ locationsApi }) {
           <p className="muted stock-note"><Icon name="info" /> {t("ui.stock.valuationNote")}</p>
           {d.items.length === 0 ? <EmptyState icon="wallet" text={t("ui.common.noResults")} /> : (
             <div className="table-wrap"><table className="table">
-              <thead><tr><th>{t("ui.common.product")}</th><th>{t("ui.stock.location")}</th><th className="num">{t("ui.common.qty")}</th><th className="num">{t("ui.products.costPrice")}</th><th className="num">{t("ui.stock.costValue")}</th><th className="num">{t("ui.stock.retailValue")}</th></tr></thead>
+              <thead><tr><th>{t("ui.common.product")}</th><th>{t("ui.stock.location")}</th><th className="num">{t("ui.common.qty")}</th><th>{t("ui.products.unit")}</th><th className="num">{t("ui.products.costPrice")}</th><th className="num">{t("ui.stock.costValue")}</th><th className="num">{t("ui.stock.retailValue")}</th></tr></thead>
               <tbody>{d.items.map((i) => (
-                <tr key={`${i.productId}-${i.locationId}`}><td><strong>{i.name}</strong></td><td>{i.location}</td><td className="num">{qty(i.qty)} {i.unit}</td><td className="num"><Money value={i.costPrice} /></td><td className="num"><Money value={i.costValue} /></td><td className="num"><Money value={i.retailValue} /></td></tr>
+                <tr key={`${i.productId}-${i.locationId}`}><td><strong>{i.name}</strong></td><td>{i.location}</td><td className="num">{qty(i.qty)}</td><td>{i.unit}</td><td className="num"><Money value={i.costPrice} /></td><td className="num"><Money value={i.costValue} /></td><td className="num"><Money value={i.retailValue} /></td></tr>
               ))}</tbody>
             </table></div>
           )}

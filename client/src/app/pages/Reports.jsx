@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { PageHeader, useApi, useMoney, Loading, EmptyState, DateRange, daysAgo, isoDate, downloadCsv } from "../ui.jsx";
 import { qty, date } from "../format.js";
+import { savePdf } from "../pdf.js";
 
 const TYPES = ["sales", "profit", "inventory", "lowStock", "receivables", "payables", "purchases", "expenses", "cashflow", "bestSellers"];
 const TYPE_ICON = { sales: "chart-line", profit: "wallet", inventory: "package", lowStock: "alert", receivables: "users", payables: "truck", purchases: "truck", expenses: "wallet", cashflow: "book-open", bestSellers: "chart-line" };
@@ -17,6 +18,14 @@ export default function Reports() {
   const [range, setRange] = useState({ from: daysAgo(29), to: isoDate(new Date()) });
   const r = useApi(`/api/reports/${type}?${new URLSearchParams(range)}`);
   const d = r.data;
+  const reportRef = useRef(null);
+  const [savingPdf, setSavingPdf] = useState(false);
+  const exportPdf = async () => {
+    if (savingPdf) return;
+    setSavingPdf(true);
+    try { await savePdf(reportRef.current, NO_DATES.has(type) ? `${type}.pdf` : `${type}-${range.from}-${range.to}.pdf`); }
+    finally { setSavingPdf(false); }
+  };
 
   const cell = (col, kind, row) => {
     const v = row[col];
@@ -37,7 +46,8 @@ export default function Reports() {
       <PageHeader icon="file-chart" title={t("ui.reports.title")} actions={
         <>
           <button type="button" className="btn btn--outline" onClick={exportCsv} disabled={!d}><Icon name="download" /><span>{t("ui.common.exportCsv")}</span></button>
-          <button type="button" className="btn btn--outline" onClick={() => window.print()}><Icon name="printer" /><span>{t("ui.common.print")}</span></button>
+          <button type="button" className="btn btn--outline" onClick={() => window.print()}><Icon name="printer" /><span>{t("invoice.printOnly")}</span></button>
+          <button type="button" className="btn btn--outline" onClick={exportPdf} disabled={!d || savingPdf}><Icon name="download" /><span>{t(savingPdf ? "invoice.savingPdf" : "invoice.savePdf")}</span></button>
         </>
       } />
       <div className="report-types no-print">
@@ -47,7 +57,7 @@ export default function Reports() {
       </div>
       {!NO_DATES.has(type) && <div className="toolbar no-print"><DateRange value={range} onChange={setRange} /></div>}
 
-      <section className="panel-card report">
+      <section className="panel-card report" ref={reportRef}>
         <h2 className="report__title">{t(`ui.reports.types.${type}`)}{!NO_DATES.has(type) && <small> · {date(range.from, lang)} – {date(range.to, lang)}</small>}</h2>
         {r.loading && !d ? <Loading /> : !d ? <EmptyState text={t("ui.errors.failed")} /> : (
           <>

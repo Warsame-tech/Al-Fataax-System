@@ -974,3 +974,36 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 .invoice__table td { padding: 9px 10px; }
 .invoice__table td small { font-size: .72rem; }
 .invoice__barcode { font-size: .8rem; }
+
+/* ---------- VAT on the POS cart ---------- */
+.vat-switch--small { gap: 6px; font-size: .84rem; }
+.vat-switch--small input { width: 15px; height: 15px; }
+.paybox__vat-base { display: block; font-size: .72rem; font-weight: 500; color: var(--muted); text-align: right; }
+
+/* ---------- Products table: totals row ---------- */
+.table-summary td { border-top: 2px solid #dfe3ee; color: var(--navy); }
+
+/* ---------- Save as draft ---------- */
+.draftbar { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.draftbar--compact { justify-content: stretch; padding: 4px 2px; }
+.draftbar--compact .btn { flex: 1 1 0; justify-content: center; }
+.draftbar__error { font-size: .8rem; color: #b42318; }
+.draftbar__panel { position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: min(340px, calc(100vw - 32px)); max-height: 340px; overflow: auto;
+  padding: 10px; border: 1px solid #e3e6ef; border-radius: 12px; background: #fff; box-shadow: 0 12px 30px rgba(16, 24, 64, .16); text-align: left; }
+.draftbar--compact .draftbar__panel { left: 0; right: auto; bottom: calc(100% + 6px); top: auto; }
+.draftbar__head { margin: 0 0 6px; font-weight: 700; color: var(--navy); font-size: .9rem; }
+.draftbar__panel ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.draftbar__panel li { display: flex; align-items: center; gap: 6px; border-radius: 8px; }
+.draftbar__panel li.is-current { background: #eef4ff; }
+.draftbar__open { flex: 1; min-width: 0; display: grid; gap: 2px; padding: 8px; border: 0; background: none; text-align: left; cursor: pointer; border-radius: 8px; font: inherit; }
+.draftbar__open:hover { background: var(--soft); }
+.draftbar__open strong { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: .88rem; }
+.draftbar__open small { color: var(--muted); font-size: .75rem; }
+
+/* ---------- Save as PDF (statement) ---------- */
+.pdf-only { display: none; }
+.is-exporting .pdf-only { display: grid; }
+.is-exporting.table-wrap, .is-exporting .table-wrap { overflow: visible; }
+.pdf-sheet__head { gap: 2px; margin-bottom: 10px; color: var(--navy); }
+.pdf-sheet__head strong { font-size: 1.1rem; }
+.pdf-sheet.is-exporting { padding: 4px; background: #fff; }

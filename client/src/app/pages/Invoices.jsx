@@ -8,6 +8,7 @@ import LineItems from "./LineItems.jsx";
 import { date, fill } from "../format.js";
 import SearchSelect from "../SearchSelect.jsx";
 import { VAT_RATE, vatOf } from "../vat.js";
+import { useDraft, DraftBar } from "../Drafts.jsx";
 
 const STATUSES = ["", "unpaid", "partially_paid", "overdue", "paid", "cancelled"];
 
@@ -75,6 +76,7 @@ export function InvoiceForm() {
   const [f, setF] = useState({ vat: false, customerId: "", billPhone: "", billAddress: "", priceList: "wholesale", issueDate: isoDate(new Date()), dueDate: isoDate(new Date(Date.now() + 14 * 86400000)), discount: "", discountLabel: "", notes: "", amountPaid: "", method: "cash", bankAccountId: "" });
   const [lines, setLines] = useState([]);
   const [newCustomer, setNewCustomer] = useState(null);   // typed name for the "New customer" form
+  const draft = useDraft("invoice");
   const sub = useSubmit();
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
   const list = customers.data?.customers || [];
@@ -99,12 +101,16 @@ export function InvoiceForm() {
     e.preventDefault();
     const body = { ...f, items: lines.map((l) => ({ productId: l.product.id, qty: l.qty, ...(allowPrice ? { unitPrice: l.price } : {}) })) };
     const r = await sub.run(() => apiRequest("/api/invoices", { method: "POST", body }));
-    if (r) navigate(`/app/invoices/${r.id}`, { replace: true });
+    if (r) { await draft.finish(); navigate(`/app/invoices/${r.id}`, { replace: true }); }
   };
 
   return (
     <div className="page">
-      <PageHeader icon="receipt" title={t("ui.invoices.new")} back="/app/m/invoices" />
+      <PageHeader icon="receipt" title={t("ui.invoices.new")} back="/app/m/invoices" actions={
+        <DraftBar draft={draft} canSave={lines.length > 0 || Boolean(f.customerId)}
+          title={`${list.find((c) => String(c.id) === String(f.customerId))?.name || t("ui.invoices.title")} · ${m(total)}`}
+          getData={() => ({ f, lines })} onLoad={(d) => { setF((x) => ({ ...x, ...d.f })); setLines(d.lines || []); }} />
+      } />
       <form onSubmit={save} className="doc-form">
         <section className="panel-card form-grid form-grid--3">
           <div className="ff">
