@@ -5,7 +5,7 @@ import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
 import { apiRequest, fileUrl } from "../services/api.js";
 import usePageTitle from "../hooks/usePageTitle.js";
-import { money, qty, date } from "./format.js";
+import { money, qty, date, fill } from "./format.js";
 import { usePerm, ReasonModal } from "./ui.jsx";
 import { PaymentModal } from "./pages/Parties.jsx";
 
@@ -132,7 +132,7 @@ export default function InvoiceView({ preview = false }) {
           <thead>
             <tr>
               <th>#</th><th>{t("invoice.item")}</th><th>{t("invoice.barcode")}</th><th className="num">{t("invoice.qty")}</th>
-              <th className="num">{t("invoice.price")}</th><th className="num">{t("invoice.discount")}</th><th className="num">{t("invoice.amount")}</th>
+              <th className="num">{t("invoice.price")}</th><th className="num">{t("invoice.amount")}</th>
             </tr>
           </thead>
           <tbody>
@@ -143,7 +143,6 @@ export default function InvoiceView({ preview = false }) {
                 <td className="invoice__barcode">{it.barcode || "—"}</td>
                 <td className="num">{qty(it.qty)}</td>
                 <td className="num">{m(it.unitPrice)}</td>
-                <td className="num">{it.discount ? m(it.discount) : "—"}</td>
                 <td className="num">{m(it.total)}</td>
               </tr>
             ))}
@@ -168,6 +167,7 @@ export default function InvoiceView({ preview = false }) {
           <dl className="invoice__totals">
             <div><dt>{t("invoice.subtotal")}</dt><dd>{m(inv.subtotal)}</dd></div>
             {inv.discount > 0 && <div><dt>{t("invoice.discount")}{inv.discountLabel ? ` (${inv.discountLabel})` : ""}</dt><dd>− {m(inv.discount)}</dd></div>}
+            {inv.vat > 0 && <div><dt>{fill(t("ui.pos.vatLine"), { rate: inv.vatRate })}</dt><dd>{m(inv.vat)}</dd></div>}
             <div className="is-total"><dt>{t("invoice.total")}</dt><dd>{m(inv.total)}</dd></div>
             <div><dt>{t("invoice.paid")}</dt><dd>{m(inv.paid)}</dd></div>
             <div className="is-balance"><dt>{t("invoice.balance")}</dt><dd>{m(inv.balance)}</dd></div>

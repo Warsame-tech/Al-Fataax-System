@@ -57,9 +57,9 @@ router.get("/", async (req, res, next) => {
     const many = async (sql, params) => (await pool.query(sql, params))[0];
 
     const [posSales, invSales, received, posCogs, invCogs, expenses, income, money, recv, pay, lowStock, recent, best, counts] = await Promise.all([
-      one(`SELECT COALESCE(SUM(total),0) v, COUNT(*) n, COALESCE(SUM(discount),0) disc FROM sales
+      one(`SELECT COALESCE(SUM(total - vat_amount),0) v, COUNT(*) n, COALESCE(SUM(discount),0) disc FROM sales
             WHERE business_id = ? AND status <> 'cancelled' AND sold_at BETWEEN ? AND ?`, [bid, start, end]),
-      one(`SELECT COALESCE(SUM(total),0) v, COUNT(*) n, COALESCE(SUM(discount),0) disc FROM invoices
+      one(`SELECT COALESCE(SUM(total - vat_amount),0) v, COUNT(*) n, COALESCE(SUM(discount),0) disc FROM invoices
             WHERE business_id = ? AND status NOT IN ('draft','cancelled') AND issue_date BETWEEN ? AND ?`, [bid, range.from, range.to]),
       one(`SELECT COALESCE(SUM(amount),0) v FROM customer_payments
             WHERE business_id = ? AND paid_at BETWEEN ? AND ?`, [bid, start, end]),

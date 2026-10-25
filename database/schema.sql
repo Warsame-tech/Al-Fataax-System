@@ -341,6 +341,8 @@ CREATE TABLE IF NOT EXISTS sales (
   user_id        INT UNSIGNED NOT NULL,
   subtotal       DECIMAL(14,2) NOT NULL,
   discount       DECIMAL(14,2) NOT NULL DEFAULT 0,
+  vat_rate       DECIMAL(5,2)  NOT NULL DEFAULT 0,  -- optional VAT (5%) on the amount after discount
+  vat_amount     DECIMAL(14,2) NOT NULL DEFAULT 0,  -- included in total; not counted as sales income
   total          DECIMAL(14,2) NOT NULL,
   amount_paid    DECIMAL(14,2) NOT NULL DEFAULT 0,  -- informational; money in = customer_payments
   change_amount  DECIMAL(14,2) NOT NULL DEFAULT 0,  -- change given back (receipt)
@@ -387,6 +389,8 @@ CREATE TABLE IF NOT EXISTS invoices (
   subtotal    DECIMAL(14,2) NOT NULL,
   discount    DECIMAL(14,2) NOT NULL DEFAULT 0,
   discount_label VARCHAR(80) NULL,  -- e.g. "10%" or "Eid offer"
+  vat_rate    DECIMAL(5,2)  NOT NULL DEFAULT 0,
+  vat_amount  DECIMAL(14,2) NOT NULL DEFAULT 0,
   total       DECIMAL(14,2) NOT NULL,
   amount_paid DECIMAL(14,2) NOT NULL DEFAULT 0,  -- sum of linked customer_payments, updated in the same transaction
   status      ENUM('draft','unpaid','partially_paid','paid','overdue','cancelled') NOT NULL DEFAULT 'unpaid',

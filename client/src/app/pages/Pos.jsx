@@ -6,6 +6,7 @@ import { apiRequest, fileUrl } from "../../services/api.js";
 import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, FormError, Money, EmptyState, Loading, SearchBox, StatusBadge, DateRange, daysAgo, isoDate, Modal } from "../ui.jsx";
 import { fill, qty, date } from "../format.js";
 import CameraScanner from "../CameraScanner.jsx";
+import { VAT_RATE, vatOf } from "../vat.js";
 
 export default function Pos() {
   const { t } = useLanguage();
@@ -237,7 +238,9 @@ function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
   const r2 = (v) => Math.round(v * 100) / 100;
   const discValue = Math.max(Number(discount) || 0, 0);
   const disc = discMode === "percent" ? r2(subtotal * Math.min(discValue, 100) / 100) : Math.min(discValue, subtotal);
-  const total = r2(subtotal - disc);
+  const [addVat, setAddVat] = useState(false);            // optional 5% VAT
+  const vat = vatOf(addVat, r2(subtotal - disc));
+  const total = r2(subtotal - disc + vat);
   const paid = r2(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0));
   const remaining = r2(total - paid);
   const cashPaid = r2(payments.filter((p) => p.kind === "cash").reduce((s, p) => s + (Number(p.amount) || 0), 0));
@@ -261,6 +264,7 @@ function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
       items: cart.map((l) => ({ productId: l.product.id, qty: l.qty })),
       customerId: customer?.id || null,
       discount: disc || 0,
+      vat: addVat,
       payments: payments.filter((p) => Number(p.amount) > 0).map((p) => ({ paymentMethodId: p.paymentMethodId, amount: Number(p.amount) }))
     };
     const result = await sub.run(() => apiRequest("/api/sales", { method: "POST", body }));
@@ -287,6 +291,16 @@ function PaymentModal({ cart, subtotal, customer, onClose, onDone }) {
                 {!can("sales.discount") && <span className="paybox__lock" title={t("ui.pos.discountLocked")}><Icon name="lock" />{t("ui.pos.locked")}</span>}
                 <strong className="paybox__disc-amt">{disc > 0 ? `− ${m(disc)}` : m(0)}</strong>
               </dd>
+            </div>
+            <div className="paybox__vat">
+              <dt>
+                <label className="vat-switch">
+                  <input type="checkbox" checked={addVat} onChange={(e) => setAddVat(e.target.checked)} />
+                  <span className="vat-switch__ui" aria-hidden="true" />
+                  {fill(t("ui.pos.addVat"), { rate: VAT_RATE })}
+                </label>
+              </dt>
+              <dd>{addVat ? m(vat) : "—"}</dd>
             </div>
             <div><dt>{t("ui.pos.totalDue")}</dt><dd>{m(total)}</dd></div>
             <div><dt>{t("ui.pos.totalPaid")}</dt><dd>{m(paid)}</dd></div>

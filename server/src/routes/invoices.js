@@ -6,6 +6,7 @@ import { ah, id, money, withTx, ensureOwned, badRequest, conflict, num, round2, 
 import { nextNumber, lockProducts, moveStock } from "../lib/ledger.js";
 import { priceLines } from "./sales.js";
 import { receiveCustomerPayment, readPayment } from "./parties.js";
+import { vatFor } from "../lib/vat.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -55,7 +56,8 @@ export async function createInvoice(conn, ctx, body) {
   const discount = disc.amount;
   if (discount > 0 && !can(role, "sales.discount")) throw badRequest({ discount: "forbidden" });
   if (discount > subtotal) throw badRequest({ discount: "tooLarge" });
-  const total = round2(subtotal - discount);
+  const vat = vatFor(body.vat, round2(subtotal - discount));   // optional 5% VAT on the amount after discount
+  const total = round2(subtotal - discount + vat.amount);
   const discountLabel = discount > 0 ? optText(body.discountLabel, 80) || (disc.percent !== undefined ? `${disc.percent}%` : null) : null;
 
   const amountPaid = body.amountPaid ? money(body.amountPaid) : 0;
@@ -64,9 +66,9 @@ export async function createInvoice(conn, ctx, body) {
 
   const number = await nextNumber(conn, businessId, "invoice");
   const [r] = await conn.query(
-    `INSERT INTO invoices (business_id, invoice_no, customer_id, bill_phone, bill_address, user_id, issue_date, due_date, subtotal, discount, discount_label, total, amount_paid, status, notes)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'unpaid', ?)`,
-    [businessId, number, customerId, optText(body.billPhone, 30), optText(body.billAddress, 255), userId, issueDate, dueDate, subtotal, discount, discountLabel, total, optText(body.notes, 255)]
+    `INSERT INTO invoices (business_id, invoice_no, customer_id, bill_phone, bill_address, user_id, issue_date, due_date, subtotal, discount, discount_label, vat_rate, vat_amount, total, amount_paid, status, notes)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'unpaid', ?)`,
+    [businessId, number, customerId, optText(body.billPhone, 30), optText(body.billAddress, 255), userId, issueDate, dueDate, subtotal, discount, discountLabel, vat.rate, vat.amount, total, optText(body.notes, 255)]
   );
   for (const l of lines) {
     await conn.query(
@@ -123,7 +125,7 @@ router.get("/:id", requirePerm("invoices.view"), ah(async (req, res) => {
     business: req.business,
     invoice: {
       id: inv.id, number: inv.invoice_no, issueDate: inv.issue_date, dueDate: inv.due_date, status: inv.computed_status,
-      subtotal: num(inv.subtotal), discount: num(inv.discount), discountLabel: inv.discount_label || null, total: num(inv.total), paid: num(inv.amount_paid),
+      subtotal: num(inv.subtotal), discount: num(inv.discount), discountLabel: inv.discount_label || null, vatRate: num(inv.vat_rate || 0), vat: num(inv.vat_amount || 0), total: num(inv.total), paid: num(inv.amount_paid),
       balance: round2(num(inv.total) - num(inv.amount_paid)), notes: inv.notes, customerId: inv.customer_id,
       customer: { name: inv.customer_name, phone: inv.bill_phone || inv.customer_phone, email: inv.customer_email, address: inv.bill_address || inv.customer_address }
     },

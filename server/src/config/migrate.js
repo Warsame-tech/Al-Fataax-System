@@ -120,6 +120,10 @@ const COLUMNS = [
   { table: "customer_payments", column: "payment_method_id", ddl: "ALTER TABLE customer_payments ADD COLUMN payment_method_id INT UNSIGNED NULL AFTER method" },
   { table: "business_user_roles", column: "role_id", ddl: "ALTER TABLE business_user_roles ADD COLUMN role_id INT UNSIGNED NULL AFTER role" },
   // product master data
+  { table: "sales", column: "vat_rate", ddl: "ALTER TABLE sales ADD COLUMN vat_rate DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER discount" },
+  { table: "sales", column: "vat_amount", ddl: "ALTER TABLE sales ADD COLUMN vat_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER vat_rate" },
+  { table: "invoices", column: "vat_rate", ddl: "ALTER TABLE invoices ADD COLUMN vat_rate DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER discount" },
+  { table: "invoices", column: "vat_amount", ddl: "ALTER TABLE invoices ADD COLUMN vat_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER vat_rate" },
   { table: "invoices", column: "bill_phone", ddl: "ALTER TABLE invoices ADD COLUMN bill_phone VARCHAR(30) NULL AFTER customer_id" },
   { table: "invoices", column: "bill_address", ddl: "ALTER TABLE invoices ADD COLUMN bill_address VARCHAR(255) NULL AFTER bill_phone" },
   { table: "invoices", column: "discount_label", ddl: "ALTER TABLE invoices ADD COLUMN discount_label VARCHAR(80) NULL AFTER discount" },

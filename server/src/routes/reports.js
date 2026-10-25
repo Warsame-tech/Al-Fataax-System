@@ -21,16 +21,16 @@ router.use(requireAuth, requirePerm("reports.view"));
 const REPORTS = {
   async sales(bid, r) {
     const [rows] = await pool.query(
-      `SELECT d, SUM(n) n, SUM(total) total, SUM(discount) discount FROM (
-         SELECT DATE(sold_at) d, 1 n, total, discount FROM sales WHERE business_id = ? AND status <> 'cancelled' AND sold_at BETWEEN ? AND ?
-         UNION ALL SELECT issue_date, 1, total, discount FROM invoices WHERE business_id = ? AND status NOT IN ('draft','cancelled') AND issue_date BETWEEN ? AND ?
+      `SELECT d, SUM(n) n, SUM(total) total, SUM(discount) discount, SUM(vat) vat FROM (
+         SELECT DATE(sold_at) d, 1 n, total, discount, vat_amount vat FROM sales WHERE business_id = ? AND status <> 'cancelled' AND sold_at BETWEEN ? AND ?
+         UNION ALL SELECT issue_date, 1, total, discount, vat_amount FROM invoices WHERE business_id = ? AND status NOT IN ('draft','cancelled') AND issue_date BETWEEN ? AND ?
        ) x GROUP BY d ORDER BY d`, [bid, r.start, r.end, bid, r.from, r.to]);
     const [[rec]] = await pool.query("SELECT COALESCE(SUM(amount),0) v FROM customer_payments WHERE business_id = ? AND paid_at BETWEEN ? AND ?", [bid, r.start, r.end]);
     const total = rows.reduce((s, x) => s + num(x.total), 0);
     return {
-      columns: [["date", "date"], ["count", "number"], ["discount", "money"], ["total", "money"]],
-      rows: rows.map((x) => ({ date: x.d, count: num(x.n), discount: num(x.discount), total: num(x.total) })),
-      summary: { salesTotal: round2(total), documents: rows.reduce((s, x) => s + num(x.n), 0), received: num(rec.v) }
+      columns: [["date", "date"], ["count", "number"], ["discount", "money"], ["vat", "money"], ["total", "money"]],
+      rows: rows.map((x) => ({ date: x.d, count: num(x.n), discount: num(x.discount), vat: num(x.vat), total: num(x.total) })),
+      summary: { salesTotal: round2(total), vat: round2(rows.reduce((s, x) => s + num(x.vat), 0)), documents: rows.reduce((s, x) => s + num(x.n), 0), received: num(rec.v) }
     };
   },
 

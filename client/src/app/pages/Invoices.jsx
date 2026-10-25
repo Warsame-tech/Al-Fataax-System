@@ -7,6 +7,7 @@ import { PageHeader, useApi, usePerm, useSubmit, useMoney, Modal, Field, FormErr
 import LineItems from "./LineItems.jsx";
 import { date, fill } from "../format.js";
 import SearchSelect from "../SearchSelect.jsx";
+import { VAT_RATE, vatOf } from "../vat.js";
 
 const STATUSES = ["", "unpaid", "partially_paid", "overdue", "paid", "cancelled"];
 
@@ -71,7 +72,7 @@ export function InvoiceForm() {
   const m = useMoney();
   const navigate = useNavigate();
   const customers = useApi("/api/customers");
-  const [f, setF] = useState({ customerId: "", billPhone: "", billAddress: "", priceList: "wholesale", issueDate: isoDate(new Date()), dueDate: isoDate(new Date(Date.now() + 14 * 86400000)), discount: "", discountLabel: "", notes: "", amountPaid: "", method: "cash", bankAccountId: "" });
+  const [f, setF] = useState({ vat: false, customerId: "", billPhone: "", billAddress: "", priceList: "wholesale", issueDate: isoDate(new Date()), dueDate: isoDate(new Date(Date.now() + 14 * 86400000)), discount: "", discountLabel: "", notes: "", amountPaid: "", method: "cash", bankAccountId: "" });
   const [lines, setLines] = useState([]);
   const [newCustomer, setNewCustomer] = useState(null);   // typed name for the "New customer" form
   const sub = useSubmit();
@@ -80,7 +81,8 @@ export function InvoiceForm() {
 
   const subtotal = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
   const disc = discountOf(f.discount, subtotal);
-  const total = Math.max(0, subtotal - (disc.amount || 0));
+  const vat = vatOf(f.vat, Math.max(0, subtotal - (disc.amount || 0)));
+  const total = Math.max(0, subtotal - (disc.amount || 0)) + vat;
   const allowPrice = can("sales.discount");
 
   /* choosing a customer fills their business phone and address (editable for this invoice) */
@@ -134,6 +136,14 @@ export function InvoiceForm() {
             <input className="input" value={f.discountLabel} disabled={!allowPrice || !f.discount} onChange={set("discountLabel")} placeholder={t("ui.invoices.discountLabelPh")} maxLength={80} />
           </Field>
           {(disc.error || sub.fieldErrors.discount === "invalidDiscount") && <p className="form-status form-status--error ff--full">{t("ui.errors.invalidDiscount")}</p>}
+          <div className="ff ff--full">
+            <label className="vat-switch">
+              <input type="checkbox" checked={f.vat} onChange={(e) => setF((x) => ({ ...x, vat: e.target.checked }))} />
+              <span className="vat-switch__ui" aria-hidden="true" />
+              {fill(t("ui.pos.addVat"), { rate: VAT_RATE })}
+            </label>
+            <span className="ff__hint">{t("ui.invoices.vatHint")}</span>
+          </div>
           <Field label={`${t("ui.common.notes")} ${t("ui.common.optional")}`}><input className="input" value={f.notes} onChange={set("notes")} /></Field>
           <Field label={t("ui.invoices.payNow")} error={sub.fieldErrors.amountPaid}><input className="input" type="number" min="0" step="0.01" max={total} value={f.amountPaid} onChange={set("amountPaid")} /></Field>
           {Number(f.amountPaid) > 0 && <div className="ff--full"><PaymentFields method={f.method} onMethod={(v) => setF((x) => ({ ...x, method: v }))} bankId={f.bankAccountId} onBank={(v) => setF((x) => ({ ...x, bankAccountId: v }))} errors={sub.fieldErrors} /></div>}
@@ -143,6 +153,7 @@ export function InvoiceForm() {
           <dl className="pos__totals pos__totals--inline">
             <div><dt>{t("ui.common.subtotal")}</dt><dd>{m(subtotal)}</dd></div>
             {disc.amount > 0 && <div><dt>{t("ui.common.discount")}</dt><dd>− {m(disc.amount)}</dd></div>}
+            {vat > 0 && <div><dt>{fill(t("ui.pos.vatLine"), { rate: VAT_RATE })}</dt><dd>{m(vat)}</dd></div>}
             <div className="is-total"><dt>{t("ui.common.total")}</dt><dd>{m(total)}</dd></div>
             <div><dt>{t("ui.common.balance")}</dt><dd>{m(Math.max(0, total - (Number(f.amountPaid) || 0)))}</dd></div>
           </dl>

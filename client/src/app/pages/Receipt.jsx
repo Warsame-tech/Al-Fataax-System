@@ -4,7 +4,7 @@ import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest, fileUrl } from "../../services/api.js";
 import { useApi, usePerm, useMoney, Loading, EmptyState, ReasonModal, StatusBadge } from "../ui.jsx";
-import { qty, date } from "../format.js";
+import { qty, date, fill } from "../format.js";
 
 const PAPER_KEY = "faatix.receiptPaper";
 
@@ -97,6 +97,7 @@ export default function Receipt() {
           <div><dt>{t("ui.receipt.items")} ({qty(itemCount)})</dt><dd /></div>
           <div><dt>{t("ui.common.subtotal")}:</dt><dd>{m(s.subtotal)}</dd></div>
           {s.discount > 0 && <div><dt>{t("ui.receipt.totalDiscount")}{discountPct ? ` (${discountPct}%)` : ""}:</dt><dd>−{m(s.discount)}</dd></div>}
+          {s.vat > 0 && <div><dt>{fill(t("ui.pos.vatLine"), { rate: s.vatRate })}:</dt><dd>{m(s.vat)}</dd></div>}
           <div className="is-total"><dt>{t("ui.common.total")}:</dt><dd>{m(s.total)}</dd></div>
         </dl>
 

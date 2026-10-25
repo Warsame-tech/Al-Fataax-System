@@ -5,6 +5,7 @@ import { can, requirePerm } from "../lib/permissions.js";
 import { ah, id, money, quantity, withTx, ensureOwned, badRequest, conflict, num, round2, METHODS, text, optText, range } from "../lib/http.js";
 import { nextNumber, lockProducts, moveStock, moneyMove } from "../lib/ledger.js";
 import { methodForPayment } from "./paymentMethods.js";
+import { vatFor } from "../lib/vat.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -107,7 +108,8 @@ export async function createSale(conn, ctx, body) {
   const lines = priceLines(items, products, { allowCustomPrice: can(role, "sales.discount") });
   const subtotal = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
   if (discount > subtotal) throw badRequest({ discount: "tooLarge" });
-  const total = round2(subtotal - discount);
+  const vat = vatFor(body.vat, round2(subtotal - discount));   // optional 5% VAT on the amount after discount
+  const total = round2(subtotal - discount + vat.amount);
 
   // Money actually collected now (one entry per payment method).
   let paid; let paidMethod; let change = 0;
@@ -131,9 +133,9 @@ export async function createSale(conn, ctx, body) {
 
   const receiptNo = await nextNumber(conn, businessId, "receipt");
   const [s] = await conn.query(
-    `INSERT INTO sales (business_id, receipt_no, customer_id, user_id, subtotal, discount, total, amount_paid, change_amount, payment_method, sold_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, UTC_TIMESTAMP()))`,
-    [businessId, receiptNo, customerId, userId, subtotal, discount, total, paid, change, method, ctx.at || null]
+    `INSERT INTO sales (business_id, receipt_no, customer_id, user_id, subtotal, discount, vat_rate, vat_amount, total, amount_paid, change_amount, payment_method, sold_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, UTC_TIMESTAMP()))`,
+    [businessId, receiptNo, customerId, userId, subtotal, discount, vat.rate, vat.amount, total, paid, change, method, ctx.at || null]
   );
   const saleId = s.insertId;
   for (const l of lines) {
@@ -189,7 +191,7 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
       WHERE cp.sale_id = ? AND cp.business_id = ? ORDER BY cp.id`, [s.id, bid]);
   res.json({
     business: req.business,
-    sale: { id: s.id, number: s.receipt_no, at: s.sold_at, status: s.status, method: s.payment_method, subtotal: num(s.subtotal), discount: num(s.discount), total: num(s.total), paid: num(s.amount_paid), change: num(s.change_amount || 0), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
+    sale: { id: s.id, number: s.receipt_no, at: s.sold_at, status: s.status, method: s.payment_method, subtotal: num(s.subtotal), discount: num(s.discount), vatRate: num(s.vat_rate || 0), vat: num(s.vat_amount || 0), total: num(s.total), paid: num(s.amount_paid), change: num(s.change_amount || 0), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
     items: items.map((i) => ({ name: i.name, sku: i.sku, qty: num(i.qty), unitPrice: num(i.unit_price), total: num(i.line_total) })),
     payments: payments.map((p) => ({ amount: num(p.amount), method: p.method, label: p.pm_name ? (p.pm_number ? `${p.pm_name} (${p.pm_number})` : p.pm_name) : null, at: p.paid_at }))
   });
