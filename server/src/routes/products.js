@@ -98,7 +98,7 @@ router.get("/", requirePerm("products.view"), ah(async (req, res) => {
       `SELECT COUNT(*) n, COALESCE(SUM(p.stock_qty), 0) units, COALESCE(SUM(p.stock_qty * p.cost_price), 0) value
          FROM products p WHERE ${where.join(" AND ")}`, params);
     total = Number(c.n);
-    summary = { count: total, units: num(c.units), stockValue: Math.round(num(c.value) * 100) / 100 };
+    summary = { count: total, units: num(c.units), stockValue: Math.round(num(c.value) * 10000) / 10000 };
   }
   res.json({ products: rows.map(shape), total, summary, page: paged ? page : 1, pageSize: paged ? pageSize : rows.length });
 }));

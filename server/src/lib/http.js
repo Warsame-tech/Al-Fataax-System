@@ -25,11 +25,11 @@ export function id(v) {
   const n = Number(v);
   return Number.isInteger(n) && n > 0 ? n : null;
 }
-/** Money: finite, >= 0, rounded to 2 decimals. Returns NaN when invalid. */
+/** Money: finite, >= 0, kept to 4 decimals (exact 5% VAT, e.g. 5% of 0.15 = 0.0075). Returns NaN when invalid. */
 export function money(v, { allowZero = true } = {}) {
   const n = Number(v);
   if (!Number.isFinite(n) || n < 0 || n > 1e11 || (!allowZero && n === 0)) return NaN;
-  return Math.round(n * 100) / 100;
+  return Math.round(n * 10000) / 10000;
 }
 /** Quantity: finite, > 0, up to 3 decimals. */
 export function quantity(v) {
@@ -39,7 +39,8 @@ export function quantity(v) {
 }
 export const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + "T00:00:00Z"));
 export const today = () => new Date().toISOString().slice(0, 10);
-export const round2 = (n) => Math.round(n * 100) / 100;
+/** Money arithmetic result, to 4 decimals (never rounded to the cent). */
+export const round2 = (n) => Math.round(n * 10000) / 10000;
 export const num = (v) => Number(v || 0);
 
 export const METHODS = ["cash", "mobile_money", "bank"];

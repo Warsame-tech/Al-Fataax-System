@@ -7,7 +7,7 @@
 -- Conventions
 --   * Every business-owned table has `business_id` (tenant id) + an index on it.
 --     The API filters EVERY query by the signed-in user's business_id.
---   * Money is DECIMAL(14,2); quantities DECIMAL(14,3).
+--   * Money is DECIMAL(14,4) (4 decimals so 5% VAT is exact); quantities DECIMAL(14,3).
 --   * Balances (cash, bank, receivables, payables, stock) are DERIVED from
 --     transactions — no duplicated running totals without reconciliation.
 --   * Timestamps are UTC (DATETIME).
@@ -179,9 +179,9 @@ CREATE TABLE IF NOT EXISTS products (
   barcode         VARCHAR(80)  NULL,
   image_path      VARCHAR(255) NULL,                 -- product photo, /uploads/products/...
   unit            VARCHAR(20)  NOT NULL DEFAULT 'pcs',
-  cost_price      DECIMAL(14,2) NOT NULL DEFAULT 0,
-  selling_price   DECIMAL(14,2) NOT NULL DEFAULT 0,
-  wholesale_price DECIMAL(14,2) NULL,
+  cost_price      DECIMAL(14,4) NOT NULL DEFAULT 0,
+  selling_price   DECIMAL(14,4) NOT NULL DEFAULT 0,
+  wholesale_price DECIMAL(14,4) NULL,
   stock_qty       DECIMAL(14,3) NOT NULL DEFAULT 0,  -- maintained only inside stock-movement transactions
   min_stock       DECIMAL(14,3) NOT NULL DEFAULT 0,  -- Low Stock Alert Level (per location: product_stock.alert_level)
   is_active       TINYINT(1) NOT NULL DEFAULT 1,
@@ -239,7 +239,7 @@ CREATE TABLE IF NOT EXISTS stock_movements (
   balance_before DECIMAL(14,3) NULL,              -- location balance before / after
   balance_after  DECIMAL(14,3) NULL,
   unit           VARCHAR(20) NULL,
-  unit_cost      DECIMAL(14,2) NULL,              -- cost price at the time (valuation of gains / losses)
+  unit_cost      DECIMAL(14,4) NULL,              -- cost price at the time (valuation of gains / losses)
   ref_type       VARCHAR(30) NULL,                -- sale, invoice, purchase, stock (manual), transfer
   ref_id         BIGINT UNSIGNED NULL,
   reason         VARCHAR(120) NULL,
@@ -315,7 +315,7 @@ CREATE TABLE IF NOT EXISTS cash_transactions (
   cash_account_id INT UNSIGNED NULL,
   bank_account_id INT UNSIGNED NULL,
   direction       ENUM('in','out') NOT NULL,
-  amount          DECIMAL(14,2) NOT NULL,
+  amount          DECIMAL(14,4) NOT NULL,
   ref_type        VARCHAR(30) NOT NULL,   -- customer_payment, supplier_payment, expense, other_income, transfer, opening
   ref_id          BIGINT UNSIGNED NULL,
   description     VARCHAR(255) NULL,
@@ -355,13 +355,13 @@ CREATE TABLE IF NOT EXISTS sales (
   receipt_no     VARCHAR(30) NOT NULL,
   customer_id    INT UNSIGNED NULL,
   user_id        INT UNSIGNED NOT NULL,
-  subtotal       DECIMAL(14,2) NOT NULL,
-  discount       DECIMAL(14,2) NOT NULL DEFAULT 0,
+  subtotal       DECIMAL(14,4) NOT NULL,
+  discount       DECIMAL(14,4) NOT NULL DEFAULT 0,
   vat_rate       DECIMAL(5,2)  NOT NULL DEFAULT 0,  -- optional VAT (5%) on the amount after discount
-  vat_amount     DECIMAL(14,2) NOT NULL DEFAULT 0,  -- included in total; not counted as sales income
-  total          DECIMAL(14,2) NOT NULL,
-  amount_paid    DECIMAL(14,2) NOT NULL DEFAULT 0,  -- informational; money in = customer_payments
-  change_amount  DECIMAL(14,2) NOT NULL DEFAULT 0,  -- change given back (receipt)
+  vat_amount     DECIMAL(14,4) NOT NULL DEFAULT 0,  -- included in total; not counted as sales income
+  total          DECIMAL(14,4) NOT NULL,
+  amount_paid    DECIMAL(14,4) NOT NULL DEFAULT 0,  -- informational; money in = customer_payments
+  change_amount  DECIMAL(14,4) NOT NULL DEFAULT 0,  -- change given back (receipt)
   payment_method ENUM('cash','mobile_money','bank','credit') NOT NULL,
   status         ENUM('completed','cancelled','returned','partially_returned') NOT NULL DEFAULT 'completed',
   sold_at        DATETIME NOT NULL,
@@ -378,10 +378,10 @@ CREATE TABLE IF NOT EXISTS sale_items (
   sale_id     BIGINT UNSIGNED NOT NULL,
   product_id  INT UNSIGNED NOT NULL,
   qty         DECIMAL(14,3) NOT NULL,
-  unit_price  DECIMAL(14,2) NOT NULL,
-  unit_cost   DECIMAL(14,2) NOT NULL,   -- cost at time of sale (for COGS / gross profit)
-  discount    DECIMAL(14,2) NOT NULL DEFAULT 0,
-  line_total  DECIMAL(14,2) NOT NULL,
+  unit_price  DECIMAL(14,4) NOT NULL,
+  unit_cost   DECIMAL(14,4) NOT NULL,   -- cost at time of sale (for COGS / gross profit)
+  discount    DECIMAL(14,4) NOT NULL DEFAULT 0,
+  line_total  DECIMAL(14,4) NOT NULL,
   INDEX idx_sale_items_sale (sale_id),
   INDEX idx_sale_items_product (business_id, product_id),
   CONSTRAINT fk_sale_items_business FOREIGN KEY (business_id) REFERENCES businesses(id),
@@ -402,13 +402,13 @@ CREATE TABLE IF NOT EXISTS invoices (
   user_id     INT UNSIGNED NOT NULL,
   issue_date  DATE NOT NULL,
   due_date    DATE NULL,
-  subtotal    DECIMAL(14,2) NOT NULL,
-  discount    DECIMAL(14,2) NOT NULL DEFAULT 0,
+  subtotal    DECIMAL(14,4) NOT NULL,
+  discount    DECIMAL(14,4) NOT NULL DEFAULT 0,
   discount_label VARCHAR(80) NULL,  -- e.g. "10%" or "Eid offer"
   vat_rate    DECIMAL(5,2)  NOT NULL DEFAULT 0,
-  vat_amount  DECIMAL(14,2) NOT NULL DEFAULT 0,
-  total       DECIMAL(14,2) NOT NULL,
-  amount_paid DECIMAL(14,2) NOT NULL DEFAULT 0,  -- sum of linked customer_payments, updated in the same transaction
+  vat_amount  DECIMAL(14,4) NOT NULL DEFAULT 0,
+  total       DECIMAL(14,4) NOT NULL,
+  amount_paid DECIMAL(14,4) NOT NULL DEFAULT 0,  -- sum of linked customer_payments, updated in the same transaction
   status      ENUM('draft','unpaid','partially_paid','paid','overdue','cancelled') NOT NULL DEFAULT 'unpaid',
   notes       VARCHAR(255) NULL,
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -427,10 +427,10 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   product_id  INT UNSIGNED NOT NULL,
   description VARCHAR(190) NULL,
   qty         DECIMAL(14,3) NOT NULL,
-  unit_price  DECIMAL(14,2) NOT NULL,
-  unit_cost   DECIMAL(14,2) NOT NULL,
-  discount    DECIMAL(14,2) NOT NULL DEFAULT 0,
-  line_total  DECIMAL(14,2) NOT NULL,
+  unit_price  DECIMAL(14,4) NOT NULL,
+  unit_cost   DECIMAL(14,4) NOT NULL,
+  discount    DECIMAL(14,4) NOT NULL DEFAULT 0,
+  line_total  DECIMAL(14,4) NOT NULL,
   INDEX idx_inv_items_invoice (invoice_id),
   INDEX idx_inv_items_product (business_id, product_id),
   CONSTRAINT fk_inv_items_business FOREIGN KEY (business_id) REFERENCES businesses(id),
@@ -444,7 +444,7 @@ CREATE TABLE IF NOT EXISTS customer_payments (
   customer_id     INT UNSIGNED NULL,
   invoice_id      BIGINT UNSIGNED NULL,
   sale_id         BIGINT UNSIGNED NULL,
-  amount          DECIMAL(14,2) NOT NULL,
+  amount          DECIMAL(14,4) NOT NULL,
   method          ENUM('cash','mobile_money','bank') NOT NULL,
   payment_method_id INT UNSIGNED NULL,               -- business payment method (E-Dahab, ...)
   cash_account_id INT UNSIGNED NULL,
@@ -470,8 +470,8 @@ CREATE TABLE IF NOT EXISTS purchases (
   purchase_no  VARCHAR(30) NOT NULL,
   supplier_id  INT UNSIGNED NOT NULL,
   user_id      INT UNSIGNED NOT NULL,
-  total        DECIMAL(14,2) NOT NULL,
-  amount_paid  DECIMAL(14,2) NOT NULL DEFAULT 0,  -- sum of linked supplier_payments
+  total        DECIMAL(14,4) NOT NULL,
+  amount_paid  DECIMAL(14,4) NOT NULL DEFAULT 0,  -- sum of linked supplier_payments
   status       ENUM('draft','received','cancelled','returned') NOT NULL DEFAULT 'received',
   purchased_at DATETIME NOT NULL,
   UNIQUE KEY uq_purchase_no (business_id, purchase_no),
@@ -487,8 +487,8 @@ CREATE TABLE IF NOT EXISTS purchase_items (
   purchase_id BIGINT UNSIGNED NOT NULL,
   product_id  INT UNSIGNED NOT NULL,
   qty         DECIMAL(14,3) NOT NULL,
-  unit_cost   DECIMAL(14,2) NOT NULL,
-  line_total  DECIMAL(14,2) NOT NULL,
+  unit_cost   DECIMAL(14,4) NOT NULL,
+  line_total  DECIMAL(14,4) NOT NULL,
   INDEX idx_pitems_purchase (purchase_id),
   CONSTRAINT fk_pitems_business FOREIGN KEY (business_id) REFERENCES businesses(id),
   CONSTRAINT fk_pitems_purchase FOREIGN KEY (purchase_id) REFERENCES purchases(id),
@@ -500,7 +500,7 @@ CREATE TABLE IF NOT EXISTS supplier_payments (
   business_id     INT UNSIGNED NOT NULL,
   supplier_id     INT UNSIGNED NOT NULL,
   purchase_id     BIGINT UNSIGNED NULL,
-  amount          DECIMAL(14,2) NOT NULL,
+  amount          DECIMAL(14,4) NOT NULL,
   method          ENUM('cash','mobile_money','bank') NOT NULL,
   cash_account_id INT UNSIGNED NULL,
   bank_account_id INT UNSIGNED NULL,
@@ -521,7 +521,7 @@ CREATE TABLE IF NOT EXISTS expenses (
   id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   business_id     INT UNSIGNED NOT NULL,
   category        VARCHAR(60) NOT NULL,     -- rent, salaries, electricity, internet, transport, repairs, marketing, other
-  amount          DECIMAL(14,2) NOT NULL,
+  amount          DECIMAL(14,4) NOT NULL,
   expense_date    DATE NOT NULL,
   method          ENUM('cash','mobile_money','bank') NOT NULL,
   cash_account_id INT UNSIGNED NULL,
@@ -538,7 +538,7 @@ CREATE TABLE IF NOT EXISTS other_income (
   id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   business_id     INT UNSIGNED NOT NULL,
   category        VARCHAR(60) NOT NULL,
-  amount          DECIMAL(14,2) NOT NULL,
+  amount          DECIMAL(14,4) NOT NULL,
   income_date     DATE NOT NULL,
   method          ENUM('cash','mobile_money','bank') NOT NULL,
   cash_account_id INT UNSIGNED NULL,
@@ -561,8 +561,8 @@ CREATE TABLE IF NOT EXISTS returns (
   sale_id     BIGINT UNSIGNED NULL,
   invoice_id  BIGINT UNSIGNED NULL,
   purchase_id BIGINT UNSIGNED NULL,
-  total       DECIMAL(14,2) NOT NULL,
-  refund_amount DECIMAL(14,2) NOT NULL DEFAULT 0,
+  total       DECIMAL(14,4) NOT NULL,
+  refund_amount DECIMAL(14,4) NOT NULL DEFAULT 0,
   reason      VARCHAR(255) NULL,
   user_id     INT UNSIGNED NOT NULL,
   approved_by INT UNSIGNED NULL,
@@ -577,9 +577,9 @@ CREATE TABLE IF NOT EXISTS return_items (
   return_id   BIGINT UNSIGNED NOT NULL,
   product_id  INT UNSIGNED NOT NULL,
   qty         DECIMAL(14,3) NOT NULL,
-  unit_price  DECIMAL(14,2) NOT NULL,
-  unit_cost   DECIMAL(14,2) NOT NULL,
-  line_total  DECIMAL(14,2) NOT NULL,
+  unit_price  DECIMAL(14,4) NOT NULL,
+  unit_cost   DECIMAL(14,4) NOT NULL,
+  line_total  DECIMAL(14,4) NOT NULL,
   CONSTRAINT fk_ritems_business FOREIGN KEY (business_id) REFERENCES businesses(id),
   CONSTRAINT fk_ritems_return   FOREIGN KEY (return_id)   REFERENCES returns(id),
   CONSTRAINT fk_ritems_product  FOREIGN KEY (product_id)  REFERENCES products(id)

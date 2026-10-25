@@ -48,8 +48,8 @@ export default function Receipt() {
   const { business: b, sale: s, items, payments } = r.data;
   const paid = payments.filter((p) => p.amount > 0);
   const refunds = payments.filter((p) => p.amount < 0);
-  const amountPaid = Math.round(paid.reduce((t2, p) => t2 + p.amount, 0) * 100) / 100;
-  const tendered = Math.round((amountPaid + (s.change || 0)) * 100) / 100;
+  const amountPaid = Math.round(paid.reduce((t2, p) => t2 + p.amount, 0) * 10000) / 10000;
+  const tendered = Math.round((amountPaid + (s.change || 0)) * 10000) / 10000;
   const discountPct = s.discount > 0 && s.subtotal > 0 ? Math.round((s.discount / s.subtotal) * 1000) / 10 : 0;
   const itemCount = items.reduce((t2, i) => t2 + i.qty, 0);
 

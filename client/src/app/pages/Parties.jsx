@@ -165,7 +165,7 @@ export function PaymentModal({ url, max, title, help, onClose, onSaved }) {
       <form onSubmit={save} className="form-grid">
         {help && <p className="modal__help">{help}</p>}
         <Field label={t("ui.common.amount")} error={sub.fieldErrors.amount}>
-          <input className="input input--big" type="number" min="0.01" step="0.01" max={max || undefined} value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+          <input className="input input--big" type="number" min="0.0001" step="any" max={max || undefined} value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
         </Field>
         <PaymentFields method={f.method} onMethod={(m) => setF({ ...f, method: m })} bankId={f.bankAccountId} onBank={(b) => setF({ ...f, bankAccountId: b })} errors={sub.fieldErrors} />
         <Field label={`${t("ui.common.reference")} ${t("ui.common.optional")}`}><input className="input" value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} /></Field>

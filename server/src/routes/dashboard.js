@@ -43,7 +43,7 @@ function periodRange(q) {
 }
 
 const num = (v) => Number(v || 0);
-const r2 = (n) => Math.round(n * 100) / 100;
+const r2 = (n) => Math.round(n * 10000) / 10000;
 
 router.get("/", async (req, res, next) => {
   try {

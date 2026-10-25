@@ -62,9 +62,9 @@ function discountOf(value, subtotal) {
   const raw = String(value || "").trim().replace(",", ".");
   if (!raw) return { amount: 0 };
   const pct = /^(\d+(?:\.\d+)?)\s*%$/.exec(raw);
-  if (pct) return Number(pct[1]) <= 100 ? { amount: Math.round(subtotal * Number(pct[1])) / 100, percent: Number(pct[1]) } : { error: true };
+  if (pct) return Number(pct[1]) <= 100 ? { amount: Math.round(subtotal * Number(pct[1]) * 100) / 10000, percent: Number(pct[1]) } : { error: true };
   const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? { amount: Math.round(n * 100) / 100 } : { error: true };
+  return Number.isFinite(n) && n >= 0 ? { amount: Math.round(n * 10000) / 10000 } : { error: true };
 }
 
 export function InvoiceForm() {
@@ -150,7 +150,7 @@ export function InvoiceForm() {
             <span className="ff__hint">{t("ui.invoices.vatHint")}</span>
           </div>
           <Field label={`${t("ui.common.notes")} ${t("ui.common.optional")}`}><input className="input" value={f.notes} onChange={set("notes")} /></Field>
-          <Field label={t("ui.invoices.payNow")} error={sub.fieldErrors.amountPaid}><input className="input" type="number" min="0" step="0.01" max={total} value={f.amountPaid} onChange={set("amountPaid")} /></Field>
+          <Field label={t("ui.invoices.payNow")} error={sub.fieldErrors.amountPaid}><input className="input" type="number" min="0" step="any" max={total} value={f.amountPaid} onChange={set("amountPaid")} /></Field>
           {Number(f.amountPaid) > 0 && <div className="ff--full"><PaymentFields method={f.method} onMethod={(v) => setF((x) => ({ ...x, method: v }))} bankId={f.bankAccountId} onBank={(v) => setF((x) => ({ ...x, bankAccountId: v }))} errors={sub.fieldErrors} /></div>}
         </section>
 

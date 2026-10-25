@@ -7,9 +7,9 @@ const LOCALES = { en: "en-US", so: "so-SO" };
 
 export function money(value, currency = "USD", lang = "en") {
   try {
-    return new Intl.NumberFormat(LOCALES[lang] || "en-US", { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(value || 0);
+    return new Intl.NumberFormat(LOCALES[lang] || "en-US", { style: "currency", currency, minimumFractionDigits: 2, maximumFractionDigits: 4 }).format(value || 0);
   } catch {
-    return `${currency} ${(value || 0).toFixed(2)}`;
+    return `${currency} ${Number(value || 0).toFixed(4).replace(/0{1,2}$/, "")}`;
   }
 }
 

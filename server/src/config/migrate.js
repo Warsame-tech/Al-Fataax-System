@@ -137,9 +137,9 @@ const COLUMNS = [
   { table: "business_user_roles", column: "role_id", ddl: "ALTER TABLE business_user_roles ADD COLUMN role_id INT UNSIGNED NULL AFTER role" },
   // product master data
   { table: "sales", column: "vat_rate", ddl: "ALTER TABLE sales ADD COLUMN vat_rate DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER discount" },
-  { table: "sales", column: "vat_amount", ddl: "ALTER TABLE sales ADD COLUMN vat_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER vat_rate" },
+  { table: "sales", column: "vat_amount", ddl: "ALTER TABLE sales ADD COLUMN vat_amount DECIMAL(14,4) NOT NULL DEFAULT 0 AFTER vat_rate" },
   { table: "invoices", column: "vat_rate", ddl: "ALTER TABLE invoices ADD COLUMN vat_rate DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER discount" },
-  { table: "invoices", column: "vat_amount", ddl: "ALTER TABLE invoices ADD COLUMN vat_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER vat_rate" },
+  { table: "invoices", column: "vat_amount", ddl: "ALTER TABLE invoices ADD COLUMN vat_amount DECIMAL(14,4) NOT NULL DEFAULT 0 AFTER vat_rate" },
   { table: "invoices", column: "bill_phone", ddl: "ALTER TABLE invoices ADD COLUMN bill_phone VARCHAR(30) NULL AFTER customer_id" },
   { table: "invoices", column: "bill_address", ddl: "ALTER TABLE invoices ADD COLUMN bill_address VARCHAR(255) NULL AFTER bill_phone" },
   { table: "invoices", column: "discount_label", ddl: "ALTER TABLE invoices ADD COLUMN discount_label VARCHAR(80) NULL AFTER discount" },
@@ -151,14 +151,14 @@ const COLUMNS = [
   { table: "stock_movements", column: "balance_before", ddl: "ALTER TABLE stock_movements ADD COLUMN balance_before DECIMAL(14,3) NULL AFTER qty_change" },
   { table: "stock_movements", column: "balance_after", ddl: "ALTER TABLE stock_movements ADD COLUMN balance_after DECIMAL(14,3) NULL AFTER balance_before" },
   { table: "stock_movements", column: "unit", ddl: "ALTER TABLE stock_movements ADD COLUMN unit VARCHAR(20) NULL AFTER balance_after" },
-  { table: "stock_movements", column: "unit_cost", ddl: "ALTER TABLE stock_movements ADD COLUMN unit_cost DECIMAL(14,2) NULL AFTER unit" },
+  { table: "stock_movements", column: "unit_cost", ddl: "ALTER TABLE stock_movements ADD COLUMN unit_cost DECIMAL(14,4) NULL AFTER unit" },
   { table: "stock_movements", column: "reason", ddl: "ALTER TABLE stock_movements ADD COLUMN reason VARCHAR(120) NULL AFTER ref_id" },
   { table: "stock_movements", column: "reference", ddl: "ALTER TABLE stock_movements ADD COLUMN reference VARCHAR(80) NULL AFTER reason" },
   { table: "stock_movements", column: "supplier_id", ddl: "ALTER TABLE stock_movements ADD COLUMN supplier_id INT UNSIGNED NULL AFTER reference" },
   { table: "stock_movements", column: "transfer_ref", ddl: "ALTER TABLE stock_movements ADD COLUMN transfer_ref VARCHAR(40) NULL AFTER supplier_id" },
   { table: "stock_movements", column: "reversal_of", ddl: "ALTER TABLE stock_movements ADD COLUMN reversal_of BIGINT UNSIGNED NULL AFTER transfer_ref" },
   // POS: change given back (shown on the receipt)
-  { table: "sales", column: "change_amount", ddl: "ALTER TABLE sales ADD COLUMN change_amount DECIMAL(14,2) NOT NULL DEFAULT 0 AFTER amount_paid" }
+  { table: "sales", column: "change_amount", ddl: "ALTER TABLE sales ADD COLUMN change_amount DECIMAL(14,4) NOT NULL DEFAULT 0 AFTER amount_paid" }
 ];
 
 /* Indexes added after the fact (name → DDL); checked against information_schema.STATISTICS. */
@@ -206,6 +206,16 @@ export async function migrate() {
     await pool.query("ALTER TABLE stock_movements MODIFY type VARCHAR(30) NOT NULL");
     console.log("Database upgraded: stock_movements.type now allows all movement types");
   }
+  // Money keeps 4 decimals so 5% VAT is exact (5% of 0.15 = 0.0075): widen every DECIMAL(14,2) column.
+  const [narrow] = await pool.query(
+    `SELECT TABLE_NAME t, COLUMN_NAME c, IS_NULLABLE n, COLUMN_DEFAULT d FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND DATA_TYPE = 'decimal' AND NUMERIC_PRECISION = 14 AND NUMERIC_SCALE = 2`
+  );
+  for (const col of narrow) {
+    const def = col.d === null || String(col.d).toUpperCase() === "NULL" ? "" : ` DEFAULT ${Number(String(col.d).replace(/'/g, ""))}`;
+    await pool.query(`ALTER TABLE \`${col.t}\` MODIFY \`${col.c}\` DECIMAL(14,4) ${col.n === "YES" ? "NULL" : "NOT NULL"}${def}`);
+  }
+  if (narrow.length) console.log(`Database upgraded: ${narrow.length} money columns now keep 4 decimals`);
   for (const ix of INDEXES) {
     const [[row]] = await pool.query(
       "SELECT COUNT(*) n FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?", [ix.table, ix.name]

@@ -130,7 +130,7 @@ function PurchaseForm({ onDone }) {
       <section className="panel-card"><LineItems lines={lines} onChange={setLines} mode="buy" errors={sub.fieldErrors} /></section>
       {can("purchases.pay") && (
         <section className="panel-card form-grid form-grid--2">
-          <Field label={t("ui.purchases.payNow")} error={sub.fieldErrors.amountPaid}><input className="input" type="number" min="0" step="0.01" max={total} value={f.amountPaid} onChange={(e) => setF({ ...f, amountPaid: e.target.value })} /></Field>
+          <Field label={t("ui.purchases.payNow")} error={sub.fieldErrors.amountPaid}><input className="input" type="number" min="0" step="any" max={total} value={f.amountPaid} onChange={(e) => setF({ ...f, amountPaid: e.target.value })} /></Field>
           {Number(f.amountPaid) > 0 && <div><PaymentFields method={f.method} onMethod={(v) => setF({ ...f, method: v })} bankId={f.bankAccountId} onBank={(v) => setF({ ...f, bankAccountId: v })} errors={sub.fieldErrors} /></div>}
         </section>
       )}

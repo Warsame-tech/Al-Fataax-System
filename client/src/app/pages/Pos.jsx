@@ -102,7 +102,7 @@ function Register() {
     codeRef.current?.focus();
   }, [t]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const subtotal = useMemo(() => Math.round(cart.reduce((s, l) => s + l.qty * l.product.sellingPrice, 0) * 100) / 100, [cart]);
+  const subtotal = useMemo(() => Math.round(cart.reduce((s, l) => s + l.qty * l.product.sellingPrice, 0) * 10000) / 10000, [cart]);
   const itemCount = cart.reduce((s, l) => s + l.qty, 0);
   const customerList = customers.data?.customers || [];
   const customer = customerList.find((c) => String(c.id) === String(customerId)) || null;
@@ -158,7 +158,7 @@ function Register() {
             <dt><label className="vat-switch vat-switch--small"><input type="checkbox" checked={addVat} onChange={(e) => setAddVat(e.target.checked)} />{fill(t("ui.pos.addVat"), { rate: VAT_RATE })}</label></dt>
             <dd>{addVat ? m(cartVat) : "—"}</dd>
           </div>
-          <div className="is-total"><dt>{t("ui.common.total")}</dt><dd>{m(Math.round((subtotal + cartVat) * 100) / 100)}</dd></div>
+          <div className="is-total"><dt>{t("ui.common.total")}</dt><dd>{m(Math.round((subtotal + cartVat) * 10000) / 10000)}</dd></div>
         </dl>
 
         <DraftBar draft={draft} compact canSave={cart.length > 0}
@@ -249,7 +249,7 @@ function PaymentModal({ cart, subtotal, customer, addVat, setAddVat, onClose, on
   const [discMode, setDiscMode] = useState("percent"); // "percent" | "amount"
   const [payments, setPayments] = useState([]);    // [{ key, paymentMethodId, kind, label, amount }]
 
-  const r2 = (v) => Math.round(v * 100) / 100;
+  const r2 = (v) => Math.round(v * 10000) / 10000;   // money to 4 decimals (exact VAT)
   const discValue = Math.max(Number(discount) || 0, 0);
   const disc = discMode === "percent" ? r2(subtotal * Math.min(discValue, 100) / 100) : Math.min(discValue, subtotal);
   const vat = vatOf(addVat, r2(subtotal - disc));
@@ -338,7 +338,7 @@ function PaymentModal({ cart, subtotal, customer, addVat, setAddVat, onClose, on
               {payments.map((p) => (
                 <li key={p.key}>
                   <span className="paybox__applied-name">{p.label}</span>
-                  <input className="input input--sm" type="number" min="0" step="0.01" value={p.amount} onChange={(e) => setAmount(p.key, e.target.value)} aria-label={p.label} />
+                  <input className="input input--sm" type="number" min="0" step="any" value={p.amount} onChange={(e) => setAmount(p.key, e.target.value)} aria-label={p.label} />
                   <button type="button" className="icon-btn" onClick={() => remove(p.key)} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
                 </li>
               ))}
