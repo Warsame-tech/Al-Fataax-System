@@ -15,6 +15,13 @@ const en = {
     choose: "Choose…", bankAccount: "Bank account", noBank: "Add a bank account in Cash & bank first.", yes: "Yes", no: "No",
     sample: "SAMPLE"
   },
+  validation: {
+    required: "Please fill in this field.", requiredSelect: "Please choose an option from the list.", requiredCheck: "Please tick this box to continue.",
+    min: "The value must be {min} or more.", max: "The value must be {max} or less.", step: "Enter a valid value (steps of {step}).",
+    number: "Please enter a number.", email: "Please enter a valid email address (e.g. name@example.com).", url: "Please enter a valid web address.",
+    tooShort: "Please use at least {min} characters (you used {n}).", tooLong: "Please use no more than {max} characters.",
+    pattern: "Please match the requested format.", date: "Please enter a valid date.", invalid: "Please check this value."
+  },
   errors: {
     required: "This field is required.", invalidAmount: "Enter a valid amount.", invalidEmail: "Enter a valid email address.",
     invalidPhone: "Enter a valid phone number.", duplicate: "This value is already used by another product.",
@@ -158,7 +165,9 @@ const en = {
   },
   invoices: {
     title: "Sales invoices", new: "New invoice", priceList: "Price list", retail: "Retail prices", wholesale: "Wholesale prices",
-    issueDate: "Issue date", dueDate: "Due date", addItem: "Add product", payNow: "Payment received now (optional)", create: "Create invoice",
+    issueDate: "Issue date", dueDate: "Due date", addItem: "Add product", inStock: "{qty} {unit} in stock", onlyInStock: "Only {qty} {unit} in stock. The quantity can't be more.",
+    noStock: "{name} is out of stock. Add stock before selling it.", alreadyAdded: "{name} is already on this invoice; change its quantity instead.",
+    newNoStock: "{name} was saved. It has no stock yet: add stock before selling it.", payNow: "Payment received now (optional)", create: "Create invoice",
     recordPayment: "Record payment", cancelInvoice: "Cancel invoice",
     vatHint: "Optional. VAT is added to the total after any discount.", chooseCustomer: "Choose or search a customer", searchCustomer: "Search customers by name, phone or address", newCustomer: "New customer", saveCustomer: "Save customer",
     businessPhone: "Business phone", businessAddress: "Business address", phonePh: "e.g. +252 61 …", addressPh: "Street, district, city",
@@ -271,6 +280,13 @@ const so = {
     saved: "Waa la kaydiyay.", optional: "(ikhtiyaari)", reason: "Sababta", reasonPh: "Maxaa loogu baahan yahay?", remove: "Ka saar", more: "Wax badan",
     choose: "Dooro…", bankAccount: "Akoonka bangiga", noBank: "Marka hore ku dar akoon bangi qaybta Lacagta & bangiga.", yes: "Haa", no: "Maya",
     sample: "TUSAALE"
+  },
+  validation: {
+    required: "Fadlan buuxi meeshan.", requiredSelect: "Fadlan ka dooro liiska mid ka mid ah.", requiredCheck: "Fadlan calaamadee sanduuqan si aad u sii wadato.",
+    min: "Qiimuhu waa inuu ahaadaa {min} ama ka badan.", max: "Qiimuhu waa inuu ahaadaa {max} ama ka yar.", step: "Geli qiime sax ah (tallaabooyin {step} ah).",
+    number: "Fadlan geli lambar.", email: "Fadlan geli iimayl sax ah (tusaale magac@example.com).", url: "Fadlan geli cinwaan website oo sax ah.",
+    tooShort: "Fadlan isticmaal ugu yaraan {min} xaraf (waxaad isticmaashay {n}).", tooLong: "Fadlan ha dhaafin {max} xaraf.",
+    pattern: "Fadlan raac qaabka la rabo.", date: "Fadlan geli taariikh sax ah.", invalid: "Fadlan hubi qiimahan."
   },
   errors: {
     required: "Goobtan waa loo baahan yahay.", invalidAmount: "Geli qaddar sax ah.", invalidEmail: "Geli iimayl sax ah.",
@@ -415,7 +431,9 @@ const so = {
   },
   invoices: {
     title: "Qaansheegyada iibka", new: "Qaansheeg cusub", priceList: "Liiska qiimaha", retail: "Qiimaha tafaariiqda", wholesale: "Qiimaha jumlada",
-    issueDate: "Taariikhda", dueDate: "Taariikhda bixinta", addItem: "Ku dar alaab", payNow: "Lacag hadda la helay (ikhtiyaari)", create: "Samee qaansheeg",
+    issueDate: "Taariikhda", dueDate: "Taariikhda bixinta", addItem: "Ku dar alaab", inStock: "{qty} {unit} ayaa kaydka ku jira", onlyInStock: "Kaliya {qty} {unit} ayaa kaydka ku jira. Tirada kama badnaan karto.",
+    noStock: "{name} kaydkiisu waa dhammaaday. Ku dar kayd ka hor intaadan iibin.", alreadyAdded: "{name} horay ayuu qaansheegan ugu jiray; beddel tiradiisa.",
+    newNoStock: "{name} waa la kaydiyay. Weli kayd ma laha: ku dar kayd ka hor intaadan iibin.", payNow: "Lacag hadda la helay (ikhtiyaari)", create: "Samee qaansheeg",
     recordPayment: "Diiwaan geli lacag-bixin", cancelInvoice: "Jooji qaansheegta",
     vatHint: "Ikhtiyaari. VAT waxaa lagu daraa wadarta dhimista kadib.", chooseCustomer: "Dooro ama raadi macmiil", searchCustomer: "Ku raadi macaamiisha magac, taleefan ama cinwaan", newCustomer: "Macmiil cusub", saveCustomer: "Kaydi macmiilka",
     businessPhone: "Taleefanka ganacsiga", businessAddress: "Cinwaanka ganacsiga", phonePh: "tusaale +252 61 …", addressPh: "Waddo, degmo, magaalo",

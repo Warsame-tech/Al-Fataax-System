@@ -8,8 +8,9 @@ import { useLanguage } from "../i18n/LanguageContext.jsx";
  *   value     selected value ("" = none)          onChange(value)
  *   onCreate  optional: shows "+ Add “typed text”" at the end, called with the typed text
  *   clearOnPick  show the placeholder again after choosing (pickers that add lines)
+ *   footer    optional: buttons shown under the list; footer(close) gets a function that closes the dropdown
  */
-export default function SearchSelect({ options, value, onChange, placeholder, searchPlaceholder, onCreate, createLabel, disabled = false, invalid = false, clearOnPick = false, icon }) {
+export default function SearchSelect({ options, value, onChange, placeholder, searchPlaceholder, onCreate, createLabel, disabled = false, invalid = false, clearOnPick = false, icon, footer }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -81,6 +82,7 @@ export default function SearchSelect({ options, value, onChange, placeholder, se
               </li>
             )}
           </ul>
+          {footer && <div className="sselect__foot">{footer(() => { setOpen(false); setQ(""); })}</div>}
         </div>
       )}
     </div>
