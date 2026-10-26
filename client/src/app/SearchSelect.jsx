@@ -8,9 +8,9 @@ import { useLanguage } from "../i18n/LanguageContext.jsx";
  *   value     selected value ("" = none)          onChange(value)
  *   onCreate  optional: shows "+ Add “typed text”" at the end, called with the typed text
  *   clearOnPick  show the placeholder again after choosing (pickers that add lines)
- *   footer    optional: buttons shown under the list; footer(close) gets a function that closes the dropdown
+ *   openSignal  optional number: each time it changes the dropdown opens (e.g. an "Add item" button elsewhere)
  */
-export default function SearchSelect({ options, value, onChange, placeholder, searchPlaceholder, onCreate, createLabel, disabled = false, invalid = false, clearOnPick = false, icon, footer }) {
+export default function SearchSelect({ options, value, onChange, placeholder, searchPlaceholder, onCreate, createLabel, disabled = false, invalid = false, clearOnPick = false, icon, openSignal }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -36,6 +36,11 @@ export default function SearchSelect({ options, value, onChange, placeholder, se
     return () => document.removeEventListener("mousedown", close);
   }, [open]);
   useEffect(() => { setHover(0); }, [q, open]);
+  useEffect(() => {
+    if (!openSignal) return;
+    setOpen(true);
+    boxRef.current?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [openSignal]);
   useEffect(() => { listRef.current?.querySelector(`[data-i="${hover}"]`)?.scrollIntoView({ block: "nearest" }); }, [hover]);
 
   const choose = (o) => {
@@ -82,7 +87,6 @@ export default function SearchSelect({ options, value, onChange, placeholder, se
               </li>
             )}
           </ul>
-          {footer && <div className="sselect__foot">{footer(() => { setOpen(false); setQ(""); })}</div>}
         </div>
       )}
     </div>

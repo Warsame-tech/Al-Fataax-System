@@ -6,14 +6,13 @@ import { useApi, useMoney, usePerm } from "../ui.jsx";
 import { fill, qty } from "../format.js";
 import SearchSelect from "../SearchSelect.jsx";
 import CameraScanner from "../CameraScanner.jsx";
-import { ProductForm, EMPTY } from "./Products.jsx";
 
 /*
  * Editable product lines for invoices and purchases.
  * mode "sell": price from the chosen price list (editable only when allowPrice);
  *              the quantity can never be more than the stock on hand
  * mode "buy":  unit cost entered per line (defaults to the product's cost price)
- * Under the product list: "Scan barcode" (camera) and "Add product" (new product without leaving the page).
+ * Under the lines: "Scan barcode" (camera) and "Add item" (opens the product list to choose another product).
  */
 export default function LineItems({ lines, onChange, mode = "sell", priceList = "retail", allowPrice = false, errors = {} }) {
   const { t } = useLanguage();
@@ -22,7 +21,7 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
   const products = useApi("/api/products?location=default");
   const all = products.data?.products || [];
   const [camera, setCamera] = useState(false);
-  const [creating, setCreating] = useState(false);
+  const [pickSignal, setPickSignal] = useState(0);   // "Add item" opens the product list
   const [notice, setNotice] = useState(null);      // { text, kind, link? }
 
   const sell = mode === "sell";
@@ -40,14 +39,6 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
     const p = all.find((x) => x.barcode && x.barcode === String(code).trim());
     if (p) addProduct(p);
     else setNotice({ text: t("ui.pos.notFound"), kind: "error" });
-  };
-  const onCreated = async (result) => {
-    setCreating(false);
-    const d = await products.reload();
-    const p = (d?.products || []).find((x) => x.id === result?.id);
-    if (!p) return;
-    if (sell) setNotice({ text: fill(t("ui.invoices.newNoStock"), { name: p.name }), kind: "info", link: can("stock.add") });
-    else addProduct(p);
   };
 
   const options = all.map((p) => ({
@@ -68,19 +59,7 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
   return (
     <div className="lines">
       <SearchSelect options={options} value="" onChange={add} clearOnPick icon="search-glass"
-        placeholder={`${t("ui.invoices.addItem")}…`} searchPlaceholder={t("ui.products.searchPh")} invalid={Boolean(errors.items)}
-        footer={(close) => (
-          <>
-            <button type="button" className="btn btn--outline btn--sm sselect__foot-scan" onClick={() => { close(); setCamera(true); }}>
-              <span>{t("ui.pos.scan")}</span><Icon name="barcode" />
-            </button>
-            {can("products.edit") && (
-              <button type="button" className="btn btn--primary btn--sm" onClick={() => { close(); setCreating(true); }}>
-                <span>{t("ui.products.add")}</span><Icon name="plus" />
-              </button>
-            )}
-          </>
-        )} />
+        placeholder={`${t("ui.invoices.addItem")}…`} searchPlaceholder={t("ui.products.searchPh")} invalid={Boolean(errors.items)} openSignal={pickSignal} />
       {errors.items && <span className="ff__error">{t("ui.errors.required")}</span>}
       {notice && (
         <p className={"form-status " + (notice.kind === "error" ? "form-status--error" : "form-status--info")} role="status">
@@ -116,8 +95,11 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
           </table>
         </div>
       )}
+      <div className="lines__actions">
+        <button type="button" className="btn btn--outline btn--sm" onClick={() => setCamera(true)}><span>{t("ui.pos.scan")}</span><Icon name="barcode" /></button>
+        <button type="button" className="btn btn--primary btn--sm" onClick={() => setPickSignal((n) => n + 1)}><span>{t("ui.invoices.addItem")}</span><Icon name="plus" /></button>
+      </div>
       {camera && <CameraScanner onCode={onScan} onClose={() => setCamera(false)} />}
-      {creating && <ProductForm product={EMPTY} onClose={() => setCreating(false)} onSaved={onCreated} />}
     </div>
   );
 }

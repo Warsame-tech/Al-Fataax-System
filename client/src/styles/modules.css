@@ -1012,7 +1012,7 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 .pos2__line { background: #f1f6ff; border-color: #c4d7fb; box-shadow: inset 4px 0 0 #8fb2f6; }
 .pos2__line.is-active { background: #e3edfe; border-color: #8fb2f6; box-shadow: inset 4px 0 0 var(--blue); }
 
-/* ---------- Product picker footer (invoices, purchases) ---------- */
-.sselect__foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 10px 4px 2px; margin-top: 6px; border-top: 1px solid #eef0f6; }
-.sselect__foot .btn { text-transform: uppercase; letter-spacing: .02em; }
+/* ---------- Invoice / purchase lines: Scan barcode + Add item under the lines ---------- */
+.lines__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.lines__actions .btn { text-transform: uppercase; letter-spacing: .02em; }
 .lines__cap { display: block; max-width: 180px; margin-left: auto; text-align: right; white-space: normal; }

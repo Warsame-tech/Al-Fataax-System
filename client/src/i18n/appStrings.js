@@ -166,8 +166,7 @@ const en = {
   invoices: {
     title: "Sales invoices", new: "New invoice", priceList: "Price list", retail: "Retail prices", wholesale: "Wholesale prices",
     issueDate: "Issue date", dueDate: "Due date", addItem: "Add product", inStock: "{qty} {unit} in stock", onlyInStock: "Only {qty} {unit} in stock. The quantity can't be more.",
-    noStock: "{name} is out of stock. Add stock before selling it.", alreadyAdded: "{name} is already on this invoice; change its quantity instead.",
-    newNoStock: "{name} was saved. It has no stock yet: add stock before selling it.", payNow: "Payment received now (optional)", create: "Create invoice",
+    noStock: "{name} is out of stock. Add stock before selling it.", alreadyAdded: "{name} is already on this invoice; change its quantity instead.", payNow: "Payment received now (optional)", create: "Create invoice",
     recordPayment: "Record payment", cancelInvoice: "Cancel invoice",
     vatHint: "Optional. VAT is added to the total after any discount.", chooseCustomer: "Choose or search a customer", searchCustomer: "Search customers by name, phone or address", newCustomer: "New customer", saveCustomer: "Save customer",
     businessPhone: "Business phone", businessAddress: "Business address", phonePh: "e.g. +252 61 …", addressPh: "Street, district, city",
@@ -432,8 +431,7 @@ const so = {
   invoices: {
     title: "Qaansheegyada iibka", new: "Qaansheeg cusub", priceList: "Liiska qiimaha", retail: "Qiimaha tafaariiqda", wholesale: "Qiimaha jumlada",
     issueDate: "Taariikhda", dueDate: "Taariikhda bixinta", addItem: "Ku dar alaab", inStock: "{qty} {unit} ayaa kaydka ku jira", onlyInStock: "Kaliya {qty} {unit} ayaa kaydka ku jira. Tirada kama badnaan karto.",
-    noStock: "{name} kaydkiisu waa dhammaaday. Ku dar kayd ka hor intaadan iibin.", alreadyAdded: "{name} horay ayuu qaansheegan ugu jiray; beddel tiradiisa.",
-    newNoStock: "{name} waa la kaydiyay. Weli kayd ma laha: ku dar kayd ka hor intaadan iibin.", payNow: "Lacag hadda la helay (ikhtiyaari)", create: "Samee qaansheeg",
+    noStock: "{name} kaydkiisu waa dhammaaday. Ku dar kayd ka hor intaadan iibin.", alreadyAdded: "{name} horay ayuu qaansheegan ugu jiray; beddel tiradiisa.", payNow: "Lacag hadda la helay (ikhtiyaari)", create: "Samee qaansheeg",
     recordPayment: "Diiwaan geli lacag-bixin", cancelInvoice: "Jooji qaansheegta",
     vatHint: "Ikhtiyaari. VAT waxaa lagu daraa wadarta dhimista kadib.", chooseCustomer: "Dooro ama raadi macmiil", searchCustomer: "Ku raadi macaamiisha magac, taleefan ama cinwaan", newCustomer: "Macmiil cusub", saveCustomer: "Kaydi macmiilka",
     businessPhone: "Taleefanka ganacsiga", businessAddress: "Cinwaanka ganacsiga", phonePh: "tusaale +252 61 …", addressPh: "Waddo, degmo, magaalo",
