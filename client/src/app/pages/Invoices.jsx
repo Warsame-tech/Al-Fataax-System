@@ -15,6 +15,7 @@ const STATUSES = ["", "unpaid", "partially_paid", "overdue", "paid", "cancelled"
 export default function Invoices() {
   const { t, lang } = useLanguage();
   const can = usePerm();
+  const navigate = useNavigate();
   const [range, setRange] = useState({ from: daysAgo(89), to: isoDate(new Date()) });
   const [q, setQ] = useState("");
   const [status, setStatus] = useState("");
@@ -39,8 +40,8 @@ export default function Invoices() {
             <thead><tr><th>#</th><th>{t("ui.common.customer")}</th><th>{t("ui.invoices.issueDate")}</th><th>{t("ui.invoices.dueDate")}</th><th className="num">{t("ui.common.total")}</th><th className="num">{t("ui.common.balance")}</th><th>{t("ui.common.status")}</th></tr></thead>
             <tbody>
               {rows.map((i) => (
-                <tr key={i.id}>
-                  <td><Link to={`/app/invoices/${i.id}`}>{i.number}</Link></td>
+                <tr key={i.id} className="is-clickable" onClick={() => navigate(`/app/invoices/${i.id}`)}>
+                  <td><Link to={`/app/invoices/${i.id}`} onClick={(e) => e.stopPropagation()}>{i.number}</Link></td>
                   <td>{i.customer}</td>
                   <td>{date(i.issueDate, lang)}</td>
                   <td>{date(i.dueDate, lang)}</td>

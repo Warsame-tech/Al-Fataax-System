@@ -105,6 +105,7 @@
 .table tr.is-muted td { opacity: .55; }
 .table tr.is-strong td { font-weight: 600; background: #f7f8fc; }
 .table tr.is-clickable { cursor: pointer; }
+.table tr.is-clickable:hover td { background: #f3f7ff; }
 .cell-sub { display: flex; align-items: center; gap: 4px; margin-top: 2px; color: var(--muted); font-size: .78rem; }
 .cell-sub .icon { width: 13px; height: 13px; }
 .stock-pill { display: inline-block; padding: 3px 10px; border-radius: var(--pill); background: #e3f6ec; color: #11683f; font-weight: 500; font-size: .85rem; }
