@@ -23,6 +23,7 @@ const en = {
     pattern: "Please match the requested format.", date: "Please enter a valid date.", invalid: "Please check this value."
   },
   errors: {
+    notReceivedYet: "Pay a purchase order after the goods are received.", notOrdered: "This purchase is not an open order.",
     required: "This field is required.", expiryPast: "This date has already passed.", invalidAmount: "Enter a valid amount.", invalidEmail: "Enter a valid email address.",
     invalidPhone: "Enter a valid phone number.", duplicate: "This value is already used by another product.",
     forbidden: "You don't have permission for this.", exceedsBalance: "The amount is more than what is owed.",
@@ -47,6 +48,7 @@ const en = {
   },
   methods: { cash: "Cash", mobile_money: "Mobile money", bank: "Bank", credit: "Credit (pay later)" },
   status: {
+    ordered: "Ordered",
     completed: "Completed", cancelled: "Cancelled", unpaid: "Unpaid", partially_paid: "Partially paid", paid: "Paid", overdue: "Overdue",
     received: "Received", active: "Active", disabled: "Disabled", suspended: "Suspended", deactivated: "Deactivated", draft: "Draft",
     returned: "Returned", expired: "Expired", converted: "Converted"
@@ -57,6 +59,19 @@ const en = {
     updateHint: "Save the changes to the draft you opened.", noPhoto: "The photo is not kept in a draft. Choose it again when you finish."
   },
   products: {
+    category: "Category", strength: "Strength", strengthPh: "e.g. 500 mg, 250 mg/5 ml", brandName: "Brand name", therapeuticCategory: "Therapeutic category",
+    baseUnit: "Base unit", purchaseCostBase: "Purchase cost (per base unit)", sellingPriceBase: "Selling price (per base unit)",
+    genericName: "Generic name", genericNamePh: "e.g. Acetaminophen", dosageForm: "Dosage form",
+    forms: { tablet: "Tablet", capsule: "Capsule", syrup: "Syrup", liquid: "Liquid medicine", cream: "Cream / ointment", injection: "Injection", drops: "Drops", sachet: "Sachet / powder", other: "Other" },
+    manufacturer: "Manufacturer", rxRequired: "Prescription required", rxHint: "Shown as Rx on the product and in the POS cart.",
+    storage: "Storage instructions", storagePh: "e.g. Store below 25°C, keep away from light",
+    baseUnitHint: "Stock is always counted in this unit.", packagingTitle: "Packaging structure",
+    packagingHint: "How this medicine is packed, from the largest pack down to the {unit}. Saved with the product and used for purchases, stock and sales.",
+    packName: "Pack", perLabel: "{child} per {pack}", buyUnit: "Purchase unit", sellUnit: "Sales unit", pricePer: "Price per {pack} (optional)",
+    baseUnitRow: "{unit} — base unit (stock is counted in {unit})", packSameAsUnit: "A pack can't have the same name as the base unit.",
+    addLargerPack: "Larger pack (top)", addSmallerPack: "Smaller pack (above {unit})", calcQty: "{pack} (quantity)", calcTotal: "Total {unit}",
+    calcIncomplete: "Fill in all the counts to calculate.", packagingShort: "Packaging",
+    calcHint: "Calculator only: registering a medicine does not add stock. Stock comes in with Opening stock, Add stock or a received purchase.",
     purchaseCost: "Purchase cost", retailPrice: "Retail price", reorderLevel: "Reorder level", settings: "Product settings",
     searchPhVariants: "Search name, shade, fragrance, SKU or barcode", expiryFilter: "Expiry",
     expiry: { all: "Any expiry", soonDays: "Expiring within {n} days", soon: "Expiring soon", expired: "Expired" },
@@ -95,7 +110,7 @@ const en = {
     barcodeExistsHelp: "No new product is created. Open the existing one or add stock to it.",
     lowStockAlert: "Low Stock Alert Level", lowStockAlertHint: "Alert when stock reaches or falls below this number.",
     stockSeparate: "Stock is entered separately: after saving, use Stock → Opening stock or Add stock.",
-    units: { pcs: "pcs", bottle: "bottle", box: "box", pack: "pack", carton: "carton", kg: "kg", g: "g", liter: "liter", ml: "ml", meter: "meter", yard: "yard", roll: "roll", pair: "pair", dozen: "dozen", tube: "tube" },
+    units: { pcs: "pcs", bottle: "bottle", box: "box", pack: "pack", carton: "carton", kg: "kg", g: "g", liter: "liter", ml: "ml", meter: "meter", yard: "yard", roll: "roll", pair: "pair", dozen: "dozen", tube: "tube", tablet: "tablet", capsule: "capsule", sachet: "sachet", ampoule: "ampoule", vial: "vial" },
     image: "Product photo", imageChoose: "Choose photo", imageChange: "Change photo", imageRemove: "Remove photo", imageHint: "PNG, JPG or WEBP, up to 2 MB", empty: "No products yet. Add your first product to start selling.",
     moveTypes: { opening: "Opening stock", purchase: "Purchase", sale: "POS sale", invoice: "Invoice", adjustment: "Adjustment", return_in: "Returned in", return_out: "Returned out", purchase_return: "Purchase cancelled" }
   },
@@ -108,6 +123,7 @@ const en = {
     paymentHelp: "The payment is applied to the oldest unpaid documents first."
   },
   pos: {
+    sellUnit: "Sell in", atPrice: "at {price}",
     title: "Point of sale", search: "Search product or scan barcode…", cart: "Cart", emptyCart: "Add products by searching or scanning.",
     walkIn: "Walk-in customer", received: "Amount received", change: "Change", creditPaid: "Paid now (optional)", paidWith: "Paid now with",
     charge: "Complete sale · {amount}", newSale: "New sale", receipt: "Receipt", history: "Sales history", cancelSale: "Cancel & refund",
@@ -199,6 +215,11 @@ const en = {
     cancelHelp: "Only invoices without payments can be cancelled. Stock will be returned.", empty: "No invoices in this period."
   },
   purchases: {
+    cancelOrder: "Cancel order", receive: "Receive goods", receivedOn: "received", confirmReceive: "Confirm goods received",
+    orderedHelp: "Purchase order: nothing has been added to stock and nothing is owed yet. Use Receive goods when the goods arrive.",
+    receiveHelp: "Check the goods and enter the batch number and expiry date. Confirming adds the stock and makes the purchase payable.",
+    mode: "Purchase type", receiveNow: "Receive goods now", orderOnly: "Purchase order (receive later)", createOrder: "Create purchase order",
+    receiveNowHint: "The goods are here: stock is added now.", orderOnlyHint: "Only the order is recorded; stock is added when you receive the goods.",
     title: "Purchases", new: "Record purchase", create: "Save purchase", payNow: "Paid now (optional)", pay: "Pay supplier",
     cancel: "Cancel purchase", cancelHelp: "Only unpaid purchases can be cancelled. The stock will be removed again.",
     empty: "No purchases in this period.", note: "Stock is added immediately and each product's cost price is updated to this purchase cost."
@@ -312,6 +333,7 @@ const so = {
     pattern: "Fadlan raac qaabka la rabo.", date: "Fadlan geli taariikh sax ah.", invalid: "Fadlan hubi qiimahan."
   },
   errors: {
+    notReceivedYet: "Bixi dalabka iibsiga kadib marka alaabta la helo.", notOrdered: "Iibsigan ma aha dalab furan.",
     required: "Goobtan waa loo baahan yahay.", expiryPast: "Taariikhdani way dhaaftay.", invalidAmount: "Geli qaddar sax ah.", invalidEmail: "Geli iimayl sax ah.",
     invalidPhone: "Geli lambar taleefan oo sax ah.", duplicate: "Qiimahan waxaa isticmaalaya alaab kale.",
     forbidden: "Ogolaansho uma lihid tan.", exceedsBalance: "Qaddarku wuu ka badan yahay waxa lagu leeyahay.",
@@ -336,6 +358,7 @@ const so = {
   },
   methods: { cash: "Caddaan", mobile_money: "Lacag moobayl", bank: "Bangi", credit: "Deyn (bixin dambe)" },
   status: {
+    ordered: "La dalbaday",
     completed: "La dhammeeyay", cancelled: "La joojiyay", unpaid: "Lama bixin", partially_paid: "Qayb ahaan la bixiyay", paid: "La bixiyay", overdue: "Waqtigii dhaafay",
     received: "La helay", active: "Firfircoon", disabled: "La damiyay", suspended: "La hakiyay", deactivated: "La xiray", draft: "Qabyo",
     returned: "La soo celiyay", expired: "Dhacay", converted: "La beddelay"
@@ -346,6 +369,19 @@ const so = {
     updateHint: "Ku kaydi isbeddellada qabyada aad furtay.", noPhoto: "Sawirka laguma kaydiyo qabyada. Dib u dooro marka aad dhammeyso."
   },
   products: {
+    category: "Qaybta", strength: "Xoogga", strengthPh: "tusaale 500 mg, 250 mg/5 ml", brandName: "Magaca shirkadda (brand)", therapeuticCategory: "Qaybta daaweynta",
+    baseUnit: "Cabbirka aasaasiga", purchaseCostBase: "Qiimaha iibsiga (cabbirka aasaasiga)", sellingPriceBase: "Qiimaha iibka (cabbirka aasaasiga)",
+    genericName: "Magaca guud (generic)", genericNamePh: "tusaale Acetaminophen", dosageForm: "Qaabka daawada",
+    forms: { tablet: "Kiniin", capsule: "Kaabsal", syrup: "Sharoobo", liquid: "Daawo dareere ah", cream: "Kareem / dufan", injection: "Irbad", drops: "Dhibcaha", sachet: "Kiish / budo", other: "Kale" },
+    manufacturer: "Soo saaraha", rxRequired: "Waxaa loo baahan yahay warqad dhakhtar", rxHint: "Wuxuu u muuqdaa Rx alaabta iyo gaadhiga POS-ka.",
+    storage: "Tilmaamaha kaydinta", storagePh: "tusaale Ku kaydi ka hooseeya 25°C, ka ilaali iftiinka",
+    baseUnitHint: "Kaydka had iyo jeer waxaa lagu tiriyaa cabbirkan.", packagingTitle: "Qaab-dhismeedka baakadaynta",
+    packagingHint: "Sida daawadan loo baakadeeyay, laga bilaabo baakadda ugu weyn ilaa {unit}. Waxaa lagu kaydiyaa alaabta waxaana loo isticmaalaa iibsiga, kaydka iyo iibka.",
+    packName: "Baakad", perLabel: "{child} halkii {pack}", buyUnit: "Cabbirka iibsiga", sellUnit: "Cabbirka iibka", pricePer: "Qiimaha {pack} (ikhtiyaari)",
+    baseUnitRow: "{unit} — cabbirka aasaasiga (kaydka waxaa lagu tiriyaa {unit})", packSameAsUnit: "Baakaddu ma yeelan karto magaca cabbirka aasaasiga.",
+    addLargerPack: "Baakad ka weyn (sare)", addSmallerPack: "Baakad ka yar ({unit} korkiisa)", calcQty: "{pack} (tirada)", calcTotal: "Wadarta {unit}",
+    calcIncomplete: "Buuxi dhammaan tirooyinka si loo xisaabiyo.", packagingShort: "Baakadaynta",
+    calcHint: "Xisaabiye kaliya: diiwaangelinta daawada kayd kuma darto. Kaydku wuxuu ku yimaadaa Kaydka bilowga, Ku dar kayd ama iibsi la helay.",
     purchaseCost: "Qiimaha iibsiga", retailPrice: "Qiimaha tafaariiqda", reorderLevel: "Heerka dib u dalbashada", settings: "Dejinta alaabta",
     searchPhVariants: "Raadi magac, midab, udug, SKU ama baarkood", expiryFilter: "Dhicitaan",
     expiry: { all: "Dhicitaan kasta", soonDays: "Dhacaya {n} maalmood gudahood", soon: "Dhawaan dhacaya", expired: "Dhacay" },
@@ -384,7 +420,7 @@ const so = {
     barcodeExistsHelp: "Alaab cusub lama samaynayo. Fur tan jirta ama kayd ku dar.",
     lowStockAlert: "Heerka Digniinta Kayd Yar", lowStockAlertHint: "Digniin marka kaydku gaadho ama ka hooseeyo tiradan.",
     stockSeparate: "Kaydka si gaar ah ayaa loo geliyaa: kaydinta kadib, isticmaal Kaydka → Kayd furitaan ama Ku dar kayd.",
-    units: { pcs: "xabbo", bottle: "dhalo", box: "sanduuq", pack: "baakad", carton: "kartoon", kg: "kg", g: "g", liter: "litir", ml: "ml", meter: "mitir", yard: "yaard", roll: "duub", pair: "lammaane", dozen: "dersin", tube: "tuubo" },
+    units: { pcs: "xabbo", bottle: "dhalo", box: "sanduuq", pack: "baakad", carton: "kartoon", kg: "kg", g: "g", liter: "litir", ml: "ml", meter: "mitir", yard: "yaard", roll: "duub", pair: "lammaane", dozen: "dersin", tube: "tuubo", tablet: "kiniin", capsule: "kaabsal", sachet: "kiish", ampoule: "ampuul", vial: "dhalo irbad" },
     image: "Sawirka alaabta", imageChoose: "Dooro sawir", imageChange: "Beddel sawirka", imageRemove: "Ka saar sawirka", imageHint: "PNG, JPG ama WEBP, ilaa 2 MB", empty: "Weli alaab ma jirto. Ku dar alaabtaada ugu horreysa si aad u bilowdo iibka.",
     moveTypes: { opening: "Kaydka bilowga", purchase: "Iibsi", sale: "Iib POS", invoice: "Qaansheeg", adjustment: "Hagaajin", return_in: "La soo celiyay", return_out: "La celiyay", purchase_return: "Iibsi la joojiyay" }
   },
@@ -397,6 +433,7 @@ const so = {
     paymentHelp: "Lacagta waxaa marka hore la mariyaa dukumentiyada ugu da'da weyn ee aan la bixin."
   },
   pos: {
+    sellUnit: "Ku iibi", atPrice: "{price} kiiba",
     title: "Barta iibka", search: "Raadi alaab ama akhri baarkoodka…", cart: "Gaariga", emptyCart: "Ku dar alaab adigoo raadinaya ama akhrinaya.",
     walkIn: "Macmiil soo socod ah", received: "Lacagta la helay", change: "Haraaga la celinayo", creditPaid: "Hadda la bixiyay (ikhtiyaari)", paidWith: "Hadda lagu bixiyay",
     charge: "Dhammee iibka · {amount}", newSale: "Iib cusub", receipt: "Rasiid", history: "Taariikhda iibka", cancelSale: "Jooji & celi lacagta",
@@ -488,6 +525,11 @@ const so = {
     cancelHelp: "Kaliya qaansheegyada aan lacag laga bixin ayaa la joojin karaa. Kaydka waa la celin doonaa.", empty: "Muddadan qaansheeg ma jiro."
   },
   purchases: {
+    cancelOrder: "Jooji dalabka", receive: "Qaado alaabta", receivedOn: "la helay", confirmReceive: "Xaqiiji in alaabta la helay",
+    orderedHelp: "Dalab iibsi: kayd laguma darin oo weli lacag lagama rabo. Isticmaal Qaado alaabta marka alaabtu timaado.",
+    receiveHelp: "Hubi alaabta oo geli lambarka dufcadda iyo taariikhda dhicitaanka. Xaqiijintu waxay ku daraysaa kaydka, iibsiguna wuxuu noqonayaa lacag la bixinayo.",
+    mode: "Nooca iibsiga", receiveNow: "Alaabta hadda la helay", orderOnly: "Dalab iibsi (mar dambe la qaadan)", createOrder: "Samee dalab iibsi",
+    receiveNowHint: "Alaabtu way joogtaa: kaydka hadda ayaa lagu darayaa.", orderOnlyHint: "Dalabka kaliya ayaa la diiwaangelinayaa; kaydka waxaa lagu darayaa marka alaabta la qaado.",
     title: "Iibsiga", new: "Diiwaan geli iibsi", create: "Kaydi iibsiga", payNow: "Hadda la bixiyay (ikhtiyaari)", pay: "Bixi alaab-qeybiyaha",
     cancel: "Jooji iibsiga", cancelHelp: "Kaliya iibsiyada aan la bixin ayaa la joojin karaa. Kaydka mar kale ayaa laga saarayaa.",
     empty: "Muddadan iibsi ma jiro.", note: "Kaydka isla markiiba waa lagu darayaa, qiimaha iibsiga alaab kastana waxaa loo cusboonaysiinayaa qiimahan."

@@ -8,6 +8,7 @@ import { imageUpload, saveImage, removeImage } from "../lib/files.js";
 import { defaultLocationId } from "../lib/stock.js";
 import { productName, productNameSql } from "../lib/productName.js";
 import { startBatchTracking } from "../lib/batches.js";
+import { readPackaging, packagingOf } from "../lib/packaging.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -35,15 +36,19 @@ const shape = (p) => ({
   wholesalePrice: p.wholesale_price === null ? null : num(p.wholesale_price),
   stock: p.loc_qty === undefined ? num(p.stock_qty) : num(p.loc_qty ?? 0), totalStock: num(p.stock_qty),
   minStock: num(p.min_stock), isActive: Boolean(p.is_active), trackBatches: Boolean(p.track_batches), nextExpiry: p.next_expiry || null,
+  // pharmacy: medicine details and packaging (packs above the base unit, see lib/packaging.js)
+  genericName: p.generic_name || "", dosageForm: p.dosage_form || "", manufacturer: p.manufacturer || "", supplierId: p.supplier_id || null,
+  supplier: p.supplier_name || null, rxRequired: Boolean(p.rx_required), storageInstructions: p.storage_instructions || "", packaging: packagingOf(p),
   stockStatus: num(p.stock_qty) < 0 ? "negative" : num(p.stock_qty) === 0 ? "out" : num(p.stock_qty) <= num(p.min_stock) ? "low" : "in"
 });
 
 /* nearest expiry of the stock on hand, and how many products are in the variant group */
 const EXTRAS = `(SELECT MIN(pb.expiry_date) FROM product_batches pb WHERE pb.product_id = p.id AND pb.qty > 0 AND pb.expiry_date IS NOT NULL) next_expiry,
   (SELECT COUNT(*) FROM products v WHERE v.business_id = p.business_id AND COALESCE(v.variant_of, v.id) = COALESCE(p.variant_of, p.id)) variant_count`;
-const SELECT = `SELECT p.*, c.name category_name, b.name brand_name, ${EXTRAS} FROM products p
+const SELECT = `SELECT p.*, c.name category_name, b.name brand_name, sp.name supplier_name, ${EXTRAS} FROM products p
   LEFT JOIN categories c ON c.id = p.category_id AND c.business_id = p.business_id
-  LEFT JOIN brands b ON b.id = p.brand_id AND b.business_id = p.business_id`;
+  LEFT JOIN brands b ON b.id = p.brand_id AND b.business_id = p.business_id
+  LEFT JOIN suppliers sp ON sp.id = p.supplier_id AND sp.business_id = p.business_id`;
 
 /* Location asked for by the request: ?location=default or ?locationId=<id> (null = totals). */
 async function requestedLocation(req) {
@@ -51,9 +56,10 @@ async function requestedLocation(req) {
   return id(req.query.locationId) || null;
 }
 const withLocation = (loc) => (loc
-  ? `SELECT p.*, c.name category_name, b.name brand_name, ps.qty loc_qty, ${EXTRAS} FROM products p
+  ? `SELECT p.*, c.name category_name, b.name brand_name, sp.name supplier_name, ps.qty loc_qty, ${EXTRAS} FROM products p
       LEFT JOIN categories c ON c.id = p.category_id AND c.business_id = p.business_id
       LEFT JOIN brands b ON b.id = p.brand_id AND b.business_id = p.business_id
+      LEFT JOIN suppliers sp ON sp.id = p.supplier_id AND sp.business_id = p.business_id
       LEFT JOIN product_stock ps ON ps.product_id = p.id AND ps.location_id = ${Number(loc)}`
   : SELECT);
 
@@ -81,9 +87,9 @@ router.get("/", requirePerm("products.view"), ah(async (req, res) => {
   const params = [bid];
   const q = text(req.query.q, 80);
   if (q) {
-    where.push(`(${productNameSql("p")} LIKE ? OR p.sku LIKE ? OR p.barcode = ?
+    where.push(`(${productNameSql("p")} LIKE ? OR p.generic_name LIKE ? OR p.sku LIKE ? OR p.barcode = ?
       OR EXISTS (SELECT 1 FROM product_barcodes xb WHERE xb.product_id = p.id AND xb.barcode = ?))`);
-    params.push(`%${q}%`, `%${q}%`, q, q);
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`, q, q);
   }
   if (id(req.query.categoryId)) { where.push("p.category_id = ?"); params.push(id(req.query.categoryId)); }
   if (id(req.query.brandId)) { where.push("p.brand_id = ?"); params.push(id(req.query.brandId)); }
@@ -191,6 +197,13 @@ async function brandId(conn, bid, name) {
   return b.id;
 }
 
+/* Default supplier of a product (must be one of the business's suppliers). */
+async function supplierOf(conn, bid, supplierId) {
+  if (!supplierId) return null;
+  await ensureOwned(conn, "suppliers", supplierId, bid);
+  return supplierId;
+}
+
 /* Packaging barcodes from the form: [{ barcode, label, qty }] (multipart sends it as a JSON string). */
 function readBarcodes(raw) {
   let list = raw;
@@ -215,10 +228,18 @@ function readProduct(body, { creating }) {
     isActive: body.isActive === undefined ? true : body.isActive === true || body.isActive === "true",
     trackBatches: body.trackBatches === true || body.trackBatches === "true",
     barcodes: body.barcodes === undefined ? null : readBarcodes(body.barcodes),
-    variantOf: creating ? id(body.variantOf) : null
+    variantOf: creating ? id(body.variantOf) : null,
+    genericName: optText(body.genericName, 190), dosageForm: optText(body.dosageForm, 40), manufacturer: optText(body.manufacturer, 150),
+    supplierId: id(body.supplierId), rxRequired: body.rxRequired === true || body.rxRequired === "true",
+    storageInstructions: optText(body.storageInstructions, 255)
   };
+  const pack = readPackaging(body.packaging);
+  // not sent (businesses without packaging): keep what is saved
+  d.packaging = body.packaging === undefined ? undefined : pack.levels ? JSON.stringify(pack.levels) : null;
   const e = {};
   if (d.name.length < 1) e.name = "required";
+  if (pack.error) e[pack.error] = "invalidAmount";
+  if (pack.levels?.some((l) => l.name === d.unit)) e.packaging = "packSameAsUnit";
   if (Number.isNaN(d.costPrice)) e.costPrice = "invalidAmount";
   if (Number.isNaN(d.sellingPrice)) e.sellingPrice = "invalidAmount";
   if (d.wholesalePrice !== null && Number.isNaN(d.wholesalePrice)) e.wholesalePrice = "invalidAmount";
@@ -296,11 +317,13 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
       let group = null;
       if (d.variantOf) { const parent = await ensureOwned(conn, "products", d.variantOf, bid); group = parent.variant_of || parent.id; }
       const [r] = await conn.query(
-        `INSERT INTO products (business_id, category_id, brand_id, subcategory, name, size, shade, fragrance, formula, pack_size, variant_of, description,
-                               sku, barcode, image_path, unit, cost_price, selling_price, wholesale_price, min_stock, track_batches, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [bid, await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.size, d.shade, d.fragrance, d.formula, d.packSize,
-          group, d.description, d.sku, d.barcode, image, d.unit, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0]
+        `INSERT INTO products (business_id, category_id, brand_id, subcategory, name, generic_name, dosage_form, manufacturer, supplier_id, rx_required, storage_instructions,
+                               size, shade, fragrance, formula, pack_size, variant_of, description,
+                               sku, barcode, image_path, unit, packaging, cost_price, selling_price, wholesale_price, min_stock, track_batches, is_active)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [bid, await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.genericName, d.dosageForm, d.manufacturer,
+          await supplierOf(conn, bid, d.supplierId), d.rxRequired ? 1 : 0, d.storageInstructions, d.size, d.shade, d.fragrance, d.formula, d.packSize,
+          group, d.description, d.sku, d.barcode, image, d.unit, d.packaging ?? null, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0]
       );
       await saveBarcodes(conn, bid, r.insertId, d.barcodes || []);
       // A product can exist with zero stock. Opening stock is normally entered in Stock → Opening stock.
@@ -329,11 +352,13 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
       await checkCodes(conn, req.business, d, p);
       const next = image || (req.body?.removeImage === "true" ? null : p.image_path);
       await conn.query(
-        `UPDATE products SET category_id = ?, brand_id = ?, subcategory = ?, name = ?, size = ?, shade = ?, fragrance = ?, formula = ?, pack_size = ?, description = ?,
-                sku = ?, barcode = ?, image_path = ?, unit = ?, cost_price = ?, selling_price = ?, wholesale_price = ?, min_stock = ?, track_batches = ?, is_active = ?
+        `UPDATE products SET category_id = ?, brand_id = ?, subcategory = ?, name = ?, generic_name = ?, dosage_form = ?, manufacturer = ?, supplier_id = ?, rx_required = ?,
+                storage_instructions = ?, size = ?, shade = ?, fragrance = ?, formula = ?, pack_size = ?, description = ?,
+                sku = ?, barcode = ?, image_path = ?, unit = ?, packaging = ?, cost_price = ?, selling_price = ?, wholesale_price = ?, min_stock = ?, track_batches = ?, is_active = ?
           WHERE id = ? AND business_id = ?`,
-        [await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.size, d.shade, d.fragrance, d.formula, d.packSize,
-          d.description, d.sku, d.barcode, next, d.unit, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0, p.id, bid]
+        [await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.genericName, d.dosageForm, d.manufacturer,
+          await supplierOf(conn, bid, d.supplierId), d.rxRequired ? 1 : 0, d.storageInstructions, d.size, d.shade, d.fragrance, d.formula, d.packSize,
+          d.description, d.sku, d.barcode, next, d.unit, d.packaging === undefined ? p.packaging : d.packaging, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0, p.id, bid]
       );
       await saveBarcodes(conn, bid, p.id, d.barcodes);
       if (d.trackBatches && !p.track_batches) await startBatchTracking(conn, bid, p.id);

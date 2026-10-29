@@ -9,6 +9,7 @@ import { date, fill } from "../format.js";
 import SearchSelect from "../SearchSelect.jsx";
 import { VAT_RATE, vatOf } from "../vat.js";
 import { useDraft, DraftBar } from "../Drafts.jsx";
+import { unitsPer, packPrice } from "../packaging.js";
 
 const STATUSES = ["", "unpaid", "partially_paid", "overdue", "paid", "cancelled"];
 
@@ -95,12 +96,16 @@ export function InvoiceForm() {
   };
   const changePriceList = (pl) => {
     setF((x) => ({ ...x, priceList: pl }));
-    setLines((ls) => ls.map((l) => ({ ...l, price: pl === "wholesale" && l.product.wholesalePrice !== null ? l.product.wholesalePrice : l.product.sellingPrice })));
+    setLines((ls) => ls.map((l) => {
+      const base = pl === "wholesale" && l.product.wholesalePrice !== null ? l.product.wholesalePrice : l.product.sellingPrice;
+      if (!l.unit) return { ...l, price: base };
+      return { ...l, price: pl === "wholesale" && l.product.wholesalePrice !== null ? Math.round(base * (unitsPer(l.product, l.unit) || 1) * 10000) / 10000 : packPrice(l.product, l.unit, base) };
+    }));
   };
 
   const save = async (e) => {
     e.preventDefault();
-    const body = { ...f, items: lines.map((l) => ({ productId: l.product.id, qty: l.qty, ...(allowPrice ? { unitPrice: l.price } : {}) })) };
+    const body = { ...f, items: lines.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(allowPrice ? { unitPrice: l.price } : {}) })) };
     const r = await sub.run(() => apiRequest("/api/invoices", { method: "POST", body }));
     if (r) { await draft.finish(); navigate(`/app/invoices/${r.id}`, { replace: true }); }
   };

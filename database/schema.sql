@@ -174,6 +174,12 @@ CREATE TABLE IF NOT EXISTS products (
   brand_id        INT UNSIGNED NULL,
   subcategory     VARCHAR(120) NULL,
   name            VARCHAR(190) NOT NULL,          -- names may repeat; size / barcode / SKU tell products apart
+  generic_name    VARCHAR(190) NULL,              -- pharmacy: generic name, dosage form, manufacturer, default supplier,
+  dosage_form     VARCHAR(40)  NULL,              --   prescription required, storage instructions
+  manufacturer    VARCHAR(150) NULL,
+  supplier_id     INT UNSIGNED NULL,
+  rx_required     TINYINT(1)   NOT NULL DEFAULT 0,
+  storage_instructions VARCHAR(255) NULL,
   size            VARCHAR(40)  NULL,              -- e.g. 400ml, 1kg — shown after the name everywhere
   shade           VARCHAR(60)  NULL,              -- variant fields (cosmetics): shown after the name too
   fragrance       VARCHAR(60)  NULL,
@@ -184,7 +190,8 @@ CREATE TABLE IF NOT EXISTS products (
   sku             VARCHAR(80)  NULL,
   barcode         VARCHAR(80)  NULL,
   image_path      VARCHAR(255) NULL,                 -- product photo, /uploads/products/...
-  unit            VARCHAR(20)  NOT NULL DEFAULT 'pcs',
+  unit            VARCHAR(20)  NOT NULL DEFAULT 'pcs',    -- base unit: stock is always kept in it
+  packaging       TEXT NULL,                          -- packs above the base unit (JSON, lib/packaging.js), e.g. carton → box → strip
   cost_price      DECIMAL(14,4) NOT NULL DEFAULT 0,
   selling_price   DECIMAL(14,4) NOT NULL DEFAULT 0,
   wholesale_price DECIMAL(14,4) NULL,
@@ -390,6 +397,9 @@ CREATE TABLE IF NOT EXISTS sale_items (
   unit_cost   DECIMAL(14,4) NOT NULL,   -- cost at time of sale (for COGS / gross profit)
   discount    DECIMAL(14,4) NOT NULL DEFAULT 0,
   line_total  DECIMAL(14,4) NOT NULL,
+  sell_unit   VARCHAR(30) NULL,            -- sold in a pack (box, strip…): the pack, how many, price per pack; qty / unit_price stay in base units
+  sell_qty    DECIMAL(14,3) NULL,
+  sell_price  DECIMAL(14,4) NULL,
   INDEX idx_sale_items_sale (sale_id),
   INDEX idx_sale_items_product (business_id, product_id),
   CONSTRAINT fk_sale_items_business FOREIGN KEY (business_id) REFERENCES businesses(id),
@@ -439,6 +449,9 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   unit_cost   DECIMAL(14,4) NOT NULL,
   discount    DECIMAL(14,4) NOT NULL DEFAULT 0,
   line_total  DECIMAL(14,4) NOT NULL,
+  sell_unit   VARCHAR(30) NULL,            -- sold in a pack (box, strip…): the pack, how many, price per pack; qty / unit_price stay in base units
+  sell_qty    DECIMAL(14,3) NULL,
+  sell_price  DECIMAL(14,4) NULL,
   INDEX idx_inv_items_invoice (invoice_id),
   INDEX idx_inv_items_product (business_id, product_id),
   CONSTRAINT fk_inv_items_business FOREIGN KEY (business_id) REFERENCES businesses(id),
@@ -480,8 +493,9 @@ CREATE TABLE IF NOT EXISTS purchases (
   user_id      INT UNSIGNED NOT NULL,
   total        DECIMAL(14,4) NOT NULL,
   amount_paid  DECIMAL(14,4) NOT NULL DEFAULT 0,  -- sum of linked supplier_payments
-  status       ENUM('draft','received','cancelled','returned') NOT NULL DEFAULT 'received',
+  status       ENUM('draft','ordered','received','cancelled','returned') NOT NULL DEFAULT 'received',  -- ordered = purchase order, no stock yet
   purchased_at DATETIME NOT NULL,
+  received_at  DATETIME NULL,                      -- goods receipt of an ordered purchase
   UNIQUE KEY uq_purchase_no (business_id, purchase_no),
   INDEX idx_purchases_date (business_id, purchased_at),
   CONSTRAINT fk_purchases_business FOREIGN KEY (business_id) REFERENCES businesses(id),
@@ -497,6 +511,11 @@ CREATE TABLE IF NOT EXISTS purchase_items (
   qty         DECIMAL(14,3) NOT NULL,
   unit_cost   DECIMAL(14,4) NOT NULL,
   line_total  DECIMAL(14,4) NOT NULL,
+  buy_unit    VARCHAR(30) NULL,            -- bought in a pack (carton, box…): the pack, how many, cost per pack; qty / unit_cost stay in base units
+  buy_qty     DECIMAL(14,3) NULL,
+  buy_cost    DECIMAL(14,4) NULL,
+  batch_no    VARCHAR(60) NULL,            -- batch / expiry of the goods (used when an ordered purchase is received)
+  expiry_date DATE NULL,
   INDEX idx_pitems_purchase (purchase_id),
   CONSTRAINT fk_pitems_business FOREIGN KEY (business_id) REFERENCES businesses(id),
   CONSTRAINT fk_pitems_purchase FOREIGN KEY (purchase_id) REFERENCES purchases(id),

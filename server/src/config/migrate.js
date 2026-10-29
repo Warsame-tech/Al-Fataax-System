@@ -219,6 +219,21 @@ COLUMNS.push(
   { table: "business_settings", column: "allow_duplicate_codes", ddl: "ALTER TABLE business_settings ADD COLUMN allow_duplicate_codes TINYINT(1) NOT NULL DEFAULT 0 AFTER invoice_footer" }
 );
 
+// Pharmacy: medicine details and packaging (carton → box → strip → tablet); sold / bought / received in packs.
+COLUMNS.push(
+  { table: "products", column: "generic_name", ddl: "ALTER TABLE products ADD COLUMN generic_name VARCHAR(190) NULL AFTER name" },
+  { table: "products", column: "dosage_form", ddl: "ALTER TABLE products ADD COLUMN dosage_form VARCHAR(40) NULL AFTER generic_name" },
+  { table: "products", column: "manufacturer", ddl: "ALTER TABLE products ADD COLUMN manufacturer VARCHAR(150) NULL AFTER dosage_form" },
+  { table: "products", column: "supplier_id", ddl: "ALTER TABLE products ADD COLUMN supplier_id INT UNSIGNED NULL AFTER manufacturer" },
+  { table: "products", column: "rx_required", ddl: "ALTER TABLE products ADD COLUMN rx_required TINYINT(1) NOT NULL DEFAULT 0 AFTER supplier_id" },
+  { table: "products", column: "storage_instructions", ddl: "ALTER TABLE products ADD COLUMN storage_instructions VARCHAR(255) NULL AFTER rx_required" },
+  { table: "products", column: "packaging", ddl: "ALTER TABLE products ADD COLUMN packaging TEXT NULL AFTER unit" },
+  { table: "sale_items", column: "sell_unit", ddl: "ALTER TABLE sale_items ADD COLUMN sell_unit VARCHAR(30) NULL AFTER line_total, ADD COLUMN sell_qty DECIMAL(14,3) NULL AFTER sell_unit, ADD COLUMN sell_price DECIMAL(14,4) NULL AFTER sell_qty" },
+  { table: "invoice_items", column: "sell_unit", ddl: "ALTER TABLE invoice_items ADD COLUMN sell_unit VARCHAR(30) NULL AFTER line_total, ADD COLUMN sell_qty DECIMAL(14,3) NULL AFTER sell_unit, ADD COLUMN sell_price DECIMAL(14,4) NULL AFTER sell_qty" },
+  { table: "purchase_items", column: "buy_unit", ddl: "ALTER TABLE purchase_items ADD COLUMN buy_unit VARCHAR(30) NULL AFTER line_total, ADD COLUMN buy_qty DECIMAL(14,3) NULL AFTER buy_unit, ADD COLUMN buy_cost DECIMAL(14,4) NULL AFTER buy_qty" },
+  { table: "purchase_items", column: "batch_no", ddl: "ALTER TABLE purchase_items ADD COLUMN batch_no VARCHAR(60) NULL AFTER buy_cost, ADD COLUMN expiry_date DATE NULL AFTER batch_no" }
+);
+
 const INDEXES = [
   { table: "products", name: "idx_products_category", ddl: "ALTER TABLE products ADD INDEX idx_products_category (business_id, category_id)" },
   { table: "products", name: "idx_products_brand", ddl: "ALTER TABLE products ADD INDEX idx_products_brand (business_id, brand_id)" },
@@ -283,6 +298,14 @@ export async function migrate() {
       await pool.query(`ALTER TABLE products DROP INDEX ${uq}, ADD INDEX ${ix} (business_id, ${col})`);
       console.log(`Database upgraded: products.${col} duplicates are checked by the app`);
     }
+  }
+  // Purchase orders: a purchase can be "ordered" (no stock yet) until the goods are received.
+  const [[pStatus]] = await pool.query(
+    "SELECT COLUMN_TYPE t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'purchases' AND COLUMN_NAME = 'status'");
+  if (pStatus && !String(pStatus.t).includes("'ordered'")) {
+    await pool.query("ALTER TABLE purchases MODIFY status ENUM('draft','ordered','received','cancelled','returned') NOT NULL DEFAULT 'received'");
+    await pool.query("ALTER TABLE purchases ADD COLUMN received_at DATETIME NULL AFTER purchased_at").catch(() => {});
+    console.log("Database upgraded: purchases can be ordered and received later");
   }
   for (const ix of INDEXES) {
     const [[row]] = await pool.query(

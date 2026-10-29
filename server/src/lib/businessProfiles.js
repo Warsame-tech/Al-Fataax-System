@@ -11,6 +11,10 @@
  *   labels          different words for the same product fields (keys of ui.products.*)
  *   units           units of measurement offered in the product form (null = the full list)
  *   hiddenFields    product form fields this business does not use (e.g. description)
+ *   medicine        medicine details: generic name, dosage form, manufacturer, supplier, prescription, storage
+ *   packaging       packs above the base unit (carton → box → strip → tablet, lib/packaging.js); stock is
+ *                   kept in the base unit, purchases / stock entry / POS / invoices may use the packs
+ *   purchaseOrders  purchases can be ordered first and received later (goods receipt adds the stock)
  *
  * Add a business type here when its special interface is built; types without one use DEFAULT.
  */
@@ -22,7 +26,10 @@ const DEFAULT = {
   expirySoonDays: 90,
   labels: {},
   units: null,
-  hiddenFields: []
+  hiddenFields: [],
+  medicine: false,
+  packaging: false,
+  purchaseOrders: false
 };
 
 const PROFILES = {
@@ -36,6 +43,20 @@ const PROFILES = {
     // e.g. 1 bottle, or 1 carton of 12 bottles (packaging barcode: carton × 12)
     units: ["pcs", "bottle", "tube", "box", "carton"],
     hiddenFields: ["description"]
+  },
+  pharmacy: {
+    key: "pharmacy",
+    variants: ["size"],                       // shown as Strength, e.g. Paracetamol 500 mg
+    extraBarcodes: false,
+    batches: true,
+    expirySoonDays: 180,
+    labels: { size: "strength", brand: "brandName", category: "therapeuticCategory", unit: "baseUnit",
+      costPrice: "purchaseCostBase", sellingPrice: "sellingPriceBase", lowStockAlert: "reorderLevel", lowStockShort: "reorderLevel" },
+    units: ["tablet", "capsule", "bottle", "ml", "tube", "sachet", "ampoule", "vial", "pcs"],
+    hiddenFields: ["description", "subcategory", "wholesalePrice"],
+    medicine: true,
+    packaging: true,
+    purchaseOrders: true
   }
 };
 

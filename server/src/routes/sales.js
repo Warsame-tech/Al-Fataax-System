@@ -6,11 +6,17 @@ import { ah, id, money, quantity, withTx, ensureOwned, badRequest, conflict, num
 import { nextNumber, lockProducts, moveStock, moneyMove } from "../lib/ledger.js";
 import { methodForPayment } from "./paymentMethods.js";
 import { vatFor } from "../lib/vat.js";
+import { unitsPer, packOf } from "../lib/packaging.js";
 
 const router = Router();
 router.use(requireAuth);
 
-/** Validates and prices cart lines against locked products. Shared by POS and invoices. */
+/*
+ * Validates and prices cart lines against locked products. Shared by POS and invoices.
+ * A line may be sold in a pack of the product (unit: "Box", "Strip"… — lib/packaging.js): qty and unitPrice are then
+ * per pack, stock is taken in base units (qty × units per pack) and the pack is kept on the line (sell).
+ * A pack's price is its own price, or the base price × units per pack.
+ */
 export function priceLines(items, products, { allowCustomPrice, priceList = "retail" }) {
   const lines = [];
   const errors = {};
@@ -19,21 +25,30 @@ export function priceLines(items, products, { allowCustomPrice, priceList = "ret
     const qty = quantity(it.qty);
     if (!p || !p.is_active) { errors[`items.${i}.productId`] = "required"; return; }
     if (Number.isNaN(qty)) { errors[`items.${i}.qty`] = "invalidAmount"; return; }
-    const listPrice = priceList === "wholesale" && p.wholesale_price !== null ? num(p.wholesale_price) : num(p.selling_price);
+    const unit = typeof it.unit === "string" && it.unit && it.unit !== p.unit ? it.unit : null;
+    const per = unit ? unitsPer(p, unit) : 1;
+    if (!per || (unit && !packOf(p, unit)?.sell)) { errors[`items.${i}.unit`] = "required"; return; }
+    const basePrice = priceList === "wholesale" && p.wholesale_price !== null ? num(p.wholesale_price) : num(p.selling_price);
+    const pack = unit ? packOf(p, unit) : null;
+    const listPrice = pack && pack.price !== null && priceList !== "wholesale" ? num(pack.price) : round2(basePrice * per);
     let unitPrice = listPrice;
     if (it.unitPrice !== undefined && it.unitPrice !== null && it.unitPrice !== "" && Number(it.unitPrice) !== listPrice) {
       if (!allowCustomPrice) { errors[`items.${i}.unitPrice`] = "forbidden"; return; }
       unitPrice = money(it.unitPrice);
       if (Number.isNaN(unitPrice)) { errors[`items.${i}.unitPrice`] = "invalidAmount"; return; }
     }
-    lines.push({ product: p, qty, unitPrice, unitCost: num(p.cost_price), lineTotal: round2(qty * unitPrice) });
+    const baseQty = Math.round(qty * per * 1000) / 1000;
+    lines.push({
+      product: p, qty: baseQty, unitPrice: unit ? round2(unitPrice / per) : unitPrice, unitCost: num(p.cost_price), lineTotal: round2(qty * unitPrice),
+      sell: unit ? { unit, qty, price: unitPrice } : null
+    });
   });
   if (Object.keys(errors).length) throw badRequest(errors);
   return lines;
 }
 
 function readItems(body) {
-  const items = Array.isArray(body.items) ? body.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: x?.qty, unitPrice: x?.unitPrice })) : [];
+  const items = Array.isArray(body.items) ? body.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: x?.qty, unitPrice: x?.unitPrice, unit: x?.unit })) : [];
   if (!items.length) throw badRequest({ items: "required" });
   return items;
 }
@@ -140,8 +155,8 @@ export async function createSale(conn, ctx, body) {
   const saleId = s.insertId;
   for (const l of lines) {
     await conn.query(
-      `INSERT INTO sale_items (business_id, sale_id, product_id, qty, unit_price, unit_cost, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [businessId, saleId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal]
+      `INSERT INTO sale_items (business_id, sale_id, product_id, qty, unit_price, unit_cost, line_total, sell_unit, sell_qty, sell_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [businessId, saleId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null]
     );
     await moveStock(conn, { businessId, userId, product: l.product, qtyChange: -l.qty, type: "sale", refType: "sale", refId: saleId });
   }
@@ -181,7 +196,7 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
   const bid = req.business.id;
   const s = await ensureOwned(pool, "sales", id(req.params.id), bid);
   const [items] = await pool.query(
-    `SELECT si.qty, si.unit_price, si.line_total, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku FROM sale_items si JOIN products p ON p.id = si.product_id AND p.business_id = si.business_id
+    `SELECT si.qty, si.unit_price, si.line_total, si.sell_unit, si.sell_qty, si.sell_price, p.unit base_unit, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku FROM sale_items si JOIN products p ON p.id = si.product_id AND p.business_id = si.business_id
       WHERE si.sale_id = ? AND si.business_id = ? ORDER BY si.id`, [s.id, bid]);
   const [[cust]] = s.customer_id ? await pool.query("SELECT name, phone FROM customers WHERE id = ? AND business_id = ?", [s.customer_id, bid]) : [[null]];
   const [[cashier]] = await pool.query("SELECT full_name FROM users WHERE id = ? AND business_id = ?", [s.user_id, bid]);
@@ -192,7 +207,9 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
   res.json({
     business: req.business,
     sale: { id: s.id, number: s.receipt_no, at: s.sold_at, status: s.status, method: s.payment_method, subtotal: num(s.subtotal), discount: num(s.discount), vatRate: num(s.vat_rate || 0), vat: num(s.vat_amount || 0), total: num(s.total), paid: num(s.amount_paid), change: num(s.change_amount || 0), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
-    items: items.map((i) => ({ name: i.name, sku: i.sku, qty: num(i.qty), unitPrice: num(i.unit_price), total: num(i.line_total) })),
+    // sold in a pack: shown as e.g. 2 Strip × 1.50 (qty / unitPrice); baseQty is the stock that left
+    items: items.map((i) => ({ name: i.name, sku: i.sku, qty: i.sell_unit ? num(i.sell_qty) : num(i.qty), unitPrice: i.sell_unit ? num(i.sell_price) : num(i.unit_price),
+      unit: i.sell_unit || null, baseQty: num(i.qty), baseUnit: i.base_unit, total: num(i.line_total) })),
     payments: payments.map((p) => ({ amount: num(p.amount), method: p.method, label: p.pm_name ? (p.pm_number ? `${p.pm_name} (${p.pm_number})` : p.pm_name) : null, at: p.paid_at }))
   });
 }));

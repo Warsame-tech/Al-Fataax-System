@@ -128,7 +128,7 @@ export default function InvoiceView({ preview = false }) {
                 <td>{i + 1}</td>
                 <td className="invoice__barcode">{it.barcode || "—"}</td>
                 <td>{it.name}{it.sku && <small>{it.sku}</small>}</td>
-                <td className="num">{qty(it.qty)}</td>
+                <td className="num">{qty(it.qty)}{it.unit ? ` ${it.unit}` : ""}</td>
                 <td className="num">{m(it.unitPrice)}</td>
                 <td className="num">{m(it.total)}</td>
               </tr>

@@ -1041,3 +1041,38 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 }
 
 .pack-codes__means { grid-column: 1 / -1; margin-top: -4px; }
+
+/* ---------- Pharmacy: medicine packaging (carton → box → strip → tablet) ---------- */
+.rx-tag { display: inline-block; margin-left: 6px; padding: 0 6px; border-radius: 6px; background: #fde8e8; color: #b42318; font-size: .7rem; font-weight: 800; vertical-align: middle; }
+.packaging { display: grid; gap: 10px; padding: 14px; border: 1px solid #e3e6ef; border-radius: 14px; background: #fafbfe; }
+.packaging__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto auto minmax(0, 1fr) auto; gap: 8px; align-items: end; }
+.packaging__per, .packaging__price, .packaging__calc label { display: grid; gap: 4px; font-size: .78rem; font-weight: 600; color: var(--ink-2, #4a5170); }
+.packaging__per .input { font-weight: 700; }
+.packaging__flag { align-self: center; font-size: .8rem; white-space: nowrap; }
+.packaging__base { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border-radius: 10px; background: #eef4ff; color: var(--navy); font-size: .85rem; font-weight: 600; }
+.packaging__base .icon { width: 16px; height: 16px; }
+.packaging__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.packaging__calc { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; padding: 12px; border-radius: 12px; background: #fff; border: 1px dashed #c4d7fb; }
+.packaging__total { font-size: 1.15rem; font-weight: 800; color: var(--navy); background: #eef4ff; }
+.packaging__chain { grid-column: 1 / -1; margin: 0; font-weight: 700; color: var(--navy); }
+.packaging__calc .ff__hint { grid-column: 1 / -1; }
+.lines__qty { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
+.lines__qty select { width: auto; min-width: 90px; }
+.lines__chain, .stock-lines__chain { display: block; text-align: right; white-space: normal; max-width: 260px; margin-left: auto; color: var(--navy); font-weight: 600; }
+.stock-lines__chain { flex-basis: 100%; text-align: left; max-width: none; padding-left: 52px; font-size: .8rem; }
+.stock-lines li:has(.stock-lines__chain) { flex-wrap: wrap; }
+.unit-picker { width: auto; min-width: 90px; }
+.qty-unit { display: flex; gap: 8px; }
+.qty-unit .input:first-child { flex: 1; }
+.pos2__unit { display: inline-flex; align-items: center; gap: 6px; }
+.pos2__unit select { min-height: 26px; padding: 0 6px; border: 1px solid #c9d8fb; border-radius: 7px; background: #fff; font-size: .78rem; font-weight: 600; color: var(--navy); }
+.pos2__unit small { color: var(--muted); font-size: .74rem; }
+.receive-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.receive-list li { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid #e8ebf3; border-radius: 12px; }
+.receive-list li span { color: var(--muted); font-size: .85rem; }
+@media (max-width: 760px) {
+  .packaging__row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .packaging__calc { grid-template-columns: 1fr; }
+}
+
+.table td.nowrap, .pos2__unit small { white-space: nowrap; }

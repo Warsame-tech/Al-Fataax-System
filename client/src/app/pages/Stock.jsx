@@ -7,6 +7,21 @@ import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, M
 import { fill, qty, date } from "../format.js";
 import ProductPicker, { FoundCard } from "../ProductPicker.jsx";
 import { useDraft, DraftBar } from "../Drafts.jsx";
+import { unitsOf, unitsPer, breakdown } from "../packaging.js";
+
+/* Packaged products (pharmacy) can be counted in a pack (carton, box…); stock is saved in base units. */
+const baseQty = (product, amount, unit) => Math.round((Number(amount) || 0) * (unit ? unitsPer(product, unit) || 1 : 1) * 1000) / 1000;
+function UnitPicker({ product, value, onChange }) {
+  const { t } = useLanguage();
+  const list = unitsOf(product, "all");
+  const label = (u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
+  if (list.length < 2) return <span>{label(product.unit)}</span>;
+  return (
+    <select className="input input--sm unit-picker" value={value || product.unit} onChange={(e) => onChange(e.target.value === product.unit ? null : e.target.value)} aria-label={t("ui.products.unit")}>
+      {list.map((u) => <option key={u.name} value={u.name}>{u.name === product.unit ? label(u.name) : u.name}</option>)}
+    </select>
+  );
+}
 
 /*
  * Stock Management module. Tabs (shown by permission):
@@ -235,11 +250,11 @@ function AddStock({ locationsApi }) {
   };
   const setQty = (pid, v) => setLines((ls) => ls.map((l) => (l.product.id === pid ? { ...l, qty: v } : l)));
   const invalid = lines.filter((l) => !(Number(l.qty) > 0));
-  const totalUnits = r3(lines.reduce((s, l) => s + (Number(l.qty) || 0), 0));
+  const totalUnits = r3(lines.reduce((s, l) => s + baseQty(l.product, l.qty, l.unit), 0));
 
   const save = async () => {
     const body = { ...f, locationId, supplierId: f.type === "purchase" ? f.supplierId || null : null,
-      items: lines.map((l) => ({ productId: l.product.id, qty: Number(l.qty), batchNo: l.batchNo || "", expiryDate: l.expiryDate || "" })) };
+      items: lines.map((l) => ({ productId: l.product.id, qty: baseQty(l.product, l.qty, l.unit), batchNo: l.batchNo || "", expiryDate: l.expiryDate || "" })) };
     const r = await sub.run(() => apiRequest("/api/stock/add", { method: "POST", body }));
     setConfirming(false);
     if (r) { draft.finish(); setDone(fill(t("ui.stock.addDone"), { n: r.count, location: locationName })); setLines([]); setF((x) => ({ ...x, reference: "", notes: "" })); }
@@ -282,8 +297,9 @@ function AddStock({ locationsApi }) {
                 <div className="stock-lines__name"><strong>{l.product.name}</strong><small>{[l.product.barcode, l.product.sku].filter(Boolean).join(" · ")} · {fill(t("ui.stock.totalNow"), { qty: qty(l.product.totalStock ?? l.product.stock), unit: l.product.unit })}</small></div>
                 <label className="stock-lines__qty">
                   <input ref={(el) => { qtyRefs.current[l.product.id] = el; }} className={"input" + (l.qty !== "" && !(Number(l.qty) > 0) ? " has-error" : "")} type="number" min="0" step="any" value={l.qty} onChange={(e) => setQty(l.product.id, e.target.value)} placeholder="0" aria-label={t("ui.common.qty")} />
-                  <span>{l.product.unit}</span>
+                  <UnitPicker product={l.product} value={l.unit} onChange={(unit) => setLines((ls) => ls.map((x) => (x.product.id === l.product.id ? { ...x, unit } : x)))} />
                 </label>
+                {l.unit && Number(l.qty) > 0 && <small className="stock-lines__chain">{breakdown(l.product, l.unit, l.qty)}</small>}
                 <button type="button" className="icon-btn" onClick={() => setLines((ls) => ls.filter((x) => x.product.id !== l.product.id))} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
                 {l.product.trackBatches && (
                   <div className="stock-lines__batch">
@@ -306,7 +322,7 @@ function AddStock({ locationsApi }) {
         <Modal title={t("ui.stock.confirmAdd")} onClose={() => setConfirming(false)}>
           <div className="form-grid">
             <p className="modal__help">{fill(t("ui.stock.confirmAddHelp"), { location: locationName, type: t(`ui.stock.types.${f.type}`) })}</p>
-            <ul className="pay-list">{lines.map((l) => <li key={l.product.id}><strong>+{qty(l.qty)} {l.product.unit}</strong> · {l.product.name}{(l.batchNo || l.expiryDate) && <small className="muted"> · {[l.batchNo && `${t("ui.products.batchNo")} ${l.batchNo}`, l.expiryDate && `${t("ui.products.expiryDate")} ${l.expiryDate}`].filter(Boolean).join(" · ")}</small>}</li>)}</ul>
+            <ul className="pay-list">{lines.map((l) => <li key={l.product.id}><strong>+{qty(baseQty(l.product, l.qty, l.unit))} {l.product.unit}</strong>{l.unit ? <small className="muted"> ({qty(l.qty)} {l.unit})</small> : null} · {l.product.name}{(l.batchNo || l.expiryDate) && <small className="muted"> · {[l.batchNo && `${t("ui.products.batchNo")} ${l.batchNo}`, l.expiryDate && `${t("ui.products.expiryDate")} ${l.expiryDate}`].filter(Boolean).join(" · ")}</small>}</li>)}</ul>
             <div className="form-actions sheet-actions">
               <button type="button" className="btn btn--outline" onClick={() => setConfirming(false)}>{t("ui.common.cancel")}</button>
               <button type="button" className="btn btn--primary" disabled={sub.busy} onClick={save}>{t(sub.busy ? "ui.common.saving" : "ui.stock.confirm")}</button>
@@ -331,7 +347,7 @@ function OpeningStock({ locationsApi }) {
   const locationId = f.locationId || defaultLocation(locationsApi);
   const here = (ps.data?.locations || []).find((l) => String(l.locationId) === String(locationId));
   const save = async () => {
-    const r = await sub.run(() => apiRequest("/api/stock/opening", { method: "POST", body: { productId: product.id, locationId, qty: f.qty, reference: f.reference, notes: f.notes, batchNo: f.batchNo, expiryDate: f.expiryDate } }));
+    const r = await sub.run(() => apiRequest("/api/stock/opening", { method: "POST", body: { productId: product.id, locationId, qty: baseQty(product, f.qty, f.unit), reference: f.reference, notes: f.notes, batchNo: f.batchNo, expiryDate: f.expiryDate } }));
     setConfirming(false);
     if (r) { setDone(fill(t("ui.stock.openingDone"), { name: product.name, qty: qty(r.after), location: here?.location || "" })); setProduct(null); setF({ ...f, qty: "", reference: "", notes: "", batchNo: "", expiryDate: "" }); }
   };
@@ -339,13 +355,17 @@ function OpeningStock({ locationsApi }) {
     <div className="stock-form">
       <p className="page-help"><Icon name="info" /> {t("ui.stock.openingHelp")}</p>
       <section className="panel-card form-grid">
-        <ProductPicker onPick={(p) => { setProduct(p); setDone(null); }} autoFocus />
+        <ProductPicker onPick={(p) => { setProduct(p); setDone(null); setF((x) => ({ ...x, unit: null })); }} autoFocus />
         {product && <FoundCard product={ps.data?.product || product} onClear={() => setProduct(null)} stockLabel={ps.data && fill(t("ui.stock.totalNow"), { qty: qty(ps.data.product.total), unit: ps.data.product.unit })} />}
         {product && (
           <div className="form-grid form-grid--2">
             <LocationSelect locationsApi={locationsApi} value={locationId} onChange={(v) => setF({ ...f, locationId: v })} />
-            <Field label={`${t("ui.stock.openingQty")} (${(ps.data?.product || product).unit})`} error={sub.fieldErrors.qty}>
-              <input className="input" type="number" min="0" step="any" value={f.qty} onChange={(e) => setF({ ...f, qty: e.target.value })} />
+            <Field label={product.packaging?.length ? t("ui.stock.openingQty") : `${t("ui.stock.openingQty")} (${(ps.data?.product || product).unit})`} error={sub.fieldErrors.qty}
+              hint={f.unit && Number(f.qty) > 0 ? breakdown(product, f.unit, f.qty) : undefined}>
+              <div className="qty-unit">
+                <input className="input" type="number" min="0" step="any" value={f.qty} onChange={(e) => setF({ ...f, qty: e.target.value })} />
+                {product.packaging?.length > 0 && <UnitPicker product={product} value={f.unit} onChange={(unit) => setF({ ...f, unit })} />}
+              </div>
             </Field>
             <Field label={`${t("ui.stock.reference")} ${t("ui.common.optional")}`}><input className="input" value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} /></Field>
             <Field label={`${t("ui.common.notes")} ${t("ui.common.optional")}`}><input className="input" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
@@ -367,7 +387,7 @@ function OpeningStock({ locationsApi }) {
             <dl className="adj-preview">
               <div><dt>{t("ui.common.product")}</dt><dd>{product.name}</dd></div>
               <div><dt>{t("ui.stock.location")}</dt><dd>{here?.location}</dd></div>
-              <div><dt>{t("ui.stock.openingQty")}</dt><dd>{qty(f.qty)} {(ps.data?.product || product).unit}</dd></div>
+              <div><dt>{t("ui.stock.openingQty")}</dt><dd>{qty(baseQty(product, f.qty, f.unit))} {(ps.data?.product || product).unit}{f.unit ? ` (${qty(f.qty)} ${f.unit})` : ""}</dd></div>
             </dl>
             <div className="form-actions sheet-actions">
               <button type="button" className="btn btn--outline" onClick={() => setConfirming(false)}>{t("ui.common.cancel")}</button>

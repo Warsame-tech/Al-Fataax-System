@@ -97,7 +97,7 @@ export default function Receipt() {
           {items.map((i, k) => (
             <div key={k} className="thermal__row" role="row">
               <span role="cell" className="thermal__name">{i.name}</span>
-              <span role="cell" className="num">{qty(i.qty)}</span>
+              <span role="cell" className="num">{qty(i.qty)}{i.unit ? ` ${i.unit}` : ""}</span>
               <span role="cell" className="num">{m(i.unitPrice)}</span>
               <span role="cell" className="num">{m(i.total)}</span>
             </div>

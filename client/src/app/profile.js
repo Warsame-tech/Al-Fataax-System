@@ -8,10 +8,12 @@ import { useAuth } from "../auth/AuthContext.jsx";
  *   profile.variants        ["size", "shade", "fragrance", "formula", "packSize"]   (cosmetics)
  *   profile.extraBarcodes   packaging barcodes      profile.batches   batch + expiry tracking
  *   profile.hiddenFields    product form fields not used by this business (cosmetics: description)
+ *   profile.medicine        medicine details (generic name, dosage form, manufacturer, supplier, prescription, storage)
+ *   profile.packaging       packs above the base unit (app/packaging.js)   profile.purchaseOrders   order first, receive later
  *   profile.units           units offered in the product form (cosmetics: pcs, bottle, tube, box, carton; null = all)
  *   label("costPrice")      "Purchase cost" for cosmetics, "Cost price" otherwise
  */
-const DEFAULT = { key: "default", variants: ["size"], extraBarcodes: false, batches: false, expirySoonDays: 90, labels: {}, units: null, hiddenFields: [] };
+const DEFAULT = { key: "default", variants: ["size"], extraBarcodes: false, batches: false, expirySoonDays: 90, labels: {}, units: null, hiddenFields: [], medicine: false, packaging: false, purchaseOrders: false };
 
 export function useProfile() {
   const { business } = useAuth();

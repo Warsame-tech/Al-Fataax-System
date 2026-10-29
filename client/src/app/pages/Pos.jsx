@@ -8,6 +8,12 @@ import { fill, qty, date } from "../format.js";
 import CameraScanner from "../CameraScanner.jsx";
 import { VAT_RATE, vatOf } from "../vat.js";
 import { useDraft, DraftBar } from "../Drafts.jsx";
+import { unitsOf, unitsPer, packPrice } from "../packaging.js";
+
+/* A cart line may be sold in a pack of the product (pharmacy: box, strip…); stock is counted in base units. */
+const perOf = (l) => (l.unit ? unitsPer(l.product, l.unit) || 1 : 1);
+const priceOf = (l) => (l.unit ? packPrice(l.product, l.unit) : l.product.sellingPrice);
+const maxOf = (l) => Math.floor((l.product.stock / perOf(l)) * 1000 + 1e-6) / 1000;
 
 export default function Pos() {
   const { t } = useLanguage();
@@ -36,6 +42,7 @@ const SCAN_CARD_MS = 6000;
 
 function Register() {
   const { t } = useLanguage();
+  const unitLabel = (u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
   const m = useMoney();
   const [q, setQ] = useState("");
   const products = useApi(`/api/products?location=default&q=${encodeURIComponent(q)}`);
@@ -65,18 +72,25 @@ function Register() {
   /* n: units to add (1, or the units in a scanned packaging barcode, e.g. a box of 12) */
   const add = (p, n = 1) => {
     if (p.stock <= 0) { setNotice(fill(t("ui.errors.insufficientStock"), { product: p.name, available: qty(p.stock) })); return false; }
-    const inCart = cart.find((l) => l.product.id === p.id)?.qty || 0;
+    const line = cart.find((l) => l.product.id === p.id);
+    const inCart = line ? line.qty * perOf(line) : 0;
     setNotice(inCart + n > p.stock ? fill(t("ui.pos.packCapped"), { qty: qty(p.stock), unit: p.unit }) : null);
     setCart((c) => {
       const found = c.find((l) => l.product.id === p.id);
-      if (found) return c.map((l) => (l.product.id === p.id ? { ...l, qty: Math.min(l.qty + n, p.stock) } : l));
-      return [...c, { product: p, qty: Math.min(n, p.stock) }];
+      if (found) return c.map((l) => (l.product.id === p.id ? { ...l, qty: Math.min(l.qty + (l.unit ? 1 : n), maxOf(l)) } : l));
+      return [...c, { product: p, qty: Math.min(n, p.stock), unit: null }];
     });
     setActive(p.id);
     setPulse((n) => n + 1);
     return true;
   };
-  const setQty = (pid, v) => setCart((c) => c.map((l) => (l.product.id === pid ? { ...l, qty: Math.max(0, Math.min(Number(v) || 0, l.product.stock)) } : l)).filter((l) => l.qty > 0));
+  const setQty = (pid, v) => setCart((c) => c.map((l) => (l.product.id === pid ? { ...l, qty: Math.max(0, Math.min(Number(v) || 0, maxOf(l))) } : l)).filter((l) => l.qty > 0));
+  /* switching a line to another pack starts it at 1 of that pack (if the stock allows it) */
+  const setUnit = (pid, unit) => setCart((c) => c.map((l) => {
+    if (l.product.id !== pid) return l;
+    const next = { ...l, unit: unit === l.product.unit ? null : unit };
+    return { ...next, qty: Math.min(1, maxOf(next)) };
+  }).filter((l) => l.qty > 0));
   const removeLine = (pid) => setCart((c) => c.filter((l) => l.product.id !== pid));
 
   /* Barcode / SKU lookup (USB scanner, camera, or typed code); falls back to a single name match. */
@@ -104,7 +118,7 @@ function Register() {
     codeRef.current?.focus();
   }, [t]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const subtotal = useMemo(() => Math.round(cart.reduce((s, l) => s + l.qty * l.product.sellingPrice, 0) * 10000) / 10000, [cart]);
+  const subtotal = useMemo(() => Math.round(cart.reduce((s, l) => s + l.qty * priceOf(l), 0) * 10000) / 10000, [cart]);
   const itemCount = cart.reduce((s, l) => s + l.qty, 0);
   const customerList = customers.data?.customers || [];
   const customer = customerList.find((c) => String(c.id) === String(customerId)) || null;
@@ -138,11 +152,18 @@ function Register() {
             <li key={active === l.product.id ? `${l.product.id}-${pulse}` : l.product.id} className={"pos2__line" + (active === l.product.id ? " is-active" : "")}
               onClick={() => setActive(l.product.id)} aria-current={active === l.product.id ? "true" : undefined}>
               <div className="pos2__line-top">
-                <span className="pos2__line-name">{l.product.name}</span>
-                <span className="pos2__line-total">{m(l.qty * l.product.sellingPrice)}</span>
+                <span className="pos2__line-name">{l.product.name}{l.product.rxRequired && <span className="rx-tag" title={t("ui.products.rxRequired")}>Rx</span>}</span>
+                <span className="pos2__line-total">{m(l.qty * priceOf(l))}</span>
               </div>
               <div className="pos2__line-bottom">
-                <small>{fill(t("ui.pos.unitsAt"), { qty: qty(l.qty), price: m(l.product.sellingPrice) })}</small>
+                {unitsOf(l.product, "sell").length > 1 ? (
+                  <span className="pos2__unit" onClick={(e) => e.stopPropagation()}>
+                    <select value={l.unit || l.product.unit} onChange={(e) => setUnit(l.product.id, e.target.value)} aria-label={t("ui.pos.sellUnit")}>
+                      {unitsOf(l.product, "sell").map((u) => <option key={u.name} value={u.name}>{u.name === l.product.unit ? unitLabel(u.name) : `${u.name} (${qty(u.per)})`}</option>)}
+                    </select>
+                    <small>{fill(t("ui.pos.atPrice"), { price: m(priceOf(l)) })}</small>
+                  </span>
+                ) : <small>{fill(t("ui.pos.unitsAt"), { qty: qty(l.qty), price: m(l.product.sellingPrice) })}</small>}
                 <div className="qty-ctl">
                   <button type="button" onClick={() => setQty(l.product.id, l.qty - 1)} aria-label="−"><Icon name="minus" /></button>
                   <input type="number" min="0" step="any" value={l.qty} onChange={(e) => setQty(l.product.id, e.target.value)} aria-label={t("ui.common.qty")} />
@@ -165,7 +186,7 @@ function Register() {
 
         <DraftBar draft={draft} compact canSave={cart.length > 0}
           title={`${customer?.name || t("ui.pos.walkInDefault")} · ${fill(t("ui.pos.itemsCount"), { n: qty(itemCount) })} · ${m(subtotal)}`}
-          getData={() => ({ customerId, addVat, cart: cart.map((l) => ({ product: l.product, qty: l.qty })) })}
+          getData={() => ({ customerId, addVat, cart: cart.map((l) => ({ product: l.product, qty: l.qty, unit: l.unit || null })) })}
           onLoad={(d) => { setCustomerId(d.customerId || ""); setAddVat(Boolean(d.addVat)); setCart(d.cart || []); setActive(null); }} />
 
         <button type="button" className="pos2__pay" disabled={!cart.length} onClick={() => setPaying(true)}>
@@ -276,7 +297,7 @@ function PaymentModal({ cart, subtotal, customer, addVat, setAddVat, onClose, on
 
   const confirm = async () => {
     const body = {
-      items: cart.map((l) => ({ productId: l.product.id, qty: l.qty })),
+      items: cart.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}) })),
       customerId: customer?.id || null,
       discount: disc || 0,
       vat: addVat,

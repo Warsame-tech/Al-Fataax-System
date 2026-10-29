@@ -41,7 +41,7 @@ export async function createInvoice(conn, ctx, body) {
   const customerId = id(body.customerId);
   if (!customerId) throw badRequest({ customerId: "required" });
   await ensureOwned(conn, "customers", customerId, businessId);
-  const items = Array.isArray(body.items) ? body.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: x?.qty, unitPrice: x?.unitPrice })) : [];
+  const items = Array.isArray(body.items) ? body.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: x?.qty, unitPrice: x?.unitPrice, unit: x?.unit })) : [];
   if (!items.length) throw badRequest({ items: "required" });
 
   const issueDate = isDate(body.issueDate) ? body.issueDate : today();
@@ -72,8 +72,8 @@ export async function createInvoice(conn, ctx, body) {
   );
   for (const l of lines) {
     await conn.query(
-      `INSERT INTO invoice_items (business_id, invoice_id, product_id, qty, unit_price, unit_cost, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [businessId, r.insertId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal]
+      `INSERT INTO invoice_items (business_id, invoice_id, product_id, qty, unit_price, unit_cost, line_total, sell_unit, sell_qty, sell_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [businessId, r.insertId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null]
     );
     await moveStock(conn, { businessId, userId, product: l.product, qtyChange: -l.qty, type: "invoice", refType: "invoice", refId: r.insertId });
   }
@@ -117,7 +117,7 @@ router.get("/:id", requirePerm("invoices.view"), ah(async (req, res) => {
       WHERE i.id = ? AND i.business_id = ?`, [invId, bid]);
   if (!inv) return res.status(404).json({ code: "notFound" });
   const [items] = await pool.query(
-    `SELECT ii.qty, ii.unit_price, ii.discount, ii.line_total, COALESCE(ii.description, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, ''))) name, p.sku, p.barcode
+    `SELECT ii.qty, ii.unit_price, ii.discount, ii.line_total, ii.sell_unit, ii.sell_qty, ii.sell_price, p.unit base_unit, COALESCE(ii.description, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, ''))) name, p.sku, p.barcode
        FROM invoice_items ii JOIN products p ON p.id = ii.product_id AND p.business_id = ii.business_id
       WHERE ii.invoice_id = ? AND ii.business_id = ? ORDER BY ii.id`, [invId, bid]);
   const [payments] = await pool.query("SELECT amount, method, paid_at, reference FROM customer_payments WHERE invoice_id = ? AND business_id = ? ORDER BY paid_at, id", [invId, bid]);
@@ -129,7 +129,9 @@ router.get("/:id", requirePerm("invoices.view"), ah(async (req, res) => {
       balance: round2(num(inv.total) - num(inv.amount_paid)), notes: inv.notes, customerId: inv.customer_id,
       customer: { name: inv.customer_name, phone: inv.bill_phone || inv.customer_phone, email: inv.customer_email, address: inv.bill_address || inv.customer_address }
     },
-    items: items.map((i) => ({ name: i.name, sku: i.sku, barcode: i.barcode || null, qty: num(i.qty), unitPrice: num(i.unit_price), discount: num(i.discount), total: num(i.line_total) })),
+    items: items.map((i) => ({ name: i.name, sku: i.sku, barcode: i.barcode || null, qty: i.sell_unit ? num(i.sell_qty) : num(i.qty),
+      unitPrice: i.sell_unit ? num(i.sell_price) : num(i.unit_price), unit: i.sell_unit || null, baseQty: num(i.qty), baseUnit: i.base_unit,
+      discount: num(i.discount), total: num(i.line_total) })),
     payments: payments.map((p) => ({ amount: num(p.amount), method: p.method, at: p.paid_at, reference: p.reference }))
   });
 }));

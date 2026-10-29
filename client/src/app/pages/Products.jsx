@@ -10,6 +10,7 @@ import CameraScanner from "../CameraScanner.jsx";
 import { FoundCard } from "../ProductPicker.jsx";
 import { useDraft, DraftBar } from "../Drafts.jsx";
 import { useProfile, productLabel, variantText, expiryState } from "../profile.js";
+import { DOSAGE_FORMS, PACK_NAMES, templateFor, unitsPer, breakdown, inPacks, packPrice } from "../packaging.js";
 
 /*
  * Product master data only — stock quantities are entered in the Stock module (opening stock, add stock).
@@ -18,13 +19,15 @@ import { useProfile, productLabel, variantText, expiryState } from "../profile.j
  */
 export const EMPTY = {
   name: "", size: "", shade: "", fragrance: "", formula: "", packSize: "", description: "", sku: "", barcode: "", category: "", subcategory: "", brand: "",
-  unit: "pcs", costPrice: "", sellingPrice: "", wholesalePrice: "", minStock: "", isActive: true, trackBatches: false
+  unit: "pcs", costPrice: "", sellingPrice: "", wholesalePrice: "", minStock: "", isActive: true, trackBatches: false,
+  // pharmacy (profile.medicine)
+  genericName: "", dosageForm: "", manufacturer: "", supplierId: "", rxRequired: false, storageInstructions: ""
 };
+const unitName = (t, u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
 
 /* Units of measurement offered in the product form (a unit already saved on a product stays selectable).
  * A business type can have its own list (profile.units, e.g. cosmetics: pcs, bottle, tube, box, carton). */
 export const UNITS = ["pcs", "bottle", "box", "pack", "carton", "kg", "g", "liter", "ml", "meter", "yard", "roll", "pair", "dozen"];
-const unitName = (t, u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
 
 const NO_FILTERS = { q: "", brandId: "", categoryId: "", subcategory: "", status: "", stockAt: "", supplierId: "", active: "", expiry: "", variantOf: "" };
 const PAGE_SIZE = 25;
@@ -89,7 +92,8 @@ export default function Products() {
     ["name", "size", "shade", "fragrance", "formula", "packSize", "sku", "barcode", "brand", "category", "subcategory", "unit", "costPrice", "sellingPrice", "wholesalePrice", "lowStockAlertLevel", "stock", "status"],
     products.map((p) => [p.baseName ?? p.name, p.size, p.shade, p.fragrance, p.formula, p.packSize, p.sku, p.barcode, p.brand, p.category, p.subcategory, p.unit, p.costPrice, p.sellingPrice,
       p.wholesalePrice ?? "", p.minStock, p.stock, p.isActive ? "active" : "archived"]));
-  const lead = 8 + (showVariant ? 1 : 0);          // columns before "Current stock" (totals row)
+  const hidden = (k) => profile.hiddenFields?.includes(k);
+  const lead = 7 + (showVariant ? 1 : 0) + (hidden("wholesalePrice") ? 0 : 1) + (profile.medicine ? 2 : 0);   // columns before "Current stock" (totals row)
 
   return (
     <div className="page">
@@ -112,10 +116,12 @@ export default function Products() {
           <option value="">{t("ui.products.allCategories")}</option>
           {(o.categories || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
-        <select className="input input--auto" value={f.subcategory} onChange={(e) => set("subcategory", e.target.value)} aria-label={t("ui.products.subcategory")}>
-          <option value="">{t("ui.products.allSubcategories")}</option>
-          {(o.subcategories || []).map((s) => <option key={s} value={s}>{s}</option>)}
-        </select>
+        {!hidden("subcategory") && (
+          <select className="input input--auto" value={f.subcategory} onChange={(e) => set("subcategory", e.target.value)} aria-label={t("ui.products.subcategory")}>
+            <option value="">{t("ui.products.allSubcategories")}</option>
+            {(o.subcategories || []).map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        )}
         <select className="input input--auto" value={f.status} onChange={(e) => set("status", e.target.value)} aria-label={t("ui.stock.stockStatus")}>
           <option value="">{t("ui.stock.allStatuses")}</option>
           {["in", "low", "out", "negative"].map((s) => <option key={s} value={s}>{t(`ui.stock.status.${s}`)}</option>)}
@@ -153,11 +159,12 @@ export default function Products() {
         <div className="table-wrap">
           <table className="table">
             <thead><tr>
-              <Th by="name">{t("ui.common.name")}</Th><Th by="size">{t("ui.products.size")}</Th>
+              <Th by="name">{t("ui.common.name")}</Th><Th by="size">{L("size")}</Th>
               {showVariant && <th>{t("ui.products.variant")}</th>}
-              <Th by="sku">{t("ui.products.sku")}</Th><Th by="brand">{t("ui.products.brand")}</Th><Th by="category">{t("ui.common.category")}</Th>
+              {profile.medicine && <><th>{t("ui.products.dosageForm")}</th><th>{t("ui.products.packagingShort")}</th></>}
+              <Th by="sku">{t("ui.products.sku")}</Th><Th by="brand">{L("brand")}</Th><Th by="category">{L("category")}</Th>
               <Th by="cost" num>{L("costPrice")}</Th><Th by="price" num>{L("sellingPrice")}</Th>
-              <th className="num">{t("ui.products.wholesalePrice")}</th><Th by="stock" num>{t("ui.stock.current")}</Th><th>{t("ui.products.unit")}</th>
+              {!hidden("wholesalePrice") && <th className="num">{t("ui.products.wholesalePrice")}</th>}<Th by="stock" num>{t("ui.stock.current")}</Th><th>{L("unit")}</th>
               <th className="num">{L("lowStockShort")}</th>
               {profile.batches && <Th by="expiry">{t("ui.products.nextExpiry")}</Th>}
               <Th by="value" num>{t("ui.products.stockValue")}</Th><th />
@@ -169,7 +176,8 @@ export default function Products() {
                     <div className="prod-cell">
                       <span className="prod-thumb">{p.imagePath ? <img src={fileUrl(p.imagePath)} alt="" loading="lazy" /> : <Icon name="package" />}</span>
                       <div>
-                        <strong>{p.name}</strong>
+                        <strong>{p.name}</strong>{p.rxRequired && <span className="rx-tag" title={t("ui.products.rxRequired")}>Rx</span>}
+                        {p.genericName && <small className="cell-sub">{p.genericName}</small>}
                         {p.barcode && <small className="cell-sub"><Icon name="barcode" /> {p.barcode}</small>}
                         {!p.isActive && <small className="cell-sub archived-tag">{t("ui.products.statusValues.archived")}</small>}
                         {showVariant && p.variantCount > 1 && !f.variantOf && (
@@ -182,16 +190,21 @@ export default function Products() {
                   </td>
                   <td>{p.size || "—"}</td>
                   {showVariant && <td>{variantText(p) || "—"}</td>}
+                  {profile.medicine && <>
+                    <td>{p.dosageForm ? t(`ui.products.forms.${p.dosageForm}`) : "—"}</td>
+                    <td className="nowrap">{p.packaging.length ? <span title={breakdown(p, p.packaging[0].name, 1, (u) => unitName(t, u))}>{p.packaging.map((l) => `${qty(l.per)}`).join(" × ")}<small className="cell-sub">{p.packaging.map((l) => l.name).join(" › ")} › {unitName(t, p.unit)}</small></span> : "—"}</td>
+                  </>}
                   <td>{p.sku || "—"}</td>
                   <td>{p.brand || "—"}</td>
                   <td>{p.category || "—"}{p.subcategory && <small className="cell-sub">{p.subcategory}</small>}</td>
                   <td className="num"><Money value={p.costPrice} /></td>
                   <td className="num"><Money value={p.sellingPrice} /></td>
-                  <td className="num">{p.wholesalePrice === null ? "—" : <Money value={p.wholesalePrice} />}</td>
+                  {!hidden("wholesalePrice") && <td className="num">{p.wholesalePrice === null ? "—" : <Money value={p.wholesalePrice} />}</td>}
                   <td className="num">
                     <span className={"stock-pill" + (p.stockStatus === "low" ? " is-low" : p.stockStatus === "in" ? "" : " is-out")} title={t(`ui.stock.status.${p.stockStatus}`)}>{qty(p.stock)}</span>
+                    {p.packaging?.length > 0 && p.stock > 0 && <small className="cell-sub">{inPacks(p, p.stock, (u) => unitName(t, u))}</small>}
                   </td>
-                  <td>{p.unit}</td>
+                  <td>{unitName(t, p.unit)}</td>
                   <td className="num">{qty(p.minStock)}</td>
                   {profile.batches && <td>{p.trackBatches ? <ExpiryCell value={p.nextExpiry} soonDays={profile.expirySoonDays} /> : <span className="muted">{t("ui.products.notTracked")}</span>}</td>}
                   <td className="num"><Money value={Math.round(p.stock * p.costPrice * 10000) / 10000} /></td>
@@ -256,8 +269,21 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     ...EMPTY, ...product, name: product.baseName ?? product.name, size: product.size || "", shade: product.shade || "", fragrance: product.fragrance || "",
     formula: product.formula || "", packSize: product.packSize || "", description: product.description || "", category: product.category || "",
     subcategory: product.subcategory || "", brand: product.brand || "", sku: product.sku || "", barcode: product.barcode || "",
-    wholesalePrice: product.wholesalePrice ?? "", minStock: product.minStock, trackBatches: Boolean(product.trackBatches)
+    wholesalePrice: product.wholesalePrice ?? "", minStock: product.minStock, trackBatches: Boolean(product.trackBatches),
+    genericName: product.genericName || "", dosageForm: product.dosageForm || "", manufacturer: product.manufacturer || "",
+    supplierId: product.supplierId ? String(product.supplierId) : "", rxRequired: Boolean(product.rxRequired), storageInstructions: product.storageInstructions || ""
   });
+  /* packaging structure (pharmacy): packs above the base unit, largest first */
+  const [pack, setPack] = useState(() => (product.packaging || []).map((l) => ({ ...l, per: l.per, price: l.price ?? "" })));
+  const suppliers = useApi(profile.medicine ? "/api/suppliers" : null);
+  /* choosing a dosage form fills its usual packaging, unless counts were already entered */
+  const chooseForm = (form) => {
+    setF((x) => ({ ...x, dosageForm: form }));
+    if (!form || pack.some((l) => String(l.per).trim())) return;
+    const tpl = templateFor(form);
+    setPack(tpl.packaging);
+    setF((x) => ({ ...x, dosageForm: form, unit: tpl.unit }));
+  };
   const [barcodes, setBarcodes] = useState([]);        // packaging barcodes [{ barcode, label, qty }]
   const details = useApi(isNew ? null : `/api/products/${product.id}/details`);
   useEffect(() => { if (details.data) setBarcodes(details.data.barcodes); }, [details.data]);
@@ -304,6 +330,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     const fd = new FormData();
     Object.keys(EMPTY).forEach((k) => fd.append(k, f[k] === null || f[k] === undefined ? "" : String(f[k])));
     if (profile.extraBarcodes) fd.append("barcodes", JSON.stringify(barcodes.filter((b) => String(b.barcode).trim())));
+    if (profile.packaging) fd.append("packaging", JSON.stringify(pack.filter((l) => String(l.name).trim()).map((l) => ({ ...l, price: l.sell && l.price !== "" ? l.price : null }))));
     if (isNew && f.variantOf) fd.append("variantOf", String(f.variantOf));
     if (image) fd.append("image", image);
     if (removeImage) fd.append("removeImage", "true");
@@ -367,23 +394,55 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
 
         {profile.variants.length > 1 && <p className="form-sub ff--full"><Icon name="layers" /> {t("ui.products.variantSection")}</p>}
         {profile.variants.map((v) => (
-          <Field key={v} label={`${t(`ui.products.${v}`)} ${t("ui.common.optional")}`} error={err[v]}>
-            <input className="input" value={f[v]} onChange={set(v)} placeholder={t(`ui.products.${v}Ph`)} />
+          <Field key={v} label={`${L(v)} ${t("ui.common.optional")}`} error={err[v]}>
+            <input className="input" value={f[v]} onChange={set(v)} placeholder={t(`ui.products.${profile.labels?.[v] || v}Ph`)} />
           </Field>
         ))}
+        {profile.medicine && (
+          <>
+            <Field label={`${t("ui.products.genericName")} ${t("ui.common.optional")}`}><input className="input" value={f.genericName} onChange={set("genericName")} placeholder={t("ui.products.genericNamePh")} /></Field>
+            <Field label={t("ui.products.dosageForm")}>
+              <select className="input" value={f.dosageForm} onChange={(e) => chooseForm(e.target.value)}>
+                <option value="">{t("ui.common.choose")}</option>
+                {Object.keys(DOSAGE_FORMS).map((k) => <option key={k} value={k}>{t(`ui.products.forms.${k}`)}</option>)}
+              </select>
+            </Field>
+          </>
+        )}
         <p className="ff__hint ff--full">{f.name && fullName !== f.name ? fill(t("ui.products.showsAs"), { name: fullName }) : t(profile.variants.length > 1 ? "ui.products.variantHint" : "ui.products.sizeHint")}</p>
 
         {!profile.hiddenFields?.includes("description") && <Field label={`${t("ui.common.description")} ${t("ui.common.optional")}`} full><textarea className="input" rows={2} value={f.description} onChange={set("description")} /></Field>}
-        <Field label={t("ui.products.brand")}><input className="input" value={f.brand} onChange={set("brand")} list="brand-options" /></Field>
-        <Field label={t("ui.common.category")}><input className="input" value={f.category} onChange={set("category")} list="category-options" /></Field>
-        <Field label={`${t("ui.products.subcategory")} ${t("ui.common.optional")}`}><input className="input" value={f.subcategory} onChange={set("subcategory")} /></Field>
-        <Field label={t("ui.products.unit")}>
+        <Field label={L("brand")}><input className="input" value={f.brand} onChange={set("brand")} list="brand-options" /></Field>
+        <Field label={L("category")}><input className="input" value={f.category} onChange={set("category")} list="category-options" /></Field>
+        {!profile.hiddenFields?.includes("subcategory") && <Field label={`${t("ui.products.subcategory")} ${t("ui.common.optional")}`}><input className="input" value={f.subcategory} onChange={set("subcategory")} /></Field>}
+        {profile.medicine && (
+          <>
+            <Field label={`${t("ui.products.manufacturer")} ${t("ui.common.optional")}`}><input className="input" value={f.manufacturer} onChange={set("manufacturer")} /></Field>
+            <Field label={`${t("ui.common.supplier")} ${t("ui.common.optional")}`} error={err.supplierId}>
+              <select className="input" value={f.supplierId} onChange={set("supplierId")}>
+                <option value="">—</option>
+                {(suppliers.data?.suppliers || []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            </Field>
+          </>
+        )}
+        <Field label={L("unit")} hint={profile.packaging ? t("ui.products.baseUnitHint") : undefined}>
           <select className="input" value={f.unit} onChange={set("unit")}>{units.map((u) => <option key={u} value={u}>{unitName(t, u)}</option>)}</select>
         </Field>
+        {profile.packaging && <PackagingEditor pack={pack} setPack={setPack} unit={f.unit} sellingPrice={f.sellingPrice} errors={err} />}
         <Field label={L("costPrice")} error={err.costPrice}><input className="input" type="number" min="0" step="any" value={f.costPrice} onChange={set("costPrice")} /></Field>
         <Field label={L("sellingPrice")} error={err.sellingPrice}><input className="input" type="number" min="0" step="any" value={f.sellingPrice} onChange={set("sellingPrice")} /></Field>
-        <Field label={`${t("ui.products.wholesalePrice")} ${t("ui.common.optional")}`} error={err.wholesalePrice}><input className="input" type="number" min="0" step="any" value={f.wholesalePrice} onChange={set("wholesalePrice")} /></Field>
+        {!profile.hiddenFields?.includes("wholesalePrice") && <Field label={`${t("ui.products.wholesalePrice")} ${t("ui.common.optional")}`} error={err.wholesalePrice}><input className="input" type="number" min="0" step="any" value={f.wholesalePrice} onChange={set("wholesalePrice")} /></Field>}
         <Field label={L("lowStockAlert")} error={err.minStock} hint={t("ui.products.lowStockAlertHint")}><input className="input" type="number" min="0" step="any" value={f.minStock} onChange={set("minStock")} /></Field>
+        {profile.medicine && (
+          <>
+            <div className="ff">
+              <label className="checkbox"><input type="checkbox" checked={f.rxRequired} onChange={set("rxRequired")} /><span>{t("ui.products.rxRequired")}</span></label>
+              <small className="ff__hint">{t("ui.products.rxHint")}</small>
+            </div>
+            <Field label={`${t("ui.products.storage")} ${t("ui.common.optional")}`}><input className="input" value={f.storageInstructions} onChange={set("storageInstructions")} placeholder={t("ui.products.storagePh")} maxLength={255} /></Field>
+          </>
+        )}
         <Field label={t("ui.products.productStatus")}>
           <select className="input" value={f.isActive ? "active" : "archived"} onChange={(e) => setF((x) => ({ ...x, isActive: e.target.value === "active" }))}>
             <option value="active">{t("ui.products.statusValues.active")}</option>
@@ -442,6 +501,75 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
       </form>
       {camera && <CameraScanner onCode={(code) => { setCamera(false); checkBarcode(code); }} onClose={() => setCamera(false)} />}
     </Modal>
+  );
+}
+
+/*
+ * Packaging structure (pharmacy): e.g. Carton → Box → Strip → tablet, with "Boxes per Carton", "Strips per Box",
+ * "Tablets per Strip" and a calculator: Cartons × … = total tablets (updates as you type; it does not add stock).
+ */
+function PackagingEditor({ pack, setPack, unit, sellingPrice, errors }) {
+  const { t, lang } = useLanguage();
+  // English labels use plurals: "Boxes per Carton", "Tablets per Strip"
+  const many = (w) => (lang !== "en" || !w || w === "…" ? w : (w[0].toUpperCase() + w.slice(1)).replace(/(x|s|ch|sh)$/i, "$1e") + "s");
+  const m = useMoney();
+  const [calc, setCalc] = useState("");
+  const base = unitName(t, unit);
+  const product = { unit, packaging: pack, sellingPrice: Number(sellingPrice) || 0 };
+  const setLevel = (i, k, v) => setPack((list) => list.map((l, j) => (j === i ? { ...l, [k]: v } : l)));
+  const childOf = (i) => (i + 1 < pack.length ? pack[i + 1].name || "…" : base);
+  const top = pack[0];
+  const total = top ? unitsPer(product, top.name) : null;
+  const calcTotal = total && Number(calc) > 0 ? Math.round(Number(calc) * total * 1000) / 1000 : null;
+  return (
+    <div className="ff ff--full packaging">
+      <span className="ff__label">{t("ui.products.packagingTitle")}</span>
+      <small className="ff__hint">{fill(t("ui.products.packagingHint"), { unit: base })}</small>
+      {pack.map((l, i) => (
+        <div key={i} className="packaging__row">
+          <input className={"input" + (errors[`packaging.${i}.name`] ? " has-error" : "")} value={l.name} onChange={(e) => setLevel(i, "name", e.target.value)}
+            list="pack-names" placeholder={t("ui.products.packName")} aria-label={t("ui.products.packName")} />
+          <label className="packaging__per">
+            <span>{fill(t("ui.products.perLabel"), { child: many(childOf(i)), pack: l.name || "…" })}</span>
+            <input className={"input" + (errors[`packaging.${i}.per`] ? " has-error" : "")} type="number" min="0" step="any" inputMode="numeric" value={l.per}
+              onChange={(e) => setLevel(i, "per", e.target.value)} />
+          </label>
+          <label className="checkbox packaging__flag"><input type="checkbox" checked={l.buy !== false} onChange={(e) => setLevel(i, "buy", e.target.checked)} /><span>{t("ui.products.buyUnit")}</span></label>
+          <label className="checkbox packaging__flag"><input type="checkbox" checked={Boolean(l.sell)} onChange={(e) => setLevel(i, "sell", e.target.checked)} /><span>{t("ui.products.sellUnit")}</span></label>
+          {l.sell ? (
+            <label className="packaging__price">
+              <span>{fill(t("ui.products.pricePer"), { pack: l.name || "…" })}</span>
+              <input className={"input" + (errors[`packaging.${i}.price`] ? " has-error" : "")} type="number" min="0" step="any" value={l.price}
+                onChange={(e) => setLevel(i, "price", e.target.value)} placeholder={unitsPer(product, l.name) ? m(packPrice(product, l.name)) : ""} />
+            </label>
+          ) : <span />}
+          <button type="button" className="icon-btn" onClick={() => setPack((list) => list.filter((_, j) => j !== i))} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
+        </div>
+      ))}
+      <div className="packaging__base"><Icon name="package" /> {fill(t("ui.products.baseUnitRow"), { unit: base })}</div>
+      {errors.packaging && <span className="ff__error">{t("ui.products.packSameAsUnit")}</span>}
+      <div className="packaging__actions">
+        <button type="button" className="btn btn--outline btn--sm" onClick={() => setPack((list) => [{ name: "", per: "", buy: true, sell: false, price: "" }, ...list])}><Icon name="plus" /><span>{t("ui.products.addLargerPack")}</span></button>
+        <button type="button" className="btn btn--outline btn--sm" onClick={() => setPack((list) => [...list, { name: "", per: "", buy: false, sell: true, price: "" }])}><Icon name="plus" /><span>{fill(t("ui.products.addSmallerPack"), { unit: base })}</span></button>
+      </div>
+      {top && (
+        <div className="packaging__calc">
+          <label>
+            <span>{fill(t("ui.products.calcQty"), { pack: many(top.name || "…") })}</span>
+            <input className="input" type="number" min="0" step="any" value={calc} onChange={(e) => setCalc(e.target.value)} placeholder="0" />
+          </label>
+          <label>
+            <span>{fill(t("ui.products.calcTotal"), { unit: many(base) })}</span>
+            <input className="input packaging__total" readOnly tabIndex={-1} value={calcTotal === null ? "" : qty(calcTotal)} placeholder={total ? "0" : t("ui.products.calcIncomplete")} />
+          </label>
+          <p className="packaging__chain">
+            {total ? (Number(calc) > 0 ? breakdown(product, top.name, calc, (u) => unitName(t, u)) : breakdown(product, top.name, 1, (u) => unitName(t, u))) : t("ui.products.calcIncomplete")}
+          </p>
+          <small className="ff__hint">{t("ui.products.calcHint")}</small>
+        </div>
+      )}
+      <datalist id="pack-names">{PACK_NAMES.map((n) => <option key={n} value={n} />)}</datalist>
+    </div>
   );
 }
 
