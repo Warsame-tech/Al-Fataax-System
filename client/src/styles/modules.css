@@ -1076,3 +1076,42 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 }
 
 .table td.nowrap, .pos2__unit small { white-space: nowrap; }
+
+/* ---------- Electronics: serial / IMEI devices, specs, warranties ---------- */
+.track-tag { display: inline-block; padding: 0 6px; border-radius: 6px; background: #eef1ff; color: #2c3494; font-size: .68rem; font-weight: 800; }
+.specs { display: grid; gap: 8px; padding: 12px; border: 1px solid #e3e6ef; border-radius: 14px; background: #fafbfe; }
+.specs .ff__label { display: flex; align-items: center; gap: 6px; }
+.specs .ff__label .icon { width: 15px; height: 15px; }
+.specs__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 8px 10px; }
+.specs__field { display: grid; gap: 3px; font-size: .78rem; font-weight: 600; color: var(--ink-2, #4a5170); }
+.device-entry { display: grid; gap: 6px; margin-top: 8px; padding: 10px; border-radius: 10px; background: #f5f8ff; border: 1px dashed #c4d7fb; }
+.device-entry__head { margin: 0; font-size: .8rem; font-weight: 700; color: var(--navy); }
+.device-entry__row { display: grid; grid-template-columns: 26px repeat(auto-fit, minmax(130px, 1fr)); gap: 6px; align-items: center; }
+.device-entry__no { font-size: .75rem; font-weight: 700; color: var(--muted); text-align: right; }
+.device-picker__search { display: flex; align-items: center; gap: 8px; }
+.device-picker__search .icon { width: 20px; height: 20px; color: var(--navy); }
+.device-picker__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; max-height: 340px; overflow: auto; }
+.device-picker__item { display: flex; align-items: center; gap: 10px; padding: 8px 10px; border: 1px solid #e8ebf3; border-radius: 10px; cursor: pointer; font-size: .88rem; }
+.device-picker__item.is-on { background: #eaf2fe; border-color: #9dbcf8; }
+.device-picker__item small { margin-left: auto; }
+.pos2__devices { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 1px; font-size: .74rem; color: var(--navy); }
+.pos2__devices li::before { content: "• "; color: var(--muted); }
+.pos2__devbtn { display: inline-flex; align-items: center; gap: 4px; min-height: 26px; padding: 0 8px; border: 1px solid #c9d8fb; border-radius: 7px; background: #fff; font-size: .78rem; font-weight: 700; color: var(--navy); cursor: pointer; }
+.pos2__devbtn .icon { width: 13px; height: 13px; }
+.device-status, .warranty-status { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef1f7; font-size: .76rem; font-weight: 700; white-space: nowrap; }
+.device-status.is-available, .warranty-status.is-active, .warranty-status.is-resolved { background: #e7f6ee; color: #146c43; }
+.device-status.is-sold { background: #eef1ff; color: #2c3494; }
+.device-status.is-defective, .device-status.is-lost, .warranty-status.is-rejected, .warranty-status.is-expired { background: #fde8e8; color: #b42318; }
+.warranty-status.is-claim_submitted, .warranty-status.is-under_review { background: #fff4e0; color: #9a5b00; }
+.timeline { list-style: none; margin: 0; padding: 0 0 0 14px; display: grid; gap: 10px; border-left: 2px solid #e3e6ef; }
+.timeline li { display: grid; gap: 2px; position: relative; }
+.timeline li::before { content: ""; position: absolute; left: -20px; top: 5px; width: 10px; height: 10px; border-radius: 50%; background: var(--blue); }
+.timeline small { color: var(--muted); }
+.chip-list { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-list li { padding: 4px 10px; border-radius: 999px; background: #eef1ff; font-size: .82rem; font-weight: 600; }
+.receive-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.receive-grid label { display: grid; gap: 3px; font-size: .76rem; font-weight: 600; color: var(--ink-2, #4a5170); }
+.thermal__device, .invoice__device { display: block; font-size: .72em; font-weight: 400; }
+.input--type-sm { font-weight: 700; }
+@media (max-width: 560px) { .receive-grid { grid-template-columns: 1fr 1fr; } }
+.device-entry .input, .receive-grid .input, .receive-list .batch-fields .input { width: 100%; max-width: none; text-align: left; }

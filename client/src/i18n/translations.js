@@ -326,7 +326,9 @@ const translations = {
         staff: "Staff & roles",
         subscription: "Subscription",
         settings: "Settings",
-        audit: "Activity log"
+        audit: "Activity log",
+        devices: "Devices (serial / IMEI)",
+        warranties: "Warranties"
       },
       coming: {
         title: "{name} is coming next",
@@ -743,7 +745,9 @@ const translations = {
         staff: "Shaqaalaha & doorarka",
         subscription: "Xirmada",
         settings: "Dejinta",
-        audit: "Diiwaanka dhaqdhaqaaqa"
+        audit: "Diiwaanka dhaqdhaqaaqa",
+        devices: "Qalabka (serial / IMEI)",
+        warranties: "Dammaanadaha"
       },
       coming: {
         title: "{name} ayaa xiga",

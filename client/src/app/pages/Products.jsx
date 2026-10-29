@@ -11,6 +11,7 @@ import { FoundCard } from "../ProductPicker.jsx";
 import { useDraft, DraftBar } from "../Drafts.jsx";
 import { useProfile, productLabel, variantText, expiryState } from "../profile.js";
 import { DOSAGE_FORMS, PACK_NAMES, templateFor, unitsPer, breakdown, inPacks, packPrice } from "../packaging.js";
+import { PRODUCT_TYPES, TRACKING, typeOf, specFieldsFor, variantFromSpecs, trackingShort } from "../electronics.js";
 
 /*
  * Product master data only — stock quantities are entered in the Stock module (opening stock, add stock).
@@ -21,22 +22,30 @@ export const EMPTY = {
   name: "", size: "", shade: "", fragrance: "", formula: "", packSize: "", description: "", sku: "", barcode: "", category: "", subcategory: "", brand: "",
   unit: "pcs", costPrice: "", sellingPrice: "", wholesalePrice: "", minStock: "", isActive: true, trackBatches: false,
   // pharmacy (profile.medicine)
-  genericName: "", dosageForm: "", manufacturer: "", supplierId: "", rxRequired: false, storageInstructions: ""
+  genericName: "", dosageForm: "", manufacturer: "", supplierId: "", rxRequired: false, storageInstructions: "",
+  // electronics (profile.electronics / serials / warranties)
+  productType: "", modelNumber: "", countryOfOrigin: "", notes: "", tracking: "qty", minPrice: "", warrantyMonths: "", warrantyProvider: "", warrantyTerms: ""
 };
 const unitName = (t, u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
+/* full unit names for dropdowns ("Piece", "Meter"…), falling back to the short ones */
+const unitFull = (t, u) => (t(`ui.products.unitNames.${u}`).startsWith("ui.") ? unitName(t, u) : t(`ui.products.unitNames.${u}`));
 
 /* Units of measurement offered in the product form (a unit already saved on a product stays selectable).
  * A business type can have its own list (profile.units, e.g. cosmetics: pcs, bottle, tube, box, carton). */
 export const UNITS = ["pcs", "bottle", "box", "pack", "carton", "kg", "g", "liter", "ml", "meter", "yard", "roll", "pair", "dozen"];
 
-const NO_FILTERS = { q: "", brandId: "", categoryId: "", subcategory: "", status: "", stockAt: "", supplierId: "", active: "", expiry: "", variantOf: "" };
+const NO_FILTERS = { q: "", brandId: "", categoryId: "", subcategory: "", status: "", stockAt: "", supplierId: "", active: "", expiry: "", variantOf: "", productType: "" };
 const PAGE_SIZE = 25;
 
 /* A new variant starts from the product it belongs to: same name, brand, category, prices; new variant fields and codes. */
 const variantTemplate = (p) => ({
   ...EMPTY, name: p.baseName ?? p.name, brand: p.brand || "", category: p.category || "", subcategory: p.subcategory || "", description: p.description || "",
   unit: p.unit, costPrice: p.costPrice, sellingPrice: p.sellingPrice, wholesalePrice: p.wholesalePrice ?? "", minStock: p.minStock,
-  trackBatches: Boolean(p.trackBatches), variantOf: p.id
+  trackBatches: Boolean(p.trackBatches), variantOf: p.id,
+  // electronics: same type, model, maker, supplier, tracking, warranty and specs (the variant changes the ones that differ)
+  productType: p.productType || "", modelNumber: p.modelNumber || "", manufacturer: p.manufacturer || "", supplierId: p.supplierId ? String(p.supplierId) : "",
+  countryOfOrigin: p.countryOfOrigin || "", tracking: p.tracking || "qty", minPrice: p.minPrice ?? "", warrantyMonths: p.warrantyMonths ?? "",
+  warrantyProvider: p.warrantyProvider || "", warrantyTerms: p.warrantyTerms || "", specs: { ...(p.specs || {}) }
 });
 
 function ExpiryCell({ value, soonDays }) {
@@ -56,6 +65,8 @@ export default function Products() {
   const profile = useProfile();
   const L = (k) => productLabel(t, profile, k);
   const showVariant = profile.variants.some((v) => v !== "size");
+  const groups = showVariant || profile.variantGroups;          // product families: "Add variant", "n variants"
+  const [specSettings, setSpecSettings] = useState(false);
   const [f, setF] = useState(NO_FILTERS);
   const [sort, setSort] = useState({ by: "name", dir: "asc" });
   const [page, setPage] = useState(1);
@@ -93,12 +104,13 @@ export default function Products() {
     products.map((p) => [p.baseName ?? p.name, p.size, p.shade, p.fragrance, p.formula, p.packSize, p.sku, p.barcode, p.brand, p.category, p.subcategory, p.unit, p.costPrice, p.sellingPrice,
       p.wholesalePrice ?? "", p.minStock, p.stock, p.isActive ? "active" : "archived"]));
   const hidden = (k) => profile.hiddenFields?.includes(k);
-  const lead = 7 + (showVariant ? 1 : 0) + (hidden("wholesalePrice") ? 0 : 1) + (profile.medicine ? 2 : 0);   // columns before "Current stock" (totals row)
+  const lead = 7 + (showVariant ? 1 : 0) + (hidden("wholesalePrice") ? 0 : 1) + (profile.medicine ? 2 : 0) + (profile.electronics ? 2 : 0);   // columns before "Current stock" (totals row)
 
   return (
     <div className="page">
       <PageHeader icon="package" title={t("ui.products.title")} actions={
         <>
+          {can("settings.edit") && profile.electronics && <button type="button" className="btn btn--outline" onClick={() => setSpecSettings(true)}><Icon name="layers" /><span>{t("ui.products.specFields")}</span></button>}
           {can("settings.edit") && <button type="button" className="btn btn--outline" onClick={() => setSettings(true)}><Icon name="settings" /><span>{t("ui.products.settings")}</span></button>}
           <button type="button" className="btn btn--outline" onClick={exportCsv}><Icon name="download" /><span>{t("ui.common.exportCsv")}</span></button>
           {can("products.edit") && <button type="button" className="btn btn--outline" onClick={() => setImporting(true)}><Icon name="upload" /><span>{t("ui.products.import")}</span></button>}
@@ -126,6 +138,12 @@ export default function Products() {
           <option value="">{t("ui.stock.allStatuses")}</option>
           {["in", "low", "out", "negative"].map((s) => <option key={s} value={s}>{t(`ui.stock.status.${s}`)}</option>)}
         </select>
+        {profile.electronics && (
+          <select className="input input--auto" value={f.productType} onChange={(e) => set("productType", e.target.value)} aria-label={t("ui.products.productType")}>
+            <option value="">{t("ui.products.allTypes")}</option>
+            {PRODUCT_TYPES.map((x) => <option key={x.key} value={x.key}>{x.key}</option>)}
+          </select>
+        )}
         {profile.batches && (
           <select className="input input--auto" value={f.expiry} onChange={(e) => set("expiry", e.target.value)} aria-label={t("ui.products.expiryFilter")}>
             <option value="">{t("ui.products.expiry.all")}</option>
@@ -162,6 +180,7 @@ export default function Products() {
               <Th by="name">{t("ui.common.name")}</Th><Th by="size">{L("size")}</Th>
               {showVariant && <th>{t("ui.products.variant")}</th>}
               {profile.medicine && <><th>{t("ui.products.dosageForm")}</th><th>{t("ui.products.packagingShort")}</th></>}
+              {profile.electronics && <><th>{t("ui.products.productType")}</th><th>{t("ui.products.modelNumber")}</th></>}
               <Th by="sku">{t("ui.products.sku")}</Th><Th by="brand">{L("brand")}</Th><Th by="category">{L("category")}</Th>
               <Th by="cost" num>{L("costPrice")}</Th><Th by="price" num>{L("sellingPrice")}</Th>
               {!hidden("wholesalePrice") && <th className="num">{t("ui.products.wholesalePrice")}</th>}<Th by="stock" num>{t("ui.stock.current")}</Th><th>{L("unit")}</th>
@@ -180,7 +199,8 @@ export default function Products() {
                         {p.genericName && <small className="cell-sub">{p.genericName}</small>}
                         {p.barcode && <small className="cell-sub"><Icon name="barcode" /> {p.barcode}</small>}
                         {!p.isActive && <small className="cell-sub archived-tag">{t("ui.products.statusValues.archived")}</small>}
-                        {showVariant && p.variantCount > 1 && !f.variantOf && (
+                        {p.tracking && p.tracking !== "qty" && <small className="cell-sub"><span className="track-tag">{trackingShort(p.tracking)}</span></small>}
+                        {groups && p.variantCount > 1 && !f.variantOf && (
                           <button type="button" className="link-btn cell-sub" onClick={() => set("variantOf", String(p.variantOf || p.id))}>
                             <Icon name="layers" /> {fill(t("ui.products.variantsCount"), { n: p.variantCount })}
                           </button>
@@ -190,6 +210,7 @@ export default function Products() {
                   </td>
                   <td>{p.size || "—"}</td>
                   {showVariant && <td>{variantText(p) || "—"}</td>}
+                  {profile.electronics && <><td>{p.productType || "—"}</td><td>{p.modelNumber || "—"}</td></>}
                   {profile.medicine && <>
                     <td>{p.dosageForm ? t(`ui.products.forms.${p.dosageForm}`) : "—"}</td>
                     <td className="nowrap">{p.packaging.length ? <span title={breakdown(p, p.packaging[0].name, 1, (u) => unitName(t, u))}>{p.packaging.map((l) => `${qty(l.per)}`).join(" × ")}<small className="cell-sub">{p.packaging.map((l) => l.name).join(" › ")} › {unitName(t, p.unit)}</small></span> : "—"}</td>
@@ -211,7 +232,7 @@ export default function Products() {
                   <td className="row-actions">
                     <button type="button" className="icon-btn" title={t("ui.products.history")} onClick={() => setHistory(p)}><Icon name="history" /></button>
                     {can("stock.adjust") && p.isActive && <Link className="icon-btn" title={t("ui.stock.adjust")} to={`/app/m/stock?tab=adjust&product=${p.id}`}><Icon name="swap" /></Link>}
-                    {can("products.edit") && showVariant && <button type="button" className="icon-btn" title={t("ui.products.addVariant")} onClick={() => setEditing(variantTemplate(p))}><Icon name="copy" /></button>}
+                    {can("products.edit") && groups && <button type="button" className="icon-btn" title={t("ui.products.addVariant")} onClick={() => setEditing(variantTemplate(p))}><Icon name="copy" /></button>}
                     {can("products.edit") && <button type="button" className="icon-btn" title={t("ui.common.edit")} onClick={() => setEditing(p)}><Icon name="settings" /></button>}
                     {can("products.edit") && (
                       <button type="button" className="icon-btn" title={t(p.isActive ? "ui.products.archive" : "ui.products.restore")} onClick={() => setStatus(p, p.isActive)}>
@@ -250,6 +271,7 @@ export default function Products() {
       {history && <HistoryModal product={history} lang={lang} onClose={() => setHistory(null)} />}
       {importing && <ImportModal onClose={() => setImporting(false)} onDone={() => { setImporting(false); list.reload(); options.reload(); }} />}
       {settings && <ProductSettings onClose={() => setSettings(false)} />}
+      {specSettings && <SpecFieldsSettings onClose={() => setSpecSettings(false)} />}
     </div>
   );
 }
@@ -271,11 +293,27 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     subcategory: product.subcategory || "", brand: product.brand || "", sku: product.sku || "", barcode: product.barcode || "",
     wholesalePrice: product.wholesalePrice ?? "", minStock: product.minStock, trackBatches: Boolean(product.trackBatches),
     genericName: product.genericName || "", dosageForm: product.dosageForm || "", manufacturer: product.manufacturer || "",
-    supplierId: product.supplierId ? String(product.supplierId) : "", rxRequired: Boolean(product.rxRequired), storageInstructions: product.storageInstructions || ""
+    supplierId: product.supplierId ? String(product.supplierId) : "", rxRequired: Boolean(product.rxRequired), storageInstructions: product.storageInstructions || "",
+    productType: product.productType || "", modelNumber: product.modelNumber || "", countryOfOrigin: product.countryOfOrigin || "", notes: product.notes || "",
+    tracking: product.tracking || "qty", minPrice: product.minPrice ?? "", warrantyMonths: product.warrantyMonths ?? "",
+    warrantyProvider: product.warrantyProvider || "", warrantyTerms: product.warrantyTerms || ""
   });
+  /* electronics: technical specifications by product type (template + the owner's extra fields) */
+  const [specs, setSpecs] = useState(() => ({ ...(product.specs || {}) }));
+  const specExtra = useApi(profile.electronics ? "/api/products/spec-fields" : null);
+  const specFields = profile.electronics ? specFieldsFor(f.productType, specExtra.data?.fields || {}) : [];
+  /* choosing a product type suggests its unit and tracking method (new products) */
+  const chooseType = (key) => {
+    const tp = typeOf(key);
+    setF((x) => ({
+      ...x, productType: key,
+      unit: tp && !tp.units.includes(x.unit) ? tp.units[0] : x.unit,
+      tracking: tp && isNew ? tp.tracking : x.tracking
+    }));
+  };
   /* packaging structure (pharmacy): packs above the base unit, largest first */
   const [pack, setPack] = useState(() => (product.packaging || []).map((l) => ({ ...l, per: l.per, price: l.price ?? "" })));
-  const suppliers = useApi(profile.medicine ? "/api/suppliers" : null);
+  const suppliers = useApi(profile.medicine || profile.electronics ? "/api/suppliers" : null);
   /* choosing a dosage form fills its usual packaging, unless counts were already entered */
   const chooseForm = (form) => {
     setF((x) => ({ ...x, dosageForm: form }));
@@ -304,7 +342,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     setImage(file); setPreview(URL.createObjectURL(file)); setRemoveImage(false);
   };
   const shown = preview || (!removeImage && product.imagePath ? fileUrl(product.imagePath) : null);
-  const unitList = profile.units || UNITS;
+  const unitList = (profile.electronics && typeOf(f.productType)?.units) || profile.units || UNITS;
   const units = unitList.includes(f.unit) || !f.unit ? unitList : [f.unit, ...unitList];
   /* packaging (cosmetics): one of the business units other than the product's own, e.g. carton of 12 bottles */
   const packUnits = (label) => { const list = unitList.filter((u) => u !== f.unit); return !label || list.includes(label) ? list : [label, ...list]; };
@@ -330,6 +368,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     const fd = new FormData();
     Object.keys(EMPTY).forEach((k) => fd.append(k, f[k] === null || f[k] === undefined ? "" : String(f[k])));
     if (profile.extraBarcodes) fd.append("barcodes", JSON.stringify(barcodes.filter((b) => String(b.barcode).trim())));
+    if (profile.electronics) fd.append("specs", JSON.stringify(Object.fromEntries(Object.entries(specs).filter(([k, v]) => specFields.includes(k) && String(v).trim()))));
     if (profile.packaging) fd.append("packaging", JSON.stringify(pack.filter((l) => String(l.name).trim()).map((l) => ({ ...l, price: l.sell && l.price !== "" ? l.price : null }))));
     if (isNew && f.variantOf) fd.append("variantOf", String(f.variantOf));
     if (image) fd.append("image", image);
@@ -392,10 +431,26 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
           <input className="input" value={f.sku} onChange={set("sku")} />
         </Field>
 
-        {profile.variants.length > 1 && <p className="form-sub ff--full"><Icon name="layers" /> {t("ui.products.variantSection")}</p>}
+        {profile.electronics && (
+          <>
+            <Field label={t("ui.products.productType")} hint={t("ui.products.productTypeHint")}>
+              <select className="input input--type-sm" value={f.productType} onChange={(e) => chooseType(e.target.value)}>
+                <option value="">{t("ui.common.choose")}</option>
+                {PRODUCT_TYPES.map((x) => <option key={x.key} value={x.key}>{x.key}</option>)}
+              </select>
+            </Field>
+            <Field label={`${t("ui.products.modelNumber")} ${t("ui.common.optional")}`}><input className="input" value={f.modelNumber} onChange={set("modelNumber")} placeholder={t("ui.products.modelNumberPh")} /></Field>
+          </>
+        )}
+        {(profile.variants.length > 1 || profile.variantGroups) && <p className="form-sub ff--full"><Icon name="layers" /> {t(profile.electronics ? "ui.products.variantSectionElec" : "ui.products.variantSection")}</p>}
         {profile.variants.map((v) => (
           <Field key={v} label={`${L(v)} ${t("ui.common.optional")}`} error={err[v]}>
-            <input className="input" value={f[v]} onChange={set(v)} placeholder={t(`ui.products.${profile.labels?.[v] || v}Ph`)} />
+            <div className="qty-unit">
+              <input className="input" value={f[v]} onChange={set(v)} placeholder={t(`ui.products.${profile.labels?.[v] || v}Ph`)} />
+              {profile.electronics && v === "size" && variantFromSpecs(specs) && f.size !== variantFromSpecs(specs) && (
+                <button type="button" className="btn btn--outline btn--sm" onClick={() => setF((x) => ({ ...x, size: variantFromSpecs(specs) }))} title={variantFromSpecs(specs)}>{t("ui.products.fromSpecs")}</button>
+              )}
+            </div>
           </Field>
         ))}
         {profile.medicine && (
@@ -409,13 +464,14 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
             </Field>
           </>
         )}
-        <p className="ff__hint ff--full">{f.name && fullName !== f.name ? fill(t("ui.products.showsAs"), { name: fullName }) : t(profile.variants.length > 1 ? "ui.products.variantHint" : "ui.products.sizeHint")}</p>
+        <p className="ff__hint ff--full">{f.name && fullName !== f.name ? fill(t("ui.products.showsAs"), { name: fullName }) : t(profile.electronics ? "ui.products.variantHintElec" : profile.variants.length > 1 ? "ui.products.variantHint" : "ui.products.sizeHint")}</p>
 
         {!profile.hiddenFields?.includes("description") && <Field label={`${t("ui.common.description")} ${t("ui.common.optional")}`} full><textarea className="input" rows={2} value={f.description} onChange={set("description")} /></Field>}
         <Field label={L("brand")}><input className="input" value={f.brand} onChange={set("brand")} list="brand-options" /></Field>
         <Field label={L("category")}><input className="input" value={f.category} onChange={set("category")} list="category-options" /></Field>
         {!profile.hiddenFields?.includes("subcategory") && <Field label={`${t("ui.products.subcategory")} ${t("ui.common.optional")}`}><input className="input" value={f.subcategory} onChange={set("subcategory")} /></Field>}
-        {profile.medicine && (
+        {profile.electronics && <Field label={`${t("ui.products.countryOfOrigin")} ${t("ui.common.optional")}`}><input className="input" value={f.countryOfOrigin} onChange={set("countryOfOrigin")} /></Field>}
+        {(profile.medicine || profile.electronics) && (
           <>
             <Field label={`${t("ui.products.manufacturer")} ${t("ui.common.optional")}`}><input className="input" value={f.manufacturer} onChange={set("manufacturer")} /></Field>
             <Field label={`${t("ui.common.supplier")} ${t("ui.common.optional")}`} error={err.supplierId}>
@@ -427,13 +483,41 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
           </>
         )}
         <Field label={L("unit")} hint={profile.packaging ? t("ui.products.baseUnitHint") : undefined}>
-          <select className="input" value={f.unit} onChange={set("unit")}>{units.map((u) => <option key={u} value={u}>{unitName(t, u)}</option>)}</select>
+          <select className="input" value={f.unit} onChange={set("unit")}>{units.map((u) => <option key={u} value={u}>{unitFull(t, u)}</option>)}</select>
         </Field>
+        {profile.serials && (
+          <Field label={t("ui.products.tracking")} error={err.tracking} hint={t(`ui.products.trackingHint.${f.tracking}`)}>
+            <select className="input" value={f.tracking} onChange={set("tracking")}>{TRACKING.map((x) => <option key={x} value={x}>{t(`ui.products.trackingOptions.${x}`)}</option>)}</select>
+          </Field>
+        )}
         {profile.packaging && <PackagingEditor pack={pack} setPack={setPack} unit={f.unit} sellingPrice={f.sellingPrice} errors={err} />}
         <Field label={L("costPrice")} error={err.costPrice}><input className="input" type="number" min="0" step="any" value={f.costPrice} onChange={set("costPrice")} /></Field>
         <Field label={L("sellingPrice")} error={err.sellingPrice}><input className="input" type="number" min="0" step="any" value={f.sellingPrice} onChange={set("sellingPrice")} /></Field>
         {!profile.hiddenFields?.includes("wholesalePrice") && <Field label={`${t("ui.products.wholesalePrice")} ${t("ui.common.optional")}`} error={err.wholesalePrice}><input className="input" type="number" min="0" step="any" value={f.wholesalePrice} onChange={set("wholesalePrice")} /></Field>}
+        {profile.electronics && <Field label={`${t("ui.products.minPrice")} ${t("ui.common.optional")}`} error={err.minPrice} hint={t("ui.products.minPriceHint")}><input className="input" type="number" min="0" step="any" value={f.minPrice} onChange={set("minPrice")} /></Field>}
         <Field label={L("lowStockAlert")} error={err.minStock} hint={t("ui.products.lowStockAlertHint")}><input className="input" type="number" min="0" step="any" value={f.minStock} onChange={set("minStock")} /></Field>
+        {profile.warranties && (
+          <>
+            <p className="form-sub ff--full"><Icon name="shield-check" /> {t("ui.products.warrantySection")}</p>
+            <Field label={`${t("ui.warranty.duration")} ${t("ui.common.optional")}`} error={err.warrantyMonths} hint={t("ui.products.warrantyHint")}><input className="input" type="number" min="0" max="240" step="1" value={f.warrantyMonths} onChange={set("warrantyMonths")} /></Field>
+            <Field label={`${t("ui.warranty.provider")} ${t("ui.common.optional")}`}><input className="input" value={f.warrantyProvider} onChange={set("warrantyProvider")} placeholder={t("ui.warranty.providerPh")} /></Field>
+            <Field label={`${t("ui.warranty.terms")} ${t("ui.common.optional")}`} full><input className="input" value={f.warrantyTerms} onChange={set("warrantyTerms")} maxLength={255} /></Field>
+          </>
+        )}
+        {profile.electronics && specFields.length > 0 && (
+          <div className="ff ff--full specs">
+            <span className="ff__label"><Icon name="layers" /> {fill(t("ui.products.specsTitle"), { type: f.productType })}</span>
+            <div className="specs__grid">
+              {specFields.map((k) => (
+                <label key={k} className="specs__field">
+                  <span>{k}</span>
+                  <input className="input" value={specs[k] || ""} onChange={(e) => setSpecs((x) => ({ ...x, [k]: e.target.value }))} />
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+        {profile.electronics && <Field label={`${t("ui.products.notes")} ${t("ui.common.optional")}`} full><textarea className="input" rows={2} value={f.notes} onChange={set("notes")} /></Field>}
         {profile.medicine && (
           <>
             <div className="ff">
@@ -476,7 +560,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
           </div>
         )}
 
-        {!isNew && profile.variants.length > 1 && (
+        {!isNew && (profile.variants.length > 1 || profile.variantGroups) && (
           <div className="ff ff--full variant-list">
             <span className="ff__label">{t("ui.products.otherVariants")}</span>
             {variants.length === 0 ? <small className="ff__hint">{t("ui.products.noVariants")}</small> : (
@@ -486,7 +570,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
                 ))}
               </ul>
             )}
-            {onOpen && <div><button type="button" className="btn btn--outline btn--sm" onClick={() => onOpen(variantTemplate({ ...product, ...f, id: product.id }))}><Icon name="copy" /><span>{t("ui.products.addVariant")}</span></button></div>}
+            {onOpen && <div><button type="button" className="btn btn--outline btn--sm" onClick={() => onOpen(variantTemplate({ ...product, ...f, specs, id: product.id }))}><Icon name="copy" /><span>{t("ui.products.addVariant")}</span></button></div>}
           </div>
         )}
 
@@ -570,6 +654,46 @@ function PackagingEditor({ pack, setPack, unit, sellingPrice, errors }) {
       )}
       <datalist id="pack-names">{PACK_NAMES.map((n) => <option key={n} value={n} />)}</datalist>
     </div>
+  );
+}
+
+/* Owner setting (electronics): extra technical specification fields per product type. */
+function SpecFieldsSettings({ onClose }) {
+  const { t } = useLanguage();
+  const cur = useApi("/api/products/spec-fields");
+  const [type, setType] = useState(PRODUCT_TYPES[0].key);
+  const [fields, setFields] = useState(null);
+  const [name, setName] = useState("");
+  useEffect(() => { if (cur.data && !fields) setFields(cur.data.fields || {}); }, [cur.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  const sub = useSubmit();
+  const extra = fields?.[type] || [];
+  const add = () => { const n = name.trim(); if (!n) return; setFields((x) => ({ ...x, [type]: [...new Set([...(x[type] || []), n])] })); setName(""); };
+  const remove = (n) => setFields((x) => ({ ...x, [type]: (x[type] || []).filter((y) => y !== n) }));
+  const save = async () => { if (await sub.run(() => apiRequest("/api/products/spec-fields", { method: "PUT", body: { fields } }))) onClose(); };
+  return (
+    <Modal title={t("ui.products.specFields")} onClose={onClose} wide>
+      {!fields ? <Loading /> : (
+        <div className="form-grid">
+          <p className="modal__help">{t("ui.products.specFieldsHelp")}</p>
+          <Field label={t("ui.products.productType")}>
+            <select className="input" value={type} onChange={(e) => setType(e.target.value)}>{PRODUCT_TYPES.map((x) => <option key={x.key} value={x.key}>{x.key}</option>)}</select>
+          </Field>
+          <p className="muted">{t("ui.products.specFieldsBuiltIn")}: {typeOf(type)?.specs.join(", ") || "—"}</p>
+          <ul className="chip-list">
+            {extra.map((n) => <li key={n}>{n}<button type="button" className="link-btn" onClick={() => remove(n)} aria-label={t("ui.common.remove")}> ✕</button></li>)}
+          </ul>
+          <div className="qty-unit">
+            <input className="input" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(); } }} placeholder={t("ui.products.specFieldPh")} />
+            <button type="button" className="btn btn--outline" onClick={add}><Icon name="plus" /><span>{t("ui.common.add")}</span></button>
+          </div>
+          <FormError error={sub.formError} />
+          <div className="form-actions sheet-actions">
+            <button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button>
+            <button type="button" className="btn btn--primary" disabled={sub.busy} onClick={save}>{t("ui.common.save")}</button>
+          </div>
+        </div>
+      )}
+    </Modal>
   );
 }
 

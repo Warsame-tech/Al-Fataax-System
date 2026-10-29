@@ -8,6 +8,9 @@ import SearchSelect from "../SearchSelect.jsx";
 import CameraScanner from "../CameraScanner.jsx";
 import { BatchFields } from "./Stock.jsx";
 import { unitsOf, unitsPer, packPrice, breakdown } from "../packaging.js";
+import { DeviceEntry, DevicePicker, deviceText } from "../Devices.jsx";
+
+const tracked = (p) => Boolean(p?.tracking) && p.tracking !== "qty";
 
 /*
  * Editable product lines for invoices and purchases.
@@ -18,7 +21,8 @@ import { unitsOf, unitsPer, packPrice, breakdown } from "../packaging.js";
  * buying (carton, box) — and its price / cost is per that unit; the stock it uses is qty × units per pack (base units).
  * Under the lines: "Scan barcode" (camera) and "Add item" (opens the product list to choose another product).
  */
-export default function LineItems({ lines, onChange, mode = "sell", priceList = "retail", allowPrice = false, errors = {} }) {
+/* deviceEntry (buying): the goods are received now, so serial numbers / IMEIs of tracked products are typed per unit */
+export default function LineItems({ lines, onChange, mode = "sell", priceList = "retail", allowPrice = false, errors = {}, deviceEntry = false }) {
   const { t } = useLanguage();
   const m = useMoney();
   const can = usePerm();
@@ -27,6 +31,7 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
   const [camera, setCamera] = useState(false);
   const [pickSignal, setPickSignal] = useState(0);   // "Add item" opens the product list
   const [notice, setNotice] = useState(null);      // { text, kind, link? }
+  const [picking, setPicking] = useState(null);    // line index choosing devices (selling)
 
   const sell = mode === "sell";
   const priceOf = (p, unit = null) => {
@@ -44,6 +49,8 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
     if (lines.some((l) => l.product.id === p.id)) return setNotice({ text: fill(t("ui.invoices.alreadyAdded"), { name: p.name }), kind: "info" });
     if (sell && p.stock <= 0) return setNotice({ text: fill(t("ui.invoices.noStock"), { name: p.name }), kind: "error", link: can("stock.add") });
     setNotice(null);
+    // selling a serial / IMEI product: choose its exact devices right away
+    if (sell && tracked(p)) { onChange([...lines, { product: p, qty: 0, unit: null, price: priceOf(p), deviceIds: [], devices: [] }]); setPicking(lines.length); return; }
     // buying a packaged product starts in its largest purchase unit (e.g. carton); selling starts in the base unit
     const unit = !sell && unitList(p).length > 1 ? unitList(p)[0].name : null;
     onChange([...lines, { product: p, qty: 1, unit, price: priceOf(p, unit) }]);
@@ -101,17 +108,26 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
                   <td>
                     {l.product.name}{sell && <small className="cell-sub">{fill(t("ui.invoices.inStock"), { qty: qty(l.product.stock), unit: l.product.unit })}</small>}
                     {!sell && l.product.trackBatches && <BatchFields compact value={l} onChange={(patch) => update(i, patch)} />}
+                    {sell && l.devices?.length > 0 && <ul className="pos2__devices">{l.devices.map((d) => <li key={d.id}>{deviceText(d)}</li>)}</ul>}
+                    {!sell && deviceEntry && tracked(l.product) && (
+                      <DeviceEntry tracking={l.product.tracking} qty={Number.isInteger(Number(l.qty)) ? Number(l.qty) : 0} value={l.devices || []}
+                        onChange={(devices) => update(i, { devices })} errors={errors} field={`items.${i}.devices`} />
+                    )}
                   </td>
                   <td className="num">
-                    <div className="lines__qty">
-                      <input className={"input input--sm" + (errors[`items.${i}.qty`] || l.capped ? " has-error" : "")} type="number" min="0" step="any"
+                    {sell && tracked(l.product) ? (
+                      <button type="button" className={"btn btn--outline btn--sm" + (errors[`items.${i}.deviceIds`] ? " has-error" : "")} onClick={() => setPicking(i)}>
+                        <Icon name="smartphone" /><span>{fill(t("ui.devices.count"), { n: (l.deviceIds || []).length })}</span>
+                      </button>
+                    ) : <div className="lines__qty">
+                      <input className={"input input--sm" + (errors[`items.${i}.qty`] || l.capped ? " has-error" : "")} type="number" min="0" step={tracked(l.product) ? "1" : "any"}
                         max={sell ? Math.floor((l.product.stock / perOf(l)) * 1000) / 1000 : undefined} value={l.qty} onChange={(e) => setQty(i, e.target.value)} />
                       {unitList(l.product).length > 1 && (
                         <select className={"input input--sm" + (errors[`items.${i}.unit`] ? " has-error" : "")} value={l.unit || l.product.unit} onChange={(e) => setUnit(i, e.target.value)} aria-label={t("ui.products.unit")}>
                           {unitList(l.product).map((u) => <option key={u.name} value={u.name}>{u.name === l.product.unit ? unitLabel(u.name) : u.name}</option>)}
                         </select>
                       )}
-                    </div>
+                    </div>}
                     {l.unit && Number(l.qty) > 0 && <small className="cell-sub lines__chain">{breakdown(l.product, l.unit, l.qty, unitLabel)}</small>}
                     {sell && l.capped && <small className="ff__error lines__cap">{fill(t("ui.invoices.onlyInStock"), { qty: qty(l.product.stock), unit: unitLabel(l.product.unit) })}</small>}
                   </td>
@@ -134,6 +150,10 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
         <button type="button" className="btn btn--primary btn--sm" onClick={() => setPickSignal((n) => n + 1)}><span>{t("ui.invoices.addItem")}</span><Icon name="plus" /></button>
       </div>
       {camera && <CameraScanner onCode={onScan} onClose={() => setCamera(false)} />}
+      {picking !== null && lines[picking] && (
+        <DevicePicker product={lines[picking].product} locationId="default" value={lines[picking].deviceIds || []}
+          onDone={(ids, devices) => { update(picking, { deviceIds: ids, devices, qty: ids.length }); setPicking(null); }} onClose={() => setPicking(null)} />
+      )}
     </div>
   );
 }

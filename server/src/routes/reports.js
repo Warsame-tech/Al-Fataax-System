@@ -102,7 +102,7 @@ const REPORTS = {
 
   async payables(bid) {
     const [rows] = await pool.query(
-      `SELECT s.name, s.phone, (SELECT COALESCE(SUM(total - amount_paid),0) FROM purchases p WHERE p.business_id = s.business_id AND p.supplier_id = s.id AND p.status = 'received') balance
+      `SELECT s.name, s.phone, (SELECT COALESCE(SUM(total - amount_paid),0) FROM purchases p WHERE p.business_id = s.business_id AND p.supplier_id = s.id AND p.status IN ('received', 'partial')) balance
          FROM suppliers s WHERE s.business_id = ? HAVING balance > 0 ORDER BY balance DESC`, [bid]);
     return {
       columns: [["name", "text"], ["phone", "text"], ["balance", "money"]],
@@ -114,7 +114,7 @@ const REPORTS = {
   async purchases(bid, r) {
     const [rows] = await pool.query(
       `SELECT p.purchase_no, DATE(p.purchased_at) d, s.name supplier, p.total, p.amount_paid FROM purchases p JOIN suppliers s ON s.id = p.supplier_id
-        WHERE p.business_id = ? AND p.status = 'received' AND p.purchased_at BETWEEN ? AND ? ORDER BY p.purchased_at`, [bid, r.start, r.end]);
+        WHERE p.business_id = ? AND p.status IN ('received', 'partial') AND p.purchased_at BETWEEN ? AND ? ORDER BY p.purchased_at`, [bid, r.start, r.end]);
     return {
       columns: [["number", "text"], ["date", "date"], ["supplier", "text"], ["total", "money"], ["paid", "money"], ["balance", "money"]],
       rows: rows.map((x) => ({ number: x.purchase_no, date: x.d, supplier: x.supplier, total: num(x.total), paid: num(x.amount_paid), balance: round2(num(x.total) - num(x.amount_paid)) })),

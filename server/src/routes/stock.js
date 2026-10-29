@@ -8,6 +8,7 @@ import { lockProducts, moveStock } from "../lib/ledger.js";
 import { defaultLocationId, activeLocation } from "../lib/stock.js";
 import { productName } from "../lib/productName.js";
 import { readBatch } from "../lib/batches.js";
+import { isTracked, readNewDevices, addDevices, pickDevices, updateDevices } from "../lib/devices.js";
 
 /*
  * Stock Management (module "stock").
@@ -163,7 +164,8 @@ router.get("/product/:id", canSee, ah(async (req, res) => {
     product: {
       id: p.id, name: productName(p), size: p.size || "", unit: p.unit, sku: p.sku, barcode: p.barcode, imagePath: p.image_path, brand: names?.brand || null,
       category: names?.category || null, subcategory: p.subcategory || null, sellingPrice: num(p.selling_price),
-      costPrice: num(p.cost_price), total: num(p.stock_qty), stock: num(p.stock_qty), alertLevel: num(p.min_stock), isActive: Boolean(p.is_active)
+      costPrice: num(p.cost_price), total: num(p.stock_qty), stock: num(p.stock_qty), alertLevel: num(p.min_stock), isActive: Boolean(p.is_active),
+      tracking: p.tracking || "qty", trackBatches: Boolean(p.track_batches)
     },
     locations: rows.map((r) => ({ locationId: r.id, location: r.name, isDefault: Boolean(r.is_default), qty: num(r.qty),
       alertLevel: r.alert_level === null ? null : num(r.alert_level), hasOpening: Boolean(r.has_opening) }))
@@ -189,8 +191,10 @@ router.post("/opening", requirePerm("stock.add"), ah(async (req, res) => {
       `SELECT m.id FROM stock_movements m WHERE m.business_id = ? AND m.product_id = ? AND m.location_id = ? AND m.type = 'opening'
           AND NOT EXISTS (SELECT 1 FROM stock_movements r WHERE r.reversal_of = m.id) LIMIT 1`, [bid, product.id, loc.id]);
     if (dup) throw conflict("openingExists", { product: productName(product), location: loc.name });
+    const devices = isTracked(product) ? readNewDevices(product, b.devices, qty, "devices") : null;
     const m = await moveStock(conn, { businessId: bid, userId: req.user.id, product, qtyChange: qty, type: "opening", refType: "stock",
-      locationId: loc.id, reason: "opening", reference: optText(b.reference, 80), note: optText(b.notes, 255), batches: readBatch(b, qty) });
+      locationId: loc.id, reason: "opening", reference: optText(b.reference, 80), note: optText(b.notes, 255), batches: readBatch(b, qty), devices: true });
+    if (devices) await addDevices(conn, { businessId: bid, product, locationId: loc.id, devices, cost: num(product.cost_price), userId: req.user.id, event: "opening", refType: "stock", refId: m.id });
     await audit(conn, { businessId: bid, userId: req.user.id, action: "stock.opening", entity: "product", entityId: product.id, meta: { location: loc.name, qty }, ip: req.ip });
     return m;
   });
@@ -203,7 +207,7 @@ router.post("/add", requirePerm("stock.add"), ah(async (req, res) => {
   const b = req.body || {};
   const bid = req.business.id;
   const type = ADD_TYPES.includes(b.type) ? b.type : null;
-  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: quantity(x?.qty), batches: readBatch(x, quantity(x?.qty)) })) : [];
+  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: quantity(x?.qty), batches: readBatch(x, quantity(x?.qty)), devices: x?.devices })) : [];
   const e = {};
   if (!type) e.type = "required";
   if (!items.length) e.items = "required";
@@ -219,11 +223,14 @@ router.post("/add", requirePerm("stock.add"), ah(async (req, res) => {
     if (supplierId) await ensureOwned(conn, "suppliers", supplierId, bid);
     const products = await lockProducts(conn, bid, items.map((x) => x.productId));
     const moves = [];
-    for (const x of items) {
+    for (const [i, x] of items.entries()) {
       const product = products.get(x.productId);
       if (!product.is_active) throw badRequest({ items: "inactiveProduct" });
-      moves.push(await moveStock(conn, { businessId: bid, userId: req.user.id, product, qtyChange: x.qty, type, refType: "stock",
-        locationId: loc.id, reason: type, reference: optText(b.reference, 80), supplierId, note: optText(b.notes, 255), batches: x.batches }));
+      const devices = isTracked(product) ? readNewDevices(product, x.devices, x.qty, `items.${i}.devices`) : null;
+      const m = await moveStock(conn, { businessId: bid, userId: req.user.id, product, qtyChange: x.qty, type, refType: "stock",
+        locationId: loc.id, reason: type, reference: optText(b.reference, 80), supplierId, note: optText(b.notes, 255), batches: x.batches, devices: true });
+      if (devices) await addDevices(conn, { businessId: bid, product, locationId: loc.id, devices, supplierId, cost: num(product.cost_price), userId: req.user.id, event: "received", refType: "stock", refId: m.id });
+      moves.push(m);
     }
     await audit(conn, { businessId: bid, userId: req.user.id, action: "stock.added", entity: "location", entityId: loc.id,
       meta: { type, items: items.length, units: q3(items.reduce((s, x) => s + x.qty, 0)), reference: optText(b.reference, 80) }, ip: req.ip });
@@ -273,8 +280,20 @@ router.post("/adjust", requirePerm("stock.adjust"), ah(async (req, res) => {
     const change = mode === "count" ? q3(counted - before) : (b.direction === "subtract" ? -qty : qty);
     if (change === 0) throw badRequest({ counted: "noChange" });
     const type = mode === "count" ? "count" : (["damaged", "expired"].includes(reason) ? "damaged" : "adjustment");
+    // serial / IMEI products: the exact devices leaving (damaged → defective, lost → lost, other → removed) or the new ones found
+    let out = null; let found = null;
+    if (isTracked(product)) {
+      if (mode === "count") throw badRequest({ mode: "devicesAdjustOnly" });
+      if (change < 0) out = await pickDevices(conn, { businessId: bid, product, locationId: loc.id, deviceIds: b.deviceIds, qty: -change, field: "deviceIds" });
+      else found = readNewDevices(product, b.devices, change, "devices");
+    }
     const m = await moveStock(conn, { businessId: bid, userId: req.user.id, product, qtyChange: change, type, refType: "stock",
-      locationId: loc.id, reason, note: optText(b.notes, 255) });
+      locationId: loc.id, reason, note: optText(b.notes, 255), devices: true });
+    if (out) {
+      const status = ["damaged", "expired"].includes(reason) ? "defective" : reason === "lost" ? "lost" : "removed";
+      await updateDevices(conn, out, { status, locationId: null, event: status, refType: "stock", refId: m.id, note: optText(b.notes, 255), userId: req.user.id });
+    }
+    if (found) await addDevices(conn, { businessId: bid, product, locationId: loc.id, devices: found, cost: num(product.cost_price), userId: req.user.id, event: "found", refType: "stock", refId: m.id });
     const valueChange = round2(change * num(product.cost_price));
     await audit(conn, { businessId: bid, userId: req.user.id, action: "stock.adjusted", entity: "product", entityId: product.id,
       meta: { location: loc.name, mode, reason, before, change, after: m.after, valueChange }, ip: req.ip });
@@ -288,7 +307,7 @@ router.post("/adjust", requirePerm("stock.adjust"), ah(async (req, res) => {
 router.post("/transfer", requirePerm("stock.transfer"), ah(async (req, res) => {
   const b = req.body || {};
   const bid = req.business.id;
-  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: quantity(x?.qty) })) : [];
+  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: quantity(x?.qty), deviceIds: x?.deviceIds })) : [];
   const e = {};
   if (!items.length) e.items = "required";
   items.forEach((x, i) => { if (!x.productId) e[`items.${i}.productId`] = "required"; if (Number.isNaN(x.qty)) e[`items.${i}.qty`] = "invalidAmount"; });
@@ -301,11 +320,13 @@ router.post("/transfer", requirePerm("stock.transfer"), ah(async (req, res) => {
     if (!to) throw badRequest({ toLocationId: "required" });
     const ref = `TR-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
     const products = await lockProducts(conn, bid, items.map((x) => x.productId));
-    for (const x of items) {
+    for (const [i, x] of items.entries()) {
       const product = products.get(x.productId);
-      const common = { businessId: bid, userId: req.user.id, product, refType: "transfer", reason: "transfer", reference: optText(b.reference, 80) || ref, transferRef: ref, note: optText(b.notes, 255) };
+      const devices = isTracked(product) ? await pickDevices(conn, { businessId: bid, product, locationId: from.id, deviceIds: x.deviceIds, qty: x.qty, field: `items.${i}.deviceIds` }) : null;
+      const common = { businessId: bid, userId: req.user.id, product, refType: "transfer", reason: "transfer", reference: optText(b.reference, 80) || ref, transferRef: ref, note: optText(b.notes, 255), devices: true };
       await moveStock(conn, { ...common, qtyChange: -x.qty, type: "transfer_out", locationId: from.id });
-      await moveStock(conn, { ...common, qtyChange: x.qty, type: "transfer_in", locationId: to.id });
+      const m = await moveStock(conn, { ...common, qtyChange: x.qty, type: "transfer_in", locationId: to.id });
+      if (devices) await updateDevices(conn, devices, { status: "available", locationId: to.id, event: "transferred", refType: "transfer", refId: m.id, note: ref, userId: req.user.id });
     }
     await audit(conn, { businessId: bid, userId: req.user.id, action: "stock.transferred", entity: "location", entityId: from.id,
       meta: { from: from.name, to: to.name, items: items.length, ref }, ip: req.ip });
@@ -365,6 +386,7 @@ router.post("/movements/:id/reverse", requirePerm("stock.adjust"), ah(async (req
     const [[done]] = await conn.query("SELECT COUNT(*) n FROM stock_movements WHERE reversal_of IN (?)", [lines.map((l) => l.id)]);
     if (done.n) throw conflict("alreadyReversed");
     const products = await lockProducts(conn, bid, lines.map((l) => l.product_id));
+    if ([...products.values()].some(isTracked)) throw conflict("trackedNoReverse");
     // reverse the incoming side of a transfer first, so the stock is still there to move back
     const ordered = [...lines].sort((a, b) => num(b.qty_change) - num(a.qty_change));
     for (const l of ordered) {

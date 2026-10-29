@@ -7,6 +7,9 @@ import { nextNumber, lockProducts, moveStock, moneyMove } from "../lib/ledger.js
 import { methodForPayment } from "./paymentMethods.js";
 import { vatFor } from "../lib/vat.js";
 import { unitsPer, packOf } from "../lib/packaging.js";
+import { isTracked, sellDevices, returnSoldDevices, deviceLabel } from "../lib/devices.js";
+import { createWarranties, voidWarranties } from "../lib/warranties.js";
+import { defaultLocationId } from "../lib/stock.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -38,7 +41,16 @@ export function priceLines(items, products, { allowCustomPrice, priceList = "ret
       if (Number.isNaN(unitPrice)) { errors[`items.${i}.unitPrice`] = "invalidAmount"; return; }
     }
     const baseQty = Math.round(qty * per * 1000) / 1000;
+    // serial / IMEI products are sold as whole units, each one a chosen device
+    if (isTracked(p) && (unit || !Number.isInteger(baseQty))) { errors[`items.${i}.qty`] = "wholeUnits"; return; }
+    // minimum selling price (per base unit), when the product has one
+    if (p.min_price !== null && p.min_price !== undefined && unitPrice / per < num(p.min_price) - 0.00005) {
+      errors[`items.${i}.unitPrice`] = "belowMinPrice"; return;
+    }
+    const warrantyMonths = it.warrantyMonths === undefined || it.warrantyMonths === null || it.warrantyMonths === "" ? null : Number(it.warrantyMonths);
+    if (warrantyMonths !== null && (!Number.isInteger(warrantyMonths) || warrantyMonths < 0 || warrantyMonths > 240)) { errors[`items.${i}.warrantyMonths`] = "invalidAmount"; return; }
     lines.push({
+      deviceIds: it.deviceIds, warrantyMonths,
       product: p, qty: baseQty, unitPrice: unit ? round2(unitPrice / per) : unitPrice, unitCost: num(p.cost_price), lineTotal: round2(qty * unitPrice),
       sell: unit ? { unit, qty, price: unitPrice } : null
     });
@@ -48,7 +60,8 @@ export function priceLines(items, products, { allowCustomPrice, priceList = "ret
 }
 
 function readItems(body) {
-  const items = Array.isArray(body.items) ? body.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: x?.qty, unitPrice: x?.unitPrice, unit: x?.unit })) : [];
+  const items = Array.isArray(body.items) ? body.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: x?.qty, unitPrice: x?.unitPrice, unit: x?.unit,
+    deviceIds: x?.deviceIds, warrantyMonths: x?.warrantyMonths })) : [];
   if (!items.length) throw badRequest({ items: "required" });
   return items;
 }
@@ -153,12 +166,15 @@ export async function createSale(conn, ctx, body) {
     [businessId, receiptNo, customerId, userId, subtotal, discount, vat.rate, vat.amount, total, paid, change, method, ctx.at || null]
   );
   const saleId = s.insertId;
-  for (const l of lines) {
-    await conn.query(
+  const loc = await defaultLocationId(conn, businessId);       // the POS sells from the default location
+  for (const [i, l] of lines.entries()) {
+    const [it] = await conn.query(
       `INSERT INTO sale_items (business_id, sale_id, product_id, qty, unit_price, unit_cost, line_total, sell_unit, sell_qty, sell_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [businessId, saleId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null]
     );
-    await moveStock(conn, { businessId, userId, product: l.product, qtyChange: -l.qty, type: "sale", refType: "sale", refId: saleId });
+    const devices = await sellDevices(conn, { businessId, userId, product: l.product, line: l, index: i, locationId: loc, refType: "sale", refId: saleId, itemId: it.insertId, customerId });
+    await moveStock(conn, { businessId, userId, product: l.product, qtyChange: -l.qty, type: "sale", refType: "sale", refId: saleId, locationId: loc, devices: true });
+    await createWarranties(conn, { businessId, product: l.product, devices, qty: l.qty, months: l.warrantyMonths, customerId, refType: "sale", refId: saleId, userId, date: ctx.at || null });
   }
   for (const pay of collected) {
     const [p] = await conn.query(
@@ -196,9 +212,11 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
   const bid = req.business.id;
   const s = await ensureOwned(pool, "sales", id(req.params.id), bid);
   const [items] = await pool.query(
-    `SELECT si.qty, si.unit_price, si.line_total, si.sell_unit, si.sell_qty, si.sell_price, p.unit base_unit, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku FROM sale_items si JOIN products p ON p.id = si.product_id AND p.business_id = si.business_id
+    `SELECT si.id, si.product_id, si.qty, si.unit_price, si.line_total, si.sell_unit, si.sell_qty, si.sell_price, p.unit base_unit, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku FROM sale_items si JOIN products p ON p.id = si.product_id AND p.business_id = si.business_id
       WHERE si.sale_id = ? AND si.business_id = ? ORDER BY si.id`, [s.id, bid]);
   const [[cust]] = s.customer_id ? await pool.query("SELECT name, phone FROM customers WHERE id = ? AND business_id = ?", [s.customer_id, bid]) : [[null]];
+  const [devs] = await pool.query("SELECT id, serial_no, imei1, imei2, sold_item_id FROM devices WHERE business_id = ? AND sold_ref_type = 'sale' AND sold_ref_id = ?", [bid, s.id]);
+  const [wars] = await pool.query("SELECT id, product_id, device_id, months, end_date, status FROM warranties WHERE business_id = ? AND ref_type = 'sale' AND ref_id = ?", [bid, s.id]);
   const [[cashier]] = await pool.query("SELECT full_name FROM users WHERE id = ? AND business_id = ?", [s.user_id, bid]);
   const [payments] = await pool.query(
     `SELECT cp.amount, cp.method, cp.paid_at, pm.name pm_name, pm.number pm_number
@@ -209,7 +227,9 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
     sale: { id: s.id, number: s.receipt_no, at: s.sold_at, status: s.status, method: s.payment_method, subtotal: num(s.subtotal), discount: num(s.discount), vatRate: num(s.vat_rate || 0), vat: num(s.vat_amount || 0), total: num(s.total), paid: num(s.amount_paid), change: num(s.change_amount || 0), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
     // sold in a pack: shown as e.g. 2 Strip × 1.50 (qty / unitPrice); baseQty is the stock that left
     items: items.map((i) => ({ name: i.name, sku: i.sku, qty: i.sell_unit ? num(i.sell_qty) : num(i.qty), unitPrice: i.sell_unit ? num(i.sell_price) : num(i.unit_price),
-      unit: i.sell_unit || null, baseQty: num(i.qty), baseUnit: i.base_unit, total: num(i.line_total) })),
+      unit: i.sell_unit || null, baseQty: num(i.qty), baseUnit: i.base_unit, total: num(i.line_total),
+      devices: devs.filter((d) => d.sold_item_id === i.id).map((d) => ({ id: d.id, label: deviceLabel(d) })),
+      warranty: (() => { const w = wars.find((x) => x.product_id === i.product_id); return w ? { months: w.months, endDate: w.end_date, status: w.status } : null; })() })),
     payments: payments.map((p) => ({ amount: num(p.amount), method: p.method, label: p.pm_name ? (p.pm_number ? `${p.pm_name} (${p.pm_number})` : p.pm_name) : null, at: p.paid_at }))
   });
 }));
@@ -232,8 +252,11 @@ router.post("/:id/cancel", requirePerm("sales.cancel"), ah(async (req, res) => {
     for (const i of items) {
       await conn.query("INSERT INTO return_items (business_id, return_id, product_id, qty, unit_price, unit_cost, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [bid, ret.insertId, i.product_id, i.qty, i.unit_price, i.unit_cost, i.line_total]);
-      await moveStock(conn, { businessId: bid, userId: uid, product: products.get(i.product_id), qtyChange: num(i.qty), type: "return_in", refType: "sale", refId: s.id, note: reason });
+      await moveStock(conn, { businessId: bid, userId: uid, product: products.get(i.product_id), qtyChange: num(i.qty), type: "return_in", refType: "sale", refId: s.id, note: reason, devices: true });
     }
+    // sold devices come back to stock; the sale's warranties become void
+    await returnSoldDevices(conn, { businessId: bid, userId: uid, refType: "sale", refId: s.id, locationId: await defaultLocationId(conn, bid), note: reason });
+    await voidWarranties(conn, { businessId: bid, refType: "sale", refId: s.id, userId: uid, reason });
     // Refund each payment through the same method and account (negative payment keeps "money received" accurate).
     const [payments] = await conn.query("SELECT id, method, payment_method_id, amount FROM customer_payments WHERE sale_id = ? AND business_id = ? AND amount > 0 ORDER BY id", [s.id, bid]);
     for (const p of payments) {

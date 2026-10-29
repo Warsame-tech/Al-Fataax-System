@@ -14,6 +14,8 @@ import Overview from "./pages/Overview.jsx";
 import Stock from "./pages/Stock.jsx";
 import { Expenses, Cashbook } from "./pages/MoneyPages.jsx";
 import { Staff, BusinessInfo, Settings, Profile, Subscription, Audit } from "./pages/AccountPages.jsx";
+import { DevicesPage, WarrantiesPage } from "./Devices.jsx";
+import { useProfile } from "./profile.js";
 
 const SCREENS = {
   overview: Overview,
@@ -24,6 +26,8 @@ const SCREENS = {
   purchases: Purchases,
   products: Products,
   stock: Stock,
+  devices: DevicesPage,
+  warranties: WarrantiesPage,
   expenses: Expenses,
   cashbook: Cashbook,
   reports: Reports,
@@ -40,9 +44,10 @@ export default function ModulePage() {
   const { id } = useParams();
   const { t } = useLanguage();
   const can = usePerm();
+  const profile = useProfile();
   usePageTitle("meta.app");
   const mod = moduleById(id);
-  if (!mod) return <Navigate to="/app" replace />;
+  if (!mod || (mod.profile && !profile[mod.profile])) return <Navigate to="/app" replace />;
   if (mod.perm && !can(mod.perm)) {
     return (
       <div className="page">

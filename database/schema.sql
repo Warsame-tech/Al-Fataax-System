@@ -132,6 +132,7 @@ CREATE TABLE IF NOT EXISTS business_settings (
   purchase_prefix  VARCHAR(10) NOT NULL DEFAULT 'PO-',
   invoice_footer   VARCHAR(255) NULL,
   allow_duplicate_codes TINYINT(1) NOT NULL DEFAULT 0,  -- products may share a SKU / barcode
+  spec_fields      TEXT NULL,                            -- extra technical specification fields per product type (JSON)
   timezone         VARCHAR(40) NOT NULL DEFAULT 'Africa/Mogadishu',
   updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_settings_business FOREIGN KEY (business_id) REFERENCES businesses(id)
@@ -180,6 +181,9 @@ CREATE TABLE IF NOT EXISTS products (
   supplier_id     INT UNSIGNED NULL,
   rx_required     TINYINT(1)   NOT NULL DEFAULT 0,
   storage_instructions VARCHAR(255) NULL,
+  product_type    VARCHAR(60)  NULL,              -- electronics: product type (Smartphone, Laptop, USB Cable…), model number, country of origin
+  model_number    VARCHAR(80)  NULL,
+  country_of_origin VARCHAR(60) NULL,
   size            VARCHAR(40)  NULL,              -- e.g. 400ml, 1kg — shown after the name everywhere
   shade           VARCHAR(60)  NULL,              -- variant fields (cosmetics): shown after the name too
   fragrance       VARCHAR(60)  NULL,
@@ -197,6 +201,13 @@ CREATE TABLE IF NOT EXISTS products (
   wholesale_price DECIMAL(14,4) NULL,
   stock_qty       DECIMAL(14,3) NOT NULL DEFAULT 0,  -- maintained only inside stock-movement transactions
   min_stock       DECIMAL(14,3) NOT NULL DEFAULT 0,  -- Low Stock Alert Level (per location: product_stock.alert_level)
+  tracking        VARCHAR(12) NOT NULL DEFAULT 'qty', -- qty | serial | imei | serial_imei (devices table)
+  warranty_months INT UNSIGNED NULL,                 -- warranty policy for sales (warranties table)
+  warranty_provider VARCHAR(100) NULL,
+  warranty_terms  VARCHAR(255) NULL,
+  notes           TEXT NULL,
+  specs           TEXT NULL,                         -- technical specifications (JSON, by product type)
+  min_price       DECIMAL(14,4) NULL,                -- lowest price a sale may use
   track_batches   TINYINT(1) NOT NULL DEFAULT 0,     -- batch number + expiry per stock entry (product_batches)
   is_active       TINYINT(1) NOT NULL DEFAULT 1,
   created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -493,7 +504,14 @@ CREATE TABLE IF NOT EXISTS purchases (
   user_id      INT UNSIGNED NOT NULL,
   total        DECIMAL(14,4) NOT NULL,
   amount_paid  DECIMAL(14,4) NOT NULL DEFAULT 0,  -- sum of linked supplier_payments
-  status       ENUM('draft','ordered','received','cancelled','returned') NOT NULL DEFAULT 'received',  -- ordered = purchase order, no stock yet
+  status       ENUM('draft','ordered','partial','received','cancelled','returned') NOT NULL DEFAULT 'received',  -- draft / ordered = no stock yet; partial = backorder outstanding
+  discount     DECIMAL(14,4) NOT NULL DEFAULT 0,
+  extra_costs  DECIMAL(14,4) NOT NULL DEFAULT 0,   -- additional purchase costs (shipping, customs…)
+  ordered_total DECIMAL(14,4) NULL,                -- value of the order; total = what is owed for the goods received
+  expected_date DATE NULL,
+  payment_terms VARCHAR(80) NULL,
+  notes        VARCHAR(255) NULL,
+  location_id  INT UNSIGNED NULL,
   purchased_at DATETIME NOT NULL,
   received_at  DATETIME NULL,                      -- goods receipt of an ordered purchase
   UNIQUE KEY uq_purchase_no (business_id, purchase_no),
@@ -511,6 +529,9 @@ CREATE TABLE IF NOT EXISTS purchase_items (
   qty         DECIMAL(14,3) NOT NULL,
   unit_cost   DECIMAL(14,4) NOT NULL,
   line_total  DECIMAL(14,4) NOT NULL,
+  received_qty DECIMAL(14,3) NOT NULL DEFAULT 0,  -- base units received so far (partial receipts)
+  damaged_qty DECIMAL(14,3) NOT NULL DEFAULT 0,   -- arrived damaged / defective (not added to stock)
+  returned_qty DECIMAL(14,3) NOT NULL DEFAULT 0,  -- returned to the supplier
   buy_unit    VARCHAR(30) NULL,            -- bought in a pack (carton, box…): the pack, how many, cost per pack; qty / unit_cost stay in base units
   buy_qty     DECIMAL(14,3) NULL,
   buy_cost    DECIMAL(14,4) NULL,
@@ -668,6 +689,79 @@ CREATE TABLE IF NOT EXISTS stock_movement_batches (
   qty         DECIMAL(14,3) NOT NULL,            -- + into the batch, − out of it
   INDEX idx_smb_movement (movement_id),
   INDEX idx_smb_batch (batch_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS devices (
+  id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id   INT UNSIGNED NOT NULL,
+  product_id    INT UNSIGNED NOT NULL,                -- the product / variant
+  serial_no     VARCHAR(80) NULL,
+  imei1         VARCHAR(20) NULL,
+  imei2         VARCHAR(20) NULL,                     -- dual-SIM
+  location_id   INT UNSIGNED NULL,                    -- where it is (NULL once it left the business)
+  status        VARCHAR(20) NOT NULL DEFAULT 'available',  -- available, reserved, sold, returned_supplier, defective, lost, removed
+  purchase_id   BIGINT UNSIGNED NULL,
+  supplier_id   INT UNSIGNED NULL,
+  cost          DECIMAL(14,4) NULL,
+  sold_ref_type VARCHAR(10) NULL,                     -- sale | invoice
+  sold_ref_id   BIGINT UNSIGNED NULL,
+  sold_item_id  BIGINT UNSIGNED NULL,
+  customer_id   INT UNSIGNED NULL,
+  sold_at       DATETIME NULL,
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_dev_product (business_id, product_id, status, location_id),
+  INDEX idx_dev_serial (business_id, serial_no),
+  INDEX idx_dev_imei1 (business_id, imei1),
+  INDEX idx_dev_imei2 (business_id, imei2),
+  INDEX idx_dev_sold (business_id, sold_ref_type, sold_ref_id),
+  CONSTRAINT fk_dev_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+  CONSTRAINT fk_dev_product  FOREIGN KEY (product_id)  REFERENCES products(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS device_events (
+  id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  device_id   INT UNSIGNED NOT NULL,
+  event       VARCHAR(30) NOT NULL,                   -- received, opening, transferred, sold, returned, returned_supplier, defective, lost, removed, warranty
+  ref_type    VARCHAR(20) NULL,
+  ref_id      BIGINT UNSIGNED NULL,
+  location_id INT UNSIGNED NULL,
+  note        VARCHAR(255) NULL,
+  user_id     INT UNSIGNED NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_devev_device (device_id, id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS warranties (
+  id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id   INT UNSIGNED NOT NULL,
+  product_id    INT UNSIGNED NOT NULL,
+  device_id     INT UNSIGNED NULL,
+  customer_id   INT UNSIGNED NULL,
+  ref_type      VARCHAR(10) NOT NULL,                  -- sale | invoice
+  ref_id        BIGINT UNSIGNED NOT NULL,
+  qty           DECIMAL(14,3) NOT NULL DEFAULT 1,
+  provider      VARCHAR(100) NULL,                     -- shop, manufacturer, supplier…
+  months        INT UNSIGNED NOT NULL,
+  start_date    DATE NOT NULL,
+  end_date      DATE NOT NULL,
+  terms         VARCHAR(255) NULL,
+  status        VARCHAR(20) NOT NULL DEFAULT 'active', -- active, under_review, claim_submitted, resolved, rejected, void (expired is shown from end_date)
+  created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_war_business (business_id, end_date),
+  INDEX idx_war_ref (business_id, ref_type, ref_id),
+  CONSTRAINT fk_war_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS warranty_events (
+  id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  warranty_id INT UNSIGNED NOT NULL,
+  changes     TEXT NULL,                              -- JSON [{ field, from, to }]
+  note        VARCHAR(255) NULL,
+  user_id     INT UNSIGNED NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_warev (warranty_id, id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS audit_logs (

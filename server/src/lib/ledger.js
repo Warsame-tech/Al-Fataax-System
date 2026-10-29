@@ -74,12 +74,15 @@ export async function lockProducts(conn, businessId, ids) {
  * and writes one ledger row with the balances before / after.
  * Products that track batches also keep their batches in step (lib/batches.js); batches: [{ batchNo, expiryDate, qty }]
  * gives the batch numbers / expiry dates of stock coming in.
+ * devices: true when the caller also moves the serial / IMEI devices (required for tracked products).
  * Returns { id, before, after } (the location balances).
  */
 export async function moveStock(conn, {
   businessId, userId, product, qtyChange, type, refType = null, refId = null, note = null,
-  locationId = null, reason = null, reference = null, supplierId = null, transferRef = null, reversalOf = null, batches = null
+  locationId = null, reason = null, reference = null, supplierId = null, transferRef = null, reversalOf = null, batches = null, devices = false
 }) {
+  // serial / IMEI tracked products: the caller must move the exact devices too (lib/devices.js)
+  if (product.tracking && product.tracking !== "qty" && !devices) throw new HttpError(400, "devicesRequired", null, { product: productName(product) });
   const loc = locationId || (await defaultLocationId(conn, businessId));
   const row = await lockStockRow(conn, businessId, product.id, loc);
   const before = Number(row.qty);

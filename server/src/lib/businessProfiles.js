@@ -15,6 +15,11 @@
  *   packaging       packs above the base unit (carton → box → strip → tablet, lib/packaging.js); stock is
  *                   kept in the base unit, purchases / stock entry / POS / invoices may use the packs
  *   purchaseOrders  purchases can be ordered first and received later (goods receipt adds the stock)
+ *   electronics     product type, model number, manufacturer, preferred supplier, country of origin, notes,
+ *                   minimum selling price, technical specifications by product type
+ *   serials         per-product tracking: quantity, serial number, IMEI or both (devices table, lib/devices.js)
+ *   warranties      warranty policy per product; a warranty record per device / line sold (Warranties module)
+ *   variantGroups   product families: "Add variant" and the variants of a product (each variant is a product)
  *
  * Add a business type here when its special interface is built; types without one use DEFAULT.
  */
@@ -29,7 +34,11 @@ const DEFAULT = {
   hiddenFields: [],
   medicine: false,
   packaging: false,
-  purchaseOrders: false
+  purchaseOrders: false,
+  electronics: false,
+  serials: false,
+  warranties: false,
+  variantGroups: false
 };
 
 const PROFILES = {
@@ -57,6 +66,20 @@ const PROFILES = {
     medicine: true,
     packaging: true,
     purchaseOrders: true
+  },
+  electronics: {
+    key: "electronics",
+    variants: ["size"],                       // shown as Variant, e.g. Galaxy A16 8GB/256GB Black
+    variantGroups: true,
+    extraBarcodes: false,
+    batches: false,
+    labels: { size: "variant", costPrice: "purchaseCost", sellingPrice: "retailPrice", lowStockAlert: "reorderLevel", lowStockShort: "reorderLevel" },
+    units: ["pcs", "pack", "box", "roll", "meter"],
+    hiddenFields: [],
+    purchaseOrders: true,
+    electronics: true,
+    serials: true,
+    warranties: true
   }
 };
 

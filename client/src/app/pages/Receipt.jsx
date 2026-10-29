@@ -96,7 +96,10 @@ export default function Receipt() {
           </div>
           {items.map((i, k) => (
             <div key={k} className="thermal__row" role="row">
-              <span role="cell" className="thermal__name">{i.name}</span>
+              <span role="cell" className="thermal__name">{i.name}
+                {i.devices?.map((d) => <small key={d.id} className="thermal__device">{d.label}</small>)}
+                {i.warranty && i.warranty.status !== "void" && <small className="thermal__device">{fill(t("ui.warranty.receiptLine"), { n: i.warranty.months, date: date(i.warranty.endDate, lang) })}</small>}
+              </span>
               <span role="cell" className="num">{qty(i.qty)}{i.unit ? ` ${i.unit}` : ""}</span>
               <span role="cell" className="num">{m(i.unitPrice)}</span>
               <span role="cell" className="num">{m(i.total)}</span>

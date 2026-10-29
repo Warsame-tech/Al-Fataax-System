@@ -19,7 +19,7 @@ function readParty(body) {
 /* ---------- open balances ---------- */
 const SUPPLIER_OPEN = `
   SELECT 'purchase' kind, p.id, p.purchase_no ref, DATE(p.purchased_at) d, p.total, p.amount_paid
-    FROM purchases p WHERE p.business_id = ? AND p.supplier_id = ? AND p.status = 'received' AND p.total > p.amount_paid
+    FROM purchases p WHERE p.business_id = ? AND p.supplier_id = ? AND p.status IN ('received', 'partial') AND p.total > p.amount_paid
   ORDER BY d, id`;
 
 /** Applies a payment to the oldest open documents first (or one specific document). */
@@ -68,7 +68,7 @@ export async function receiveCustomerPayment(conn, { businessId, userId, custome
 
 export async function paySupplier(conn, { businessId, userId, supplierId, amount, method, bankAccountId, reference, purchaseId = null, at = null }) {
   const [docs] = purchaseId
-    ? await conn.query("SELECT 'purchase' kind, id, purchase_no ref, total, amount_paid FROM purchases WHERE id = ? AND business_id = ? AND status = 'received' FOR UPDATE", [purchaseId, businessId])
+    ? await conn.query("SELECT 'purchase' kind, id, purchase_no ref, total, amount_paid FROM purchases WHERE id = ? AND business_id = ? AND status IN ('received', 'partial') FOR UPDATE", [purchaseId, businessId])
     : await conn.query(SUPPLIER_OPEN + " FOR UPDATE", [businessId, supplierId]);
   const open = round2(docs.reduce((s, d) => s + num(d.total) - num(d.amount_paid), 0));
   if (amount > open + 0.001) throw badRequest({ amount: "exceedsBalance" });
@@ -109,7 +109,7 @@ function partyRouter(kind) {
   const balanceSql = isCustomer
     ? `(SELECT COALESCE(SUM(i.total - i.amount_paid),0) FROM invoices i WHERE i.business_id = x.business_id AND i.customer_id = x.id AND i.status IN ('unpaid','partially_paid'))
        + (SELECT COALESCE(SUM(s.total - s.amount_paid),0) FROM sales s WHERE s.business_id = x.business_id AND s.customer_id = x.id AND s.status = 'completed')`
-    : `(SELECT COALESCE(SUM(p.total - p.amount_paid),0) FROM purchases p WHERE p.business_id = x.business_id AND p.supplier_id = x.id AND p.status = 'received')`;
+    : `(SELECT COALESCE(SUM(p.total - p.amount_paid),0) FROM purchases p WHERE p.business_id = x.business_id AND p.supplier_id = x.id AND p.status IN ('received', 'partial'))`;
   const overdueSql = isCustomer
     ? `(SELECT COUNT(*) FROM invoices i WHERE i.business_id = x.business_id AND i.customer_id = x.id AND i.status IN ('unpaid','partially_paid') AND i.due_date < UTC_DATE())`
     : "0";
@@ -155,7 +155,7 @@ function partyRouter(kind) {
          ) t ORDER BY at, kind DESC, id`, [bid, party.id, bid, party.id, bid, party.id])
       : await pool.query(
         `SELECT * FROM (
-           SELECT 'purchase' kind, purchase_no ref, purchased_at at, total debit, 0 credit, status, id, NULL due_date FROM purchases WHERE business_id = ? AND supplier_id = ? AND status = 'received'
+           SELECT 'purchase' kind, purchase_no ref, purchased_at at, total debit, 0 credit, status, id, NULL due_date FROM purchases WHERE business_id = ? AND supplier_id = ? AND status IN ('received', 'partial')
            UNION ALL SELECT 'payment', COALESCE(reference, ''), paid_at, 0, amount, method, id, NULL FROM supplier_payments WHERE business_id = ? AND supplier_id = ?
          ) t ORDER BY at, kind DESC, id`, [bid, party.id, bid, party.id]);
     let bal = 0;

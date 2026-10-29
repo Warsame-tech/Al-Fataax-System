@@ -9,6 +9,8 @@ import { defaultLocationId } from "../lib/stock.js";
 import { productName, productNameSql } from "../lib/productName.js";
 import { startBatchTracking } from "../lib/batches.js";
 import { readPackaging, packagingOf } from "../lib/packaging.js";
+import { TRACKING } from "../lib/devices.js";
+import { conflict } from "../lib/http.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -39,8 +41,28 @@ const shape = (p) => ({
   // pharmacy: medicine details and packaging (packs above the base unit, see lib/packaging.js)
   genericName: p.generic_name || "", dosageForm: p.dosage_form || "", manufacturer: p.manufacturer || "", supplierId: p.supplier_id || null,
   supplier: p.supplier_name || null, rxRequired: Boolean(p.rx_required), storageInstructions: p.storage_instructions || "", packaging: packagingOf(p),
+  // electronics: type, model, specs, tracking (qty / serial / imei / serial_imei), warranty policy, minimum price
+  productType: p.product_type || "", modelNumber: p.model_number || "", countryOfOrigin: p.country_of_origin || "", notes: p.notes || "",
+  specs: specsOf(p), tracking: p.tracking || "qty", minPrice: p.min_price === null || p.min_price === undefined ? null : num(p.min_price),
+  warrantyMonths: p.warranty_months ?? null, warrantyProvider: p.warranty_provider || "", warrantyTerms: p.warranty_terms || "",
   stockStatus: num(p.stock_qty) < 0 ? "negative" : num(p.stock_qty) === 0 ? "out" : num(p.stock_qty) <= num(p.min_stock) ? "low" : "in"
 });
+
+function specsOf(p) { try { return JSON.parse(p.specs || "{}") || {}; } catch { return {}; } }
+
+/* Technical specifications from the form: { "RAM": "8 GB", … } (multipart: JSON string), up to 60 fields. */
+function readSpecs(raw) {
+  let o = raw;
+  if (typeof raw === "string") { try { o = raw.trim() ? JSON.parse(raw) : {}; } catch { o = {}; } }
+  if (!o || typeof o !== "object" || Array.isArray(o)) return {};
+  const out = {};
+  for (const [k, v] of Object.entries(o).slice(0, 60)) {
+    const key = String(k).trim().slice(0, 60);
+    const val = v === null || v === undefined ? "" : String(v).trim().slice(0, 120);
+    if (key && val) out[key] = val;
+  }
+  return out;
+}
 
 /* nearest expiry of the stock on hand, and how many products are in the variant group */
 const EXTRAS = `(SELECT MIN(pb.expiry_date) FROM product_batches pb WHERE pb.product_id = p.id AND pb.qty > 0 AND pb.expiry_date IS NOT NULL) next_expiry,
@@ -77,7 +99,7 @@ const EXPIRY_WHERE = {
  * GET /api/products — filters work together:
  *   q (name / variant / SKU / barcode, also packaging barcodes), brandId, categoryId, subcategory, status (in|low|out|negative),
  *   stockAt (has stock there), supplierId (bought from that supplier), active=all|archived, low=1 (old: low or out),
- *   expiry=expired|soon (batch-tracked stock), variantOf=<id> (one variant group)
+ *   expiry=expired|soon (batch-tracked stock), variantOf=<id> (one variant group), id=<id> (one product), productType
  *   sort (name|sku|category|brand|cost|price|stock|updated|expiry) + dir (asc|desc), page + pageSize (optional; default: up to 500)
  *   location=default | locationId → stock at that location
  */
@@ -87,9 +109,9 @@ router.get("/", requirePerm("products.view"), ah(async (req, res) => {
   const params = [bid];
   const q = text(req.query.q, 80);
   if (q) {
-    where.push(`(${productNameSql("p")} LIKE ? OR p.generic_name LIKE ? OR p.sku LIKE ? OR p.barcode = ?
+    where.push(`(${productNameSql("p")} LIKE ? OR p.generic_name LIKE ? OR p.sku LIKE ? OR p.barcode = ? OR p.model_number LIKE ? OR b.name LIKE ? OR p.product_type LIKE ?
       OR EXISTS (SELECT 1 FROM product_barcodes xb WHERE xb.product_id = p.id AND xb.barcode = ?))`);
-    params.push(`%${q}%`, `%${q}%`, `%${q}%`, q, q);
+    params.push(`%${q}%`, `%${q}%`, `%${q}%`, q, `%${q}%`, `%${q}%`, `%${q}%`, q);
   }
   if (id(req.query.categoryId)) { where.push("p.category_id = ?"); params.push(id(req.query.categoryId)); }
   if (id(req.query.brandId)) { where.push("p.brand_id = ?"); params.push(id(req.query.brandId)); }
@@ -100,6 +122,9 @@ router.get("/", requirePerm("products.view"), ah(async (req, res) => {
   if (req.query.expiry === "expired") where.push(EXPIRY_WHERE.expired);
   if (req.query.expiry === "soon") { where.push(EXPIRY_WHERE.soon); params.push(req.business.profile.expirySoonDays); }
   if (id(req.query.variantOf)) { where.push("COALESCE(p.variant_of, p.id) = ?"); params.push(id(req.query.variantOf)); }
+  if (id(req.query.id)) { where.push("p.id = ?"); params.push(id(req.query.id)); }
+  const ptype = text(req.query.productType, 60);
+  if (ptype) { where.push("p.product_type = ?"); params.push(ptype); }
   if (id(req.query.supplierId)) {
     where.push(`EXISTS (SELECT 1 FROM purchase_items pi JOIN purchases pu ON pu.id = pi.purchase_id AND pu.business_id = pi.business_id
                  WHERE pi.business_id = p.business_id AND pi.product_id = p.id AND pu.supplier_id = ?)`);
@@ -122,7 +147,8 @@ router.get("/", requirePerm("products.view"), ah(async (req, res) => {
   if (paged) {
     const [[c]] = await pool.query(
       `SELECT COUNT(*) n, COALESCE(SUM(p.stock_qty), 0) units, COALESCE(SUM(p.stock_qty * p.cost_price), 0) value
-         FROM products p WHERE ${where.join(" AND ")}`, params);
+         FROM products p LEFT JOIN brands b ON b.id = p.brand_id AND b.business_id = p.business_id
+         LEFT JOIN categories c ON c.id = p.category_id AND c.business_id = p.business_id WHERE ${where.join(" AND ")}`, params);
     total = Number(c.n);
     summary = { count: total, units: num(c.units), stockValue: Math.round(num(c.value) * 10000) / 10000 };
   }
@@ -182,6 +208,26 @@ router.put("/settings", requirePerm("settings.edit"), ah(async (req, res) => {
   res.json({ code: "saved", allowDuplicateCodes: allow });
 }));
 
+/* Extra technical specification fields per product type, set by the owner: { "Smartphone": ["Water resistance"], … } */
+router.get("/spec-fields", requirePerm("products.view"), ah(async (req, res) => {
+  const [[s]] = await pool.query("SELECT spec_fields FROM business_settings WHERE business_id = ?", [req.business.id]);
+  let fields = {};
+  try { fields = JSON.parse(s?.spec_fields || "{}") || {}; } catch { fields = {}; }
+  res.json({ fields });
+}));
+router.put("/spec-fields", requirePerm("settings.edit"), ah(async (req, res) => {
+  const raw = req.body?.fields && typeof req.body.fields === "object" ? req.body.fields : {};
+  const fields = {};
+  for (const [type, list] of Object.entries(raw).slice(0, 60)) {
+    const t = String(type).trim().slice(0, 60);
+    const names = (Array.isArray(list) ? list : []).map((x) => String(x).trim().slice(0, 60)).filter(Boolean);
+    if (t && names.length) fields[t] = [...new Set(names)].slice(0, 30);
+  }
+  await pool.query("UPDATE business_settings SET spec_fields = ? WHERE business_id = ?", [JSON.stringify(fields), req.business.id]);
+  await audit(pool, { businessId: req.business.id, userId: req.user.id, action: "settings.specFields", ip: req.ip });
+  res.json({ fields });
+}));
+
 async function categoryId(conn, bid, name) {
   const n = text(name, 120);
   if (!n) return null;
@@ -231,7 +277,13 @@ function readProduct(body, { creating }) {
     variantOf: creating ? id(body.variantOf) : null,
     genericName: optText(body.genericName, 190), dosageForm: optText(body.dosageForm, 40), manufacturer: optText(body.manufacturer, 150),
     supplierId: id(body.supplierId), rxRequired: body.rxRequired === true || body.rxRequired === "true",
-    storageInstructions: optText(body.storageInstructions, 255)
+    storageInstructions: optText(body.storageInstructions, 255),
+    productType: optText(body.productType, 60), modelNumber: optText(body.modelNumber, 80), countryOfOrigin: optText(body.countryOfOrigin, 60),
+    notes: optText(body.notes, 2000), specs: body.specs === undefined ? undefined : JSON.stringify(readSpecs(body.specs)),
+    tracking: TRACKING.includes(body.tracking) ? body.tracking : "qty",
+    minPrice: body.minPrice === "" || body.minPrice == null ? null : money(body.minPrice),
+    warrantyMonths: body.warrantyMonths === "" || body.warrantyMonths == null ? null : Number(body.warrantyMonths),
+    warrantyProvider: optText(body.warrantyProvider, 100), warrantyTerms: optText(body.warrantyTerms, 255)
   };
   const pack = readPackaging(body.packaging);
   // not sent (businesses without packaging): keep what is saved
@@ -239,6 +291,9 @@ function readProduct(body, { creating }) {
   const e = {};
   if (d.name.length < 1) e.name = "required";
   if (pack.error) e[pack.error] = "invalidAmount";
+  if (d.minPrice !== null && Number.isNaN(d.minPrice)) e.minPrice = "invalidAmount";
+  if (d.minPrice !== null && !Number.isNaN(d.minPrice) && !Number.isNaN(d.sellingPrice) && d.minPrice > d.sellingPrice) e.minPrice = "minAboveSelling";
+  if (d.warrantyMonths !== null && (!Number.isInteger(d.warrantyMonths) || d.warrantyMonths < 0 || d.warrantyMonths > 240)) e.warrantyMonths = "invalidAmount";
   if (pack.levels?.some((l) => l.name === d.unit)) e.packaging = "packSameAsUnit";
   if (Number.isNaN(d.costPrice)) e.costPrice = "invalidAmount";
   if (Number.isNaN(d.sellingPrice)) e.sellingPrice = "invalidAmount";
@@ -302,6 +357,9 @@ function changesOf(old, d) {
   }
   if (Boolean(old.is_active) !== d.isActive) out.push({ field: "status", from: old.is_active ? "active" : "archived", to: d.isActive ? "active" : "archived" });
   if (Boolean(old.track_batches) !== d.trackBatches) out.push({ field: "trackBatches", from: Boolean(old.track_batches), to: d.trackBatches });
+  if ((old.tracking || "qty") !== d.tracking) out.push({ field: "tracking", from: old.tracking || "qty", to: d.tracking });
+  const oldMin = old.min_price === null || old.min_price === undefined ? null : num(old.min_price);
+  if (oldMin !== d.minPrice) out.push({ field: "minPrice", from: oldMin, to: d.minPrice });
   return out;
 }
 
@@ -318,16 +376,19 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
       if (d.variantOf) { const parent = await ensureOwned(conn, "products", d.variantOf, bid); group = parent.variant_of || parent.id; }
       const [r] = await conn.query(
         `INSERT INTO products (business_id, category_id, brand_id, subcategory, name, generic_name, dosage_form, manufacturer, supplier_id, rx_required, storage_instructions,
+                               product_type, model_number, country_of_origin, notes, specs, tracking, min_price, warranty_months, warranty_provider, warranty_terms,
                                size, shade, fragrance, formula, pack_size, variant_of, description,
                                sku, barcode, image_path, unit, packaging, cost_price, selling_price, wholesale_price, min_stock, track_batches, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [bid, await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.genericName, d.dosageForm, d.manufacturer,
-          await supplierOf(conn, bid, d.supplierId), d.rxRequired ? 1 : 0, d.storageInstructions, d.size, d.shade, d.fragrance, d.formula, d.packSize,
+          await supplierOf(conn, bid, d.supplierId), d.rxRequired ? 1 : 0, d.storageInstructions,
+          d.productType, d.modelNumber, d.countryOfOrigin, d.notes, d.specs ?? null, d.tracking, d.minPrice, d.warrantyMonths, d.warrantyProvider, d.warrantyTerms,
+          d.size, d.shade, d.fragrance, d.formula, d.packSize,
           group, d.description, d.sku, d.barcode, image, d.unit, d.packaging ?? null, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0]
       );
       await saveBarcodes(conn, bid, r.insertId, d.barcodes || []);
       // A product can exist with zero stock. Opening stock is normally entered in Stock → Opening stock.
-      if (d.openingStock > 0) {
+      if (d.openingStock > 0 && d.tracking === "qty") {
         const product = { id: r.insertId, name: d.name, stock_qty: 0, unit: d.unit, cost_price: d.costPrice, track_batches: d.trackBatches ? 1 : 0 };
         await moveStock(conn, { businessId: bid, userId: req.user.id, product, qtyChange: d.openingStock, type: "opening", refType: "stock", reason: "opening", note: "Opening stock" });
       }
@@ -350,14 +411,19 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
     const oldImage = await withTx(async (conn) => {
       const p = await ensureOwned(conn, "products", id(req.params.id), bid, true);
       await checkCodes(conn, req.business, d, p);
+      // the tracking method can change only while nothing is in stock (devices must match the stock)
+      if ((p.tracking || "qty") !== d.tracking && num(p.stock_qty) !== 0) throw conflict("trackingNeedsZeroStock");
       const next = image || (req.body?.removeImage === "true" ? null : p.image_path);
       await conn.query(
         `UPDATE products SET category_id = ?, brand_id = ?, subcategory = ?, name = ?, generic_name = ?, dosage_form = ?, manufacturer = ?, supplier_id = ?, rx_required = ?,
-                storage_instructions = ?, size = ?, shade = ?, fragrance = ?, formula = ?, pack_size = ?, description = ?,
+                storage_instructions = ?, product_type = ?, model_number = ?, country_of_origin = ?, notes = ?, specs = ?, tracking = ?, min_price = ?,
+                warranty_months = ?, warranty_provider = ?, warranty_terms = ?, size = ?, shade = ?, fragrance = ?, formula = ?, pack_size = ?, description = ?,
                 sku = ?, barcode = ?, image_path = ?, unit = ?, packaging = ?, cost_price = ?, selling_price = ?, wholesale_price = ?, min_stock = ?, track_batches = ?, is_active = ?
           WHERE id = ? AND business_id = ?`,
         [await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.genericName, d.dosageForm, d.manufacturer,
-          await supplierOf(conn, bid, d.supplierId), d.rxRequired ? 1 : 0, d.storageInstructions, d.size, d.shade, d.fragrance, d.formula, d.packSize,
+          await supplierOf(conn, bid, d.supplierId), d.rxRequired ? 1 : 0, d.storageInstructions,
+          d.productType, d.modelNumber, d.countryOfOrigin, d.notes, d.specs === undefined ? p.specs : d.specs, d.tracking, d.minPrice,
+          d.warrantyMonths, d.warrantyProvider, d.warrantyTerms, d.size, d.shade, d.fragrance, d.formula, d.packSize,
           d.description, d.sku, d.barcode, next, d.unit, d.packaging === undefined ? p.packaging : d.packaging, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0, p.id, bid]
       );
       await saveBarcodes(conn, bid, p.id, d.barcodes);

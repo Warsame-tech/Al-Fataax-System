@@ -81,7 +81,7 @@ router.get("/", async (req, res, next) => {
              (SELECT COALESCE(SUM(total - amount_paid),0) FROM sales
                WHERE business_id = ? AND status = 'completed' AND total > amount_paid) v`, [bid, bid]),
       one(`SELECT COALESCE(SUM(total - amount_paid),0) v FROM purchases
-            WHERE business_id = ? AND status = 'received' AND total > amount_paid`, [bid]),
+            WHERE business_id = ? AND status IN ('received', 'partial') AND total > amount_paid`, [bid]),
       many(`SELECT id, CONCAT_WS(' ', name, NULLIF(size, '')) name, stock_qty, min_stock, unit FROM products
              WHERE business_id = ? AND is_active = 1 AND stock_qty <= min_stock
              ORDER BY (stock_qty <= 0) DESC, stock_qty ASC LIMIT 8`, [bid]),

@@ -59,5 +59,14 @@ export const DATA_STEPS = [
     async run(db) {
       await db.query("UPDATE businesses SET business_type = 'supermarket' WHERE business_type = 'retail'");
     }
+  },
+  {
+    // Purchases received before partial receipts existed: every line was received in full.
+    name: "purchase_received_qty_v1",
+    async run(db) {
+      await db.query(`UPDATE purchase_items pi JOIN purchases p ON p.id = pi.purchase_id
+                         SET pi.received_qty = pi.qty WHERE p.status IN ('received', 'cancelled', 'returned') AND pi.received_qty = 0`);
+      await db.query("UPDATE purchases SET ordered_total = total WHERE ordered_total IS NULL");
+    }
   }
 ];

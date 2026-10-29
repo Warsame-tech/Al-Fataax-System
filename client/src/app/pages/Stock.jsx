@@ -8,6 +8,10 @@ import { fill, qty, date } from "../format.js";
 import ProductPicker, { FoundCard } from "../ProductPicker.jsx";
 import { useDraft, DraftBar } from "../Drafts.jsx";
 import { unitsOf, unitsPer, breakdown } from "../packaging.js";
+import { DeviceEntry, DevicePicker, deviceText } from "../Devices.jsx";
+
+/* serial / IMEI products (electronics): new units need their numbers, units leaving are the exact devices */
+const tracked = (p) => Boolean(p?.tracking) && p.tracking !== "qty";
 
 /* Packaged products (pharmacy) can be counted in a pack (carton, box…); stock is saved in base units. */
 const baseQty = (product, amount, unit) => Math.round((Number(amount) || 0) * (unit ? unitsPer(product, unit) || 1 : 1) * 1000) / 1000;
@@ -254,7 +258,8 @@ function AddStock({ locationsApi }) {
 
   const save = async () => {
     const body = { ...f, locationId, supplierId: f.type === "purchase" ? f.supplierId || null : null,
-      items: lines.map((l) => ({ productId: l.product.id, qty: baseQty(l.product, l.qty, l.unit), batchNo: l.batchNo || "", expiryDate: l.expiryDate || "" })) };
+      items: lines.map((l) => ({ productId: l.product.id, qty: baseQty(l.product, l.qty, l.unit), batchNo: l.batchNo || "", expiryDate: l.expiryDate || "",
+        ...(tracked(l.product) ? { devices: l.devices || [] } : {}) })) };
     const r = await sub.run(() => apiRequest("/api/stock/add", { method: "POST", body }));
     setConfirming(false);
     if (r) { draft.finish(); setDone(fill(t("ui.stock.addDone"), { n: r.count, location: locationName })); setLines([]); setF((x) => ({ ...x, reference: "", notes: "" })); }
@@ -300,6 +305,12 @@ function AddStock({ locationsApi }) {
                   <UnitPicker product={l.product} value={l.unit} onChange={(unit) => setLines((ls) => ls.map((x) => (x.product.id === l.product.id ? { ...x, unit } : x)))} />
                 </label>
                 {l.unit && Number(l.qty) > 0 && <small className="stock-lines__chain">{breakdown(l.product, l.unit, l.qty)}</small>}
+                {tracked(l.product) && Number.isInteger(Number(l.qty)) && Number(l.qty) > 0 && (
+                  <div className="stock-lines__batch">
+                    <DeviceEntry tracking={l.product.tracking} qty={Number(l.qty)} value={l.devices || []} errors={sub.fieldErrors} field={`items.${lines.indexOf(l)}.devices`}
+                      onChange={(devices) => setLines((ls) => ls.map((x) => (x.product.id === l.product.id ? { ...x, devices } : x)))} />
+                  </div>
+                )}
                 <button type="button" className="icon-btn" onClick={() => setLines((ls) => ls.filter((x) => x.product.id !== l.product.id))} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
                 {l.product.trackBatches && (
                   <div className="stock-lines__batch">
@@ -347,7 +358,8 @@ function OpeningStock({ locationsApi }) {
   const locationId = f.locationId || defaultLocation(locationsApi);
   const here = (ps.data?.locations || []).find((l) => String(l.locationId) === String(locationId));
   const save = async () => {
-    const r = await sub.run(() => apiRequest("/api/stock/opening", { method: "POST", body: { productId: product.id, locationId, qty: baseQty(product, f.qty, f.unit), reference: f.reference, notes: f.notes, batchNo: f.batchNo, expiryDate: f.expiryDate } }));
+    const r = await sub.run(() => apiRequest("/api/stock/opening", { method: "POST", body: { productId: product.id, locationId, qty: baseQty(product, f.qty, f.unit), reference: f.reference, notes: f.notes, batchNo: f.batchNo, expiryDate: f.expiryDate,
+      ...(tracked(product) ? { devices: f.devices || [] } : {}) } }));
     setConfirming(false);
     if (r) { setDone(fill(t("ui.stock.openingDone"), { name: product.name, qty: qty(r.after), location: here?.location || "" })); setProduct(null); setF({ ...f, qty: "", reference: "", notes: "", batchNo: "", expiryDate: "" }); }
   };
@@ -371,6 +383,9 @@ function OpeningStock({ locationsApi }) {
             <Field label={`${t("ui.common.notes")} ${t("ui.common.optional")}`}><input className="input" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
             {product.trackBatches && <BatchFields value={f} onChange={(patch) => setF({ ...f, ...patch })} />}
           </div>
+        )}
+        {product && tracked(product) && Number.isInteger(Number(f.qty)) && Number(f.qty) > 0 && (
+          <DeviceEntry tracking={product.tracking} qty={Number(f.qty)} value={f.devices || []} onChange={(devices) => setF((x) => ({ ...x, devices }))} errors={sub.fieldErrors} />
         )}
         {here?.hasOpening && <p className="form-status form-status--error">{fill(t("ui.stock.openingExistsHere"), { location: here.location })}</p>}
         {sub.formError && <p className="form-status form-status--error" role="alert">{errText(sub.formError)}</p>}
@@ -421,16 +436,20 @@ function AdjustStock({ locationsApi, initialProduct, initialLocation }) {
   const after = change === null ? null : r3(before + change);
   const valueChange = change === null || !product ? null : Math.round(change * product.costPrice * 100) / 100;
   const reason = f.mode === "count" ? (f.reason || "correction") : f.reason;
-  const ready = product && change !== null && change !== 0 && after >= 0 && reason;
+  const isTracked = tracked(product);
+  const [picking, setPicking] = useState(false);
+  const devicesOk = !isTracked || (f.direction === "subtract" ? (f.deviceIds || []).length === Number(f.qty) : (f.devices || []).length === Number(f.qty));
+  const ready = product && change !== null && change !== 0 && after >= 0 && reason && devicesOk;
 
   const save = async () => {
-    const body = { productId, locationId, mode: f.mode, direction: f.direction, qty: f.qty, counted: f.counted, reason, notes: f.notes, expectedBefore: before };
+    const body = { productId, locationId, mode: f.mode, direction: f.direction, qty: f.qty, counted: f.counted, reason, notes: f.notes, expectedBefore: before,
+      ...(isTracked ? (f.direction === "subtract" ? { deviceIds: f.deviceIds || [] } : { devices: f.devices || [] }) : {}) };
     const r = await sub.run(() => apiRequest("/api/stock/adjust", { method: "POST", body }));
     setConfirming(false);
     ps.reload();
     if (r) {
       setDone(fill(t("ui.stock.adjustDone"), { name: product.name, before: qty(r.before), after: qty(r.after), unit: product.unit }));
-      setF((x) => ({ ...x, qty: "", counted: "", notes: "" }));
+      setF((x) => ({ ...x, qty: "", counted: "", notes: "", deviceIds: [], devices: [], picked: [] }));
     }
   };
 
@@ -444,12 +463,14 @@ function AdjustStock({ locationsApi, initialProduct, initialLocation }) {
           <>
             <div className="form-grid form-grid--2">
               <LocationSelect locationsApi={locationsApi} value={locationId} onChange={(v) => setF({ ...f, locationId: v })} />
-              <Field label={t("ui.stock.method")}>
-                <div className="seg">
-                  <button type="button" aria-pressed={f.mode === "adjust"} onClick={() => setF({ ...f, mode: "adjust" })}>{t("ui.stock.modeAdjust")}</button>
-                  <button type="button" aria-pressed={f.mode === "count"} onClick={() => setF({ ...f, mode: "count" })}>{t("ui.stock.modeCount")}</button>
-                </div>
-              </Field>
+              {!isTracked ? (
+                <Field label={t("ui.stock.method")}>
+                  <div className="seg">
+                    <button type="button" aria-pressed={f.mode === "adjust"} onClick={() => setF({ ...f, mode: "adjust" })}>{t("ui.stock.modeAdjust")}</button>
+                    <button type="button" aria-pressed={f.mode === "count"} onClick={() => setF({ ...f, mode: "count" })}>{t("ui.stock.modeCount")}</button>
+                  </div>
+                </Field>
+              ) : <p className="page-help"><Icon name="smartphone" /> {t("ui.devices.adjustHelp")}</p>}
               {f.mode === "adjust" ? (
                 <>
                   <Field label={t("ui.stock.adjustType")}>
@@ -458,9 +479,15 @@ function AdjustStock({ locationsApi, initialProduct, initialLocation }) {
                       <button type="button" aria-pressed={f.direction === "subtract"} onClick={() => setF({ ...f, direction: "subtract" })}>{t("ui.stock.subtract")}</button>
                     </div>
                   </Field>
-                  <Field label={`${t("ui.stock.adjustQty")} (${product.unit})`} error={sub.fieldErrors.qty}>
-                    <input className="input" type="number" min="0" step="any" value={f.qty} onChange={(e) => setF({ ...f, qty: e.target.value })} />
-                  </Field>
+                  {isTracked && f.direction === "subtract" ? (
+                    <Field label={t("ui.devices.devicesOut")} error={sub.fieldErrors.deviceIds}>
+                      <button type="button" className="btn btn--outline" onClick={() => setPicking(true)}><Icon name="smartphone" /><span>{fill(t("ui.devices.count"), { n: (f.deviceIds || []).length })}</span></button>
+                    </Field>
+                  ) : (
+                    <Field label={`${t("ui.stock.adjustQty")} (${product.unit})`} error={sub.fieldErrors.qty}>
+                      <input className="input" type="number" min="0" step={isTracked ? "1" : "any"} value={f.qty} onChange={(e) => setF({ ...f, qty: e.target.value })} />
+                    </Field>
+                  )}
                 </>
               ) : (
                 <Field label={`${t("ui.stock.countedQty")} (${product.unit})`} error={sub.fieldErrors.counted} hint={t("ui.stock.countHint")} full>
@@ -475,6 +502,14 @@ function AdjustStock({ locationsApi, initialProduct, initialLocation }) {
               </Field>
               <Field label={`${t("ui.common.notes")} ${t("ui.common.optional")}`}><input className="input" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
             </div>
+            {isTracked && f.direction === "subtract" && (f.picked || []).length > 0 && <ul className="pos2__devices">{f.picked.map((d) => <li key={d.id}>{deviceText(d)}</li>)}</ul>}
+            {isTracked && f.direction === "add" && Number.isInteger(Number(f.qty)) && Number(f.qty) > 0 && (
+              <DeviceEntry tracking={product.tracking} qty={Number(f.qty)} value={f.devices || []} onChange={(devices) => setF((x) => ({ ...x, devices }))} errors={sub.fieldErrors} />
+            )}
+            {picking && (
+              <DevicePicker product={product} locationId={locationId} value={f.deviceIds || []} onClose={() => setPicking(false)}
+                onDone={(ids, devices) => { setF((x) => ({ ...x, deviceIds: ids, picked: devices, qty: String(ids.length) })); setPicking(false); }} />
+            )}
             <AdjPreview before={before} change={change} after={after} unit={product.unit} value={valueChange} m={m} />
             {after !== null && after < 0 && <p className="form-status form-status--error">{t("ui.stock.wouldBeNegative")}</p>}
             {change === 0 && <p className="form-status form-status--error">{t("ui.errors.noChange")}</p>}
@@ -542,8 +577,10 @@ function TransferStock({ locationsApi }) {
   }, [from, lines.length]); // eslint-disable-line react-hooks/exhaustive-deps
   const pick = (p) => { setDone(null); setLines((ls) => (ls.some((l) => l.product.id === p.id) ? ls : [...ls, { product: p, qty: "", available: null, availableAt: null }])); };
   const bad = (l) => !(Number(l.qty) > 0) || (l.available !== null && Number(l.qty) > l.available);
+  const [pickFor, setPickFor] = useState(null);
   const save = async () => {
-    const r = await sub.run(() => apiRequest("/api/stock/transfer", { method: "POST", body: { fromLocationId: from, toLocationId: to, reference: f.reference, notes: f.notes, items: lines.map((l) => ({ productId: l.product.id, qty: Number(l.qty) })) } }));
+    const r = await sub.run(() => apiRequest("/api/stock/transfer", { method: "POST", body: { fromLocationId: from, toLocationId: to, reference: f.reference, notes: f.notes,
+      items: lines.map((l) => ({ productId: l.product.id, qty: Number(l.qty), ...(tracked(l.product) ? { deviceIds: l.deviceIds || [] } : {}) })) } }));
     setConfirming(false);
     if (r) { draft.finish(); setDone(fill(t("ui.stock.transferDone"), { n: r.count, from: nameOf(from), to: nameOf(to), ref: r.transferRef })); setLines([]); }
   };
@@ -572,15 +609,24 @@ function TransferStock({ locationsApi }) {
               <li key={l.product.id}>
                 <span className="prod-thumb">{l.product.imagePath ? <img src={fileUrl(l.product.imagePath)} alt="" /> : <Icon name="package" />}</span>
                 <div className="stock-lines__name"><strong>{l.product.name}</strong><small>{l.available === null ? "…" : fill(t("ui.stock.availableAt"), { qty: qty(l.available), unit: l.product.unit, location: nameOf(from) })}</small></div>
-                <label className="stock-lines__qty">
-                  <input className={"input" + (l.qty !== "" && bad(l) ? " has-error" : "")} type="number" min="0" step="any" value={l.qty} onChange={(e) => setLines((ls) => ls.map((x) => (x.product.id === l.product.id ? { ...x, qty: e.target.value } : x)))} placeholder="0" aria-label={t("ui.common.qty")} />
-                  <span>{l.product.unit}</span>
-                </label>
+                {tracked(l.product) ? (
+                  <button type="button" className="btn btn--outline btn--sm" onClick={() => setPickFor(l.product.id)}><Icon name="smartphone" /><span>{fill(t("ui.devices.count"), { n: (l.deviceIds || []).length })}</span></button>
+                ) : (
+                  <label className="stock-lines__qty">
+                    <input className={"input" + (l.qty !== "" && bad(l) ? " has-error" : "")} type="number" min="0" step="any" value={l.qty} onChange={(e) => setLines((ls) => ls.map((x) => (x.product.id === l.product.id ? { ...x, qty: e.target.value } : x)))} placeholder="0" aria-label={t("ui.common.qty")} />
+                    <span>{l.product.unit}</span>
+                  </label>
+                )}
                 <button type="button" className="icon-btn" onClick={() => setLines((ls) => ls.filter((x) => x.product.id !== l.product.id))} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
               </li>
             ))}
           </ul>
         )}
+        {pickFor && (() => {
+          const l = lines.find((x) => x.product.id === pickFor);
+          return l ? <DevicePicker product={l.product} locationId={from} value={l.deviceIds || []} onClose={() => setPickFor(null)}
+            onDone={(ids) => { setLines((ls) => ls.map((x) => (x.product.id === pickFor ? { ...x, deviceIds: ids, qty: String(ids.length) } : x))); setPickFor(null); }} /> : null;
+        })()}
         {sub.formError && <p className="form-status form-status--error" role="alert">{errText(sub.formError)}</p>}
         <Done text={done} />
         <div className="form-actions">

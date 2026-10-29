@@ -174,6 +174,87 @@ const TABLES = [
       INDEX idx_smb_movement (movement_id),
       INDEX idx_smb_batch (batch_id)
     ) ENGINE=InnoDB`
+  },
+  {
+    table: "devices",
+    ddl: `CREATE TABLE IF NOT EXISTS devices (
+      id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id   INT UNSIGNED NOT NULL,
+      product_id    INT UNSIGNED NOT NULL,                -- the product / variant
+      serial_no     VARCHAR(80) NULL,
+      imei1         VARCHAR(20) NULL,
+      imei2         VARCHAR(20) NULL,                     -- dual-SIM
+      location_id   INT UNSIGNED NULL,                    -- where it is (NULL once it left the business)
+      status        VARCHAR(20) NOT NULL DEFAULT 'available',  -- available, reserved, sold, returned_supplier, defective, lost, removed
+      purchase_id   BIGINT UNSIGNED NULL,
+      supplier_id   INT UNSIGNED NULL,
+      cost          DECIMAL(14,4) NULL,
+      sold_ref_type VARCHAR(10) NULL,                     -- sale | invoice
+      sold_ref_id   BIGINT UNSIGNED NULL,
+      sold_item_id  BIGINT UNSIGNED NULL,
+      customer_id   INT UNSIGNED NULL,
+      sold_at       DATETIME NULL,
+      created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_dev_product (business_id, product_id, status, location_id),
+      INDEX idx_dev_serial (business_id, serial_no),
+      INDEX idx_dev_imei1 (business_id, imei1),
+      INDEX idx_dev_imei2 (business_id, imei2),
+      INDEX idx_dev_sold (business_id, sold_ref_type, sold_ref_id),
+      CONSTRAINT fk_dev_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+      CONSTRAINT fk_dev_product  FOREIGN KEY (product_id)  REFERENCES products(id)
+    ) ENGINE=InnoDB`
+  },
+  {
+    table: "device_events",
+    ddl: `CREATE TABLE IF NOT EXISTS device_events (
+      id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      device_id   INT UNSIGNED NOT NULL,
+      event       VARCHAR(30) NOT NULL,                   -- received, opening, transferred, sold, returned, returned_supplier, defective, lost, removed, warranty
+      ref_type    VARCHAR(20) NULL,
+      ref_id      BIGINT UNSIGNED NULL,
+      location_id INT UNSIGNED NULL,
+      note        VARCHAR(255) NULL,
+      user_id     INT UNSIGNED NULL,
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_devev_device (device_id, id)
+    ) ENGINE=InnoDB`
+  },
+  {
+    table: "warranties",
+    ddl: `CREATE TABLE IF NOT EXISTS warranties (
+      id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id   INT UNSIGNED NOT NULL,
+      product_id    INT UNSIGNED NOT NULL,
+      device_id     INT UNSIGNED NULL,
+      customer_id   INT UNSIGNED NULL,
+      ref_type      VARCHAR(10) NOT NULL,                  -- sale | invoice
+      ref_id        BIGINT UNSIGNED NOT NULL,
+      qty           DECIMAL(14,3) NOT NULL DEFAULT 1,
+      provider      VARCHAR(100) NULL,                     -- shop, manufacturer, supplier…
+      months        INT UNSIGNED NOT NULL,
+      start_date    DATE NOT NULL,
+      end_date      DATE NOT NULL,
+      terms         VARCHAR(255) NULL,
+      status        VARCHAR(20) NOT NULL DEFAULT 'active', -- active, under_review, claim_submitted, resolved, rejected, void (expired is shown from end_date)
+      created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_war_business (business_id, end_date),
+      INDEX idx_war_ref (business_id, ref_type, ref_id),
+      CONSTRAINT fk_war_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+    ) ENGINE=InnoDB`
+  },
+  {
+    table: "warranty_events",
+    ddl: `CREATE TABLE IF NOT EXISTS warranty_events (
+      id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      warranty_id INT UNSIGNED NOT NULL,
+      changes     TEXT NULL,                              -- JSON [{ field, from, to }]
+      note        VARCHAR(255) NULL,
+      user_id     INT UNSIGNED NULL,
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_warev (warranty_id, id)
+    ) ENGINE=InnoDB`
   }
 ];
 
@@ -232,6 +313,22 @@ COLUMNS.push(
   { table: "invoice_items", column: "sell_unit", ddl: "ALTER TABLE invoice_items ADD COLUMN sell_unit VARCHAR(30) NULL AFTER line_total, ADD COLUMN sell_qty DECIMAL(14,3) NULL AFTER sell_unit, ADD COLUMN sell_price DECIMAL(14,4) NULL AFTER sell_qty" },
   { table: "purchase_items", column: "buy_unit", ddl: "ALTER TABLE purchase_items ADD COLUMN buy_unit VARCHAR(30) NULL AFTER line_total, ADD COLUMN buy_qty DECIMAL(14,3) NULL AFTER buy_unit, ADD COLUMN buy_cost DECIMAL(14,4) NULL AFTER buy_qty" },
   { table: "purchase_items", column: "batch_no", ddl: "ALTER TABLE purchase_items ADD COLUMN batch_no VARCHAR(60) NULL AFTER buy_cost, ADD COLUMN expiry_date DATE NULL AFTER batch_no" }
+);
+
+// Electronics: product type, model, specs, tracking (quantity / serial / IMEI), warranty policy, minimum price;
+// purchase orders with draft, partial receipts, backorders, discount and extra costs; supplier returns.
+COLUMNS.push(
+  { table: "products", column: "product_type", ddl: "ALTER TABLE products ADD COLUMN product_type VARCHAR(60) NULL AFTER generic_name" },
+  { table: "products", column: "model_number", ddl: "ALTER TABLE products ADD COLUMN model_number VARCHAR(80) NULL AFTER product_type" },
+  { table: "products", column: "country_of_origin", ddl: "ALTER TABLE products ADD COLUMN country_of_origin VARCHAR(60) NULL AFTER model_number" },
+  { table: "products", column: "notes", ddl: "ALTER TABLE products ADD COLUMN notes TEXT NULL AFTER description" },
+  { table: "products", column: "specs", ddl: "ALTER TABLE products ADD COLUMN specs TEXT NULL AFTER notes" },
+  { table: "products", column: "tracking", ddl: "ALTER TABLE products ADD COLUMN tracking VARCHAR(12) NOT NULL DEFAULT 'qty' AFTER track_batches" },
+  { table: "products", column: "min_price", ddl: "ALTER TABLE products ADD COLUMN min_price DECIMAL(14,4) NULL AFTER wholesale_price" },
+  { table: "products", column: "warranty_months", ddl: "ALTER TABLE products ADD COLUMN warranty_months INT UNSIGNED NULL AFTER tracking, ADD COLUMN warranty_provider VARCHAR(100) NULL AFTER warranty_months, ADD COLUMN warranty_terms VARCHAR(255) NULL AFTER warranty_provider" },
+  { table: "business_settings", column: "spec_fields", ddl: "ALTER TABLE business_settings ADD COLUMN spec_fields TEXT NULL AFTER allow_duplicate_codes" },
+  { table: "purchases", column: "expected_date", ddl: "ALTER TABLE purchases ADD COLUMN expected_date DATE NULL AFTER purchased_at, ADD COLUMN payment_terms VARCHAR(80) NULL AFTER expected_date, ADD COLUMN discount DECIMAL(14,4) NOT NULL DEFAULT 0 AFTER total, ADD COLUMN extra_costs DECIMAL(14,4) NOT NULL DEFAULT 0 AFTER discount, ADD COLUMN ordered_total DECIMAL(14,4) NULL AFTER extra_costs, ADD COLUMN notes VARCHAR(255) NULL AFTER payment_terms, ADD COLUMN location_id INT UNSIGNED NULL AFTER notes" },
+  { table: "purchase_items", column: "received_qty", ddl: "ALTER TABLE purchase_items ADD COLUMN received_qty DECIMAL(14,3) NOT NULL DEFAULT 0 AFTER qty, ADD COLUMN damaged_qty DECIMAL(14,3) NOT NULL DEFAULT 0 AFTER received_qty, ADD COLUMN returned_qty DECIMAL(14,3) NOT NULL DEFAULT 0 AFTER damaged_qty" }
 );
 
 const INDEXES = [
@@ -303,9 +400,16 @@ export async function migrate() {
   const [[pStatus]] = await pool.query(
     "SELECT COLUMN_TYPE t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'purchases' AND COLUMN_NAME = 'status'");
   if (pStatus && !String(pStatus.t).includes("'ordered'")) {
-    await pool.query("ALTER TABLE purchases MODIFY status ENUM('draft','ordered','received','cancelled','returned') NOT NULL DEFAULT 'received'");
+    await pool.query("ALTER TABLE purchases MODIFY status ENUM('draft','ordered','partial','received','cancelled','returned') NOT NULL DEFAULT 'received'");
     await pool.query("ALTER TABLE purchases ADD COLUMN received_at DATETIME NULL AFTER purchased_at").catch(() => {});
     console.log("Database upgraded: purchases can be ordered and received later");
+  }
+  // Partial receipts: a purchase order can be partly received (backorder outstanding).
+  const [[pStatus2]] = await pool.query(
+    "SELECT COLUMN_TYPE t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'purchases' AND COLUMN_NAME = 'status'");
+  if (pStatus2 && !String(pStatus2.t).includes("'partial'")) {
+    await pool.query("ALTER TABLE purchases MODIFY status ENUM('draft','ordered','partial','received','cancelled','returned') NOT NULL DEFAULT 'received'");
+    console.log("Database upgraded: purchases can be partly received");
   }
   for (const ix of INDEXES) {
     const [[row]] = await pool.query(

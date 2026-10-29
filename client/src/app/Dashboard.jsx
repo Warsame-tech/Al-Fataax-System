@@ -4,6 +4,7 @@ import { useLanguage } from "../i18n/LanguageContext.jsx";
 import usePageTitle from "../hooks/usePageTitle.js";
 import { MODULES, QUICK_ACTIONS } from "./modules.js";
 import { usePerm } from "./ui.jsx";
+import { useProfile } from "./profile.js";
 
 /*
  * Business dashboard: quick actions, then large module buttons (5 per row).
@@ -13,7 +14,8 @@ export default function Dashboard() {
   const { t } = useLanguage();
   const can = usePerm();
   const quick = QUICK_ACTIONS.filter((a) => can(a.perm));
-  const tiles = MODULES.filter((mod) => !mod.perm || can(mod.perm));
+  const profile = useProfile();
+  const tiles = MODULES.filter((mod) => (!mod.perm || can(mod.perm)) && (!mod.profile || profile[mod.profile]));
   usePageTitle("meta.app");
 
   return (

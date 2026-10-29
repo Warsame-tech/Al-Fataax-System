@@ -10,10 +10,13 @@ import { useAuth } from "../auth/AuthContext.jsx";
  *   profile.hiddenFields    product form fields not used by this business (cosmetics: description)
  *   profile.medicine        medicine details (generic name, dosage form, manufacturer, supplier, prescription, storage)
  *   profile.packaging       packs above the base unit (app/packaging.js)   profile.purchaseOrders   order first, receive later
+ *   profile.electronics     product type, model, specs, minimum price…   profile.serials   serial / IMEI devices
+ *   profile.warranties      warranty policy + Warranties module          profile.variantGroups   product families ("Add variant")
  *   profile.units           units offered in the product form (cosmetics: pcs, bottle, tube, box, carton; null = all)
  *   label("costPrice")      "Purchase cost" for cosmetics, "Cost price" otherwise
  */
-const DEFAULT = { key: "default", variants: ["size"], extraBarcodes: false, batches: false, expirySoonDays: 90, labels: {}, units: null, hiddenFields: [], medicine: false, packaging: false, purchaseOrders: false };
+const DEFAULT = { key: "default", variants: ["size"], extraBarcodes: false, batches: false, expirySoonDays: 90, labels: {}, units: null, hiddenFields: [], medicine: false, packaging: false, purchaseOrders: false,
+  electronics: false, serials: false, warranties: false, variantGroups: false };
 
 export function useProfile() {
   const { business } = useAuth();

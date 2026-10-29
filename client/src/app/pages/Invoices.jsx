@@ -105,7 +105,7 @@ export function InvoiceForm() {
 
   const save = async (e) => {
     e.preventDefault();
-    const body = { ...f, items: lines.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(allowPrice ? { unitPrice: l.price } : {}) })) };
+    const body = { ...f, items: lines.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}), ...(allowPrice ? { unitPrice: l.price } : {}) })) };
     const r = await sub.run(() => apiRequest("/api/invoices", { method: "POST", body }));
     if (r) { await draft.finish(); navigate(`/app/invoices/${r.id}`, { replace: true }); }
   };

@@ -1,6 +1,7 @@
 /*
  * Business application modules shown as tiles on the dashboard.
  * `perm` hides the tile from roles that can't use it (the API enforces it too).
+ * `profile` shows the tile only to business types whose profile has that feature (e.g. electronics: devices, warranties).
  */
 export const MODULES = [
   { id: "overview",     icon: "chart-line",  color: "#f2712f", perm: null },
@@ -11,6 +12,8 @@ export const MODULES = [
   { id: "purchases",    icon: "truck",       color: "#f2712f", perm: "purchases.view" },
   { id: "products",     icon: "package",     color: "#d97706", perm: "products.view" },
   { id: "stock",        icon: "layers",      color: "#0f766e", perm: "stock.view" },
+  { id: "devices",      icon: "smartphone",  color: "#2c3494", perm: "products.view", profile: "serials" },
+  { id: "warranties",   icon: "shield-check", color: "#1f9d61", perm: "sales.view", profile: "warranties" },
   { id: "expenses",     icon: "wallet",      color: "#dc2626", perm: "expenses.view" },
   { id: "cashbook",     icon: "book-open",   color: "#2373f4", perm: "cash.view" },
   { id: "reports",      icon: "file-chart",  color: "#0f9488", perm: "reports.view" },

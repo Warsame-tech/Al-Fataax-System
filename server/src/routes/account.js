@@ -222,7 +222,7 @@ notificationsRouter.get("/", ah(async (req, res) => {
   if (can(role, "purchases.pay")) {
     const [pay] = await pool.query(
       `SELECT s.id, s.name, SUM(p.total - p.amount_paid) bal FROM purchases p JOIN suppliers s ON s.id = p.supplier_id
-        WHERE p.business_id = ? AND p.status = 'received' AND p.total > p.amount_paid GROUP BY s.id, s.name ORDER BY bal DESC LIMIT 10`, [bid]);
+        WHERE p.business_id = ? AND p.status IN ('received', 'partial') AND p.total > p.amount_paid GROUP BY s.id, s.name ORDER BY bal DESC LIMIT 10`, [bid]);
     pay.forEach((s) => items.push({ type: "supplierDue", ref: s.name, link: "/app/m/suppliers", amount: num(s.bal) }));
   }
   res.json({ notifications: items });

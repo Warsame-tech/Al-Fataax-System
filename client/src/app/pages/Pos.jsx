@@ -9,6 +9,10 @@ import CameraScanner from "../CameraScanner.jsx";
 import { VAT_RATE, vatOf } from "../vat.js";
 import { useDraft, DraftBar } from "../Drafts.jsx";
 import { unitsOf, unitsPer, packPrice } from "../packaging.js";
+import { DevicePicker, deviceText } from "../Devices.jsx";
+
+/* serial / IMEI products (electronics): a line is the exact devices chosen or scanned */
+const tracked = (p) => Boolean(p?.tracking) && p.tracking !== "qty";
 
 /* A cart line may be sold in a pack of the product (pharmacy: box, strip…); stock is counted in base units. */
 const perOf = (l) => (l.unit ? unitsPer(l.product, l.unit) || 1 : 1);
@@ -72,6 +76,7 @@ function Register() {
   /* n: units to add (1, or the units in a scanned packaging barcode, e.g. a box of 12) */
   const add = (p, n = 1) => {
     if (p.stock <= 0) { setNotice(fill(t("ui.errors.insufficientStock"), { product: p.name, available: qty(p.stock) })); return false; }
+    if (tracked(p)) { setPicking(p); return true; }       // choose the exact device(s)
     const line = cart.find((l) => l.product.id === p.id);
     const inCart = line ? line.qty * perOf(line) : 0;
     setNotice(inCart + n > p.stock ? fill(t("ui.pos.packCapped"), { qty: qty(p.stock), unit: p.unit }) : null);
@@ -92,6 +97,28 @@ function Register() {
     return { ...next, qty: Math.min(1, maxOf(next)) };
   }).filter((l) => l.qty > 0));
   const removeLine = (pid) => setCart((c) => c.filter((l) => l.product.id !== pid));
+  /* the devices of a tracked line (from the picker or a scanned serial / IMEI) */
+  const [picking, setPicking] = useState(null);
+  const setDevices = (p, devices) => {
+    setCart((c) => {
+      const rest = c.filter((l) => l.product.id !== p.id);
+      if (!devices.length) return rest;
+      const line = { product: p, qty: devices.length, unit: null, deviceIds: devices.map((d) => d.id), devices };
+      return c.some((l) => l.product.id === p.id) ? c.map((l) => (l.product.id === p.id ? line : l)) : [...rest, line];
+    });
+    setActive(p.id); setPulse((x) => x + 1); setNotice(null);
+  };
+  const addDevice = async (device) => {
+    if (device.status !== "available") { setNotice(fill(t("ui.devices.notAvailable"), { device: deviceText(device), status: t(`ui.devices.status.${device.status}`) })); return true; }
+    const { products: found } = await apiRequest(`/api/products?location=default&id=${device.productId}`);
+    const p = found[0];
+    if (!p) return false;
+    const line = cart.find((l) => l.product.id === p.id);
+    if (line?.deviceIds?.includes(device.id)) return true;
+    setDevices(p, [...(line?.devices || []), device]);
+    showScanned(p);
+    return true;
+  };
 
   /* Barcode / SKU lookup (USB scanner, camera, or typed code); falls back to a single name match. */
   const lookup = async (value) => {
@@ -100,6 +127,8 @@ function Register() {
       add(product, pack?.qty || 1); showScanned(product);
       return true;
     } catch {
+      // a serial number / IMEI scanned: add that exact device
+      try { const { device } = await apiRequest(`/api/devices/lookup/${encodeURIComponent(value)}`); if (device) return addDevice(device); } catch { /* not a device */ }
       try {
         const { products: found } = await apiRequest(`/api/products?location=default&q=${encodeURIComponent(value)}`);
         if (found.length === 1) { add(found[0]); showScanned(found[0]); return true; }
@@ -164,13 +193,19 @@ function Register() {
                     <small>{fill(t("ui.pos.atPrice"), { price: m(priceOf(l)) })}</small>
                   </span>
                 ) : <small>{fill(t("ui.pos.unitsAt"), { qty: qty(l.qty), price: m(l.product.sellingPrice) })}</small>}
-                <div className="qty-ctl">
+                {tracked(l.product) ? (
+                  <div className="qty-ctl">
+                    <button type="button" className="pos2__devbtn" onClick={(e) => { e.stopPropagation(); setPicking(l.product); }}><Icon name="smartphone" /> {fill(t("ui.devices.count"), { n: l.qty })}</button>
+                    <button type="button" className="qty-ctl__x" onClick={() => removeLine(l.product.id)} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
+                  </div>
+                ) : <div className="qty-ctl">
                   <button type="button" onClick={() => setQty(l.product.id, l.qty - 1)} aria-label="−"><Icon name="minus" /></button>
                   <input type="number" min="0" step="any" value={l.qty} onChange={(e) => setQty(l.product.id, e.target.value)} aria-label={t("ui.common.qty")} />
                   <button type="button" onClick={() => setQty(l.product.id, l.qty + 1)} aria-label="+"><Icon name="plus" /></button>
                   <button type="button" className="qty-ctl__x" onClick={() => removeLine(l.product.id)} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
-                </div>
+                </div>}
               </div>
+              {l.devices?.length > 0 && <ul className="pos2__devices">{l.devices.map((d) => <li key={d.id}>{deviceText(d)}</li>)}</ul>}
             </li>
           ))}
         </ul>
@@ -186,7 +221,7 @@ function Register() {
 
         <DraftBar draft={draft} compact canSave={cart.length > 0}
           title={`${customer?.name || t("ui.pos.walkInDefault")} · ${fill(t("ui.pos.itemsCount"), { n: qty(itemCount) })} · ${m(subtotal)}`}
-          getData={() => ({ customerId, addVat, cart: cart.map((l) => ({ product: l.product, qty: l.qty, unit: l.unit || null })) })}
+          getData={() => ({ customerId, addVat, cart: cart.map((l) => ({ product: l.product, qty: l.qty, unit: l.unit || null, deviceIds: l.deviceIds, devices: l.devices })) })}
           onLoad={(d) => { setCustomerId(d.customerId || ""); setAddVat(Boolean(d.addVat)); setCart(d.cart || []); setActive(null); }} />
 
         <button type="button" className="pos2__pay" disabled={!cart.length} onClick={() => setPaying(true)}>
@@ -229,6 +264,10 @@ function Register() {
         )}
       </section>
 
+      {picking && (
+        <DevicePicker product={picking} locationId="default" value={cart.find((l) => l.product.id === picking.id)?.deviceIds || []}
+          onDone={(ids, devices) => { setDevices(picking, devices); setPicking(null); codeRef.current?.focus(); }} onClose={() => setPicking(null)} />
+      )}
       {camera && <CameraScanner onCode={onCameraCode} onClose={() => { setCamera(false); codeRef.current?.focus(); }} />}
 
       {paying && (
@@ -297,7 +336,7 @@ function PaymentModal({ cart, subtotal, customer, addVat, setAddVat, onClose, on
 
   const confirm = async () => {
     const body = {
-      items: cart.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}) })),
+      items: cart.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}) })),
       customerId: customer?.id || null,
       discount: disc || 0,
       vat: addVat,
