@@ -28,7 +28,7 @@ const DEFAULT = {
 const PROFILES = {
   cosmetics: {
     key: "cosmetics",
-    variants: ["size", "packSize"],
+    variants: ["size"],
     extraBarcodes: true,
     batches: true,
     expirySoonDays: 90,
