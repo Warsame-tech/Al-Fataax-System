@@ -52,5 +52,12 @@ export const DATA_STEPS = [
         await startBatchTracking(db, p.business_id, p.id);
       }
     }
+  },
+  {
+    // "Retail" is no longer a business category: those businesses become Supermarket.
+    name: "retail_to_supermarket_v1",
+    async run(db) {
+      await db.query("UPDATE businesses SET business_type = 'supermarket' WHERE business_type = 'retail'");
+    }
   }
 ];
