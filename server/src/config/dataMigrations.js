@@ -2,6 +2,8 @@
  * One-time data upgrades. Each step runs once per database and is recorded in app_migrations.
  */
 import { defaultLocationId } from "../lib/stock.js";
+import { profileFor } from "../lib/businessProfiles.js";
+import { startBatchTracking } from "../lib/batches.js";
 
 const STOCK_PERMS_ADD_EDIT = ["stock.view", "stock.add"];
 const STOCK_PERMS_MANAGER = ["stock.view", "stock.add", "stock.adjust", "stock.transfer", "stock.locations"];
@@ -36,6 +38,18 @@ export const DATA_STEPS = [
         if (set.has("products.edit")) STOCK_PERMS_ADD_EDIT.forEach((p) => set.add(p));
         if (set.has("stock.adjust")) STOCK_PERMS_MANAGER.forEach((p) => set.add(p));
         if (set.size !== perms.length) await db.query("UPDATE roles SET permissions = ? WHERE id = ?", [JSON.stringify([...set]), r.id]);
+      }
+    }
+  },
+  {
+    // Business types whose products always track batches (cosmetics): switch it on for existing products;
+    // the stock already there becomes "no batch" stock.
+    name: "profile_batches_v1",
+    async run(db) {
+      const [products] = await db.query("SELECT p.id, p.business_id, b.business_type FROM products p JOIN businesses b ON b.id = p.business_id WHERE p.track_batches = 0");
+      for (const p of products.filter((x) => profileFor(x.business_type).batches)) {
+        await db.query("UPDATE products SET track_batches = 1 WHERE id = ?", [p.id]);
+        await startBatchTracking(db, p.business_id, p.id);
       }
     }
   }

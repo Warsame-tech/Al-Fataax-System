@@ -103,7 +103,7 @@ export default function Products() {
       } />
 
       <div className="filters">
-        <SearchBox value={f.q} onChange={(v) => set("q", v)} placeholder={t(showVariant ? "ui.products.searchPhVariants" : "ui.products.searchPh")} />
+        <SearchBox value={f.q} onChange={(v) => set("q", v)} placeholder={t(profile.variants.includes("shade") ? "ui.products.searchPhVariants" : "ui.products.searchPh")} />
         <select className="input input--auto" value={f.brandId} onChange={(e) => set("brandId", e.target.value)} aria-label={t("ui.products.brand")}>
           <option value="">{t("ui.products.allBrands")}</option>
           {(o.brands || []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -373,7 +373,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
         ))}
         <p className="ff__hint ff--full">{f.name && fullName !== f.name ? fill(t("ui.products.showsAs"), { name: fullName }) : t(profile.variants.length > 1 ? "ui.products.variantHint" : "ui.products.sizeHint")}</p>
 
-        <Field label={`${t("ui.common.description")} ${t("ui.common.optional")}`} full><textarea className="input" rows={2} value={f.description} onChange={set("description")} /></Field>
+        {!profile.hiddenFields?.includes("description") && <Field label={`${t("ui.common.description")} ${t("ui.common.optional")}`} full><textarea className="input" rows={2} value={f.description} onChange={set("description")} /></Field>}
         <Field label={t("ui.products.brand")}><input className="input" value={f.brand} onChange={set("brand")} list="brand-options" /></Field>
         <Field label={t("ui.common.category")}><input className="input" value={f.category} onChange={set("category")} list="category-options" /></Field>
         <Field label={`${t("ui.products.subcategory")} ${t("ui.common.optional")}`}><input className="input" value={f.subcategory} onChange={set("subcategory")} /></Field>
@@ -390,12 +390,6 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
             <option value="archived">{t("ui.products.statusValues.archived")}</option>
           </select>
         </Field>
-        {profile.batches && (
-          <div className="ff">
-            <label className="checkbox"><input type="checkbox" checked={f.trackBatches} onChange={set("trackBatches")} /><span>{t("ui.products.trackBatches")}</span></label>
-            <small className="ff__hint">{t("ui.products.trackBatchesHint")}</small>
-          </div>
-        )}
 
         {profile.extraBarcodes && (
           <div className="ff ff--full pack-codes">

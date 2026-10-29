@@ -6,10 +6,11 @@
  *   variants        product variant fields shown in the form / list and added to the product name
  *                   (size, shade, fragrance, formula, packSize)
  *   extraBarcodes   several barcodes per product, each for a packaging unit (e.g. box of 12)
- *   batches         batch number + expiry date per stock entry, sold first-expiry-first-out
+ *   batches         every product tracks batch number + expiry date per stock entry, sold first-expiry-first-out
  *   expirySoonDays  "expiring soon" window for batch alerts and filters
  *   labels          different words for the same product fields (keys of ui.products.*)
  *   units           units of measurement offered in the product form (null = the full list)
+ *   hiddenFields    product form fields this business does not use (e.g. description)
  *
  * Add a business type here when its special interface is built; types without one use DEFAULT.
  */
@@ -20,19 +21,21 @@ const DEFAULT = {
   batches: false,
   expirySoonDays: 90,
   labels: {},
-  units: null
+  units: null,
+  hiddenFields: []
 };
 
 const PROFILES = {
   cosmetics: {
     key: "cosmetics",
-    variants: ["size", "shade", "fragrance", "formula", "packSize"],
+    variants: ["size", "packSize"],
     extraBarcodes: true,
     batches: true,
     expirySoonDays: 90,
     labels: { costPrice: "purchaseCost", sellingPrice: "retailPrice", lowStockAlert: "reorderLevel", lowStockShort: "reorderLevel" },
     // e.g. 1 bottle, or 1 carton of 12 bottles (packaging barcode: carton × 12)
-    units: ["pcs", "bottle", "tube", "box", "carton"]
+    units: ["pcs", "bottle", "tube", "box", "carton"],
+    hiddenFields: ["description"]
   }
 };
 

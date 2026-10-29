@@ -287,6 +287,7 @@ function changesOf(old, d) {
 /* POST /api/products (multipart; barcodes = JSON [{ barcode, label, qty }]; variantOf = product this is a variant of) */
 router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(async (req, res) => {
   const d = readProduct(req.body || {}, { creating: true });
+  if (req.business.profile.batches) d.trackBatches = true;     // e.g. cosmetics: every product tracks batches & expiry
   const image = await imageFrom(req);
   const bid = req.business.id;
   try {
@@ -319,6 +320,7 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
 /* multipart: product fields + optional "image" file; removeImage=true clears the photo */
 router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah(async (req, res) => {
   const d = readProduct(req.body || {}, { creating: false });
+  if (req.business.profile.batches) d.trackBatches = true;
   const image = await imageFrom(req);
   const bid = req.business.id;
   try {
