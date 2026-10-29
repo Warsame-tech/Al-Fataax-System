@@ -125,7 +125,7 @@ settingsRouter.put("/business", requirePerm("business.edit"), imageUpload.single
   if (d.ownerName.length < 2) e.ownerName = "required";
   if (d.email && !EMAIL.test(d.email)) e.email = "invalidEmail";
   if (!PHONE.test(d.phone)) e.phone = "invalidPhone";
-  if (!BUSINESS_TYPES.includes(d.type)) e.businessType = "required";
+  if (!BUSINESS_TYPES.includes(d.type) && d.type !== req.business.type) e.businessType = "required";   // an older type may be kept
   if (file && !imageType(file.buffer)) e.logo = "invalidLogo";
   if (Object.keys(e).length) throw badRequest(e);
 

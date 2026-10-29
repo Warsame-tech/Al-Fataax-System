@@ -6,8 +6,8 @@ import { useAuth } from "../auth/AuthContext.jsx";
 import usePageTitle from "../hooks/usePageTitle.js";
 import { register } from "../services/authService.js";
 
-const TYPES = ["retail", "supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "furniture",
-  "hardware", "books", "bakery", "jewelry", "wholesale", "services", "other"];
+/* Business categories (same list as the server: routes/auth.js; "fashion" = Clothing) */
+const TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "jewelry", "fabric"];
 const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const EMPTY = { businessName: "", businessType: "", phone: "", ownerName: "", username: "", password: "", confirmPassword: "" };
 

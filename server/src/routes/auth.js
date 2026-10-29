@@ -9,8 +9,9 @@ import { imageUpload, imageType, saveImage } from "../lib/files.js";
 const router = Router();
 
 /* ---------- validation ---------- */
-export const BUSINESS_TYPES = ["retail", "supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "furniture",
-  "hardware", "books", "bakery", "jewelry", "wholesale", "services", "other"];
+/* Business categories offered at sign-up ("fashion" = Clothing). Older businesses may still have a type
+ * that is no longer offered; they keep it until they choose another one. */
+export const BUSINESS_TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "jewelry", "fabric"];
 
 const USERNAME = /^[a-zA-Z0-9_.]{3,30}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
