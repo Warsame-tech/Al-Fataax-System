@@ -1039,3 +1039,5 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 @media (max-width: 560px) {
   .pack-codes__row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
 }
+
+.pack-codes__means { grid-column: 1 / -1; margin-top: -4px; }

@@ -21,8 +21,10 @@ export const EMPTY = {
   unit: "pcs", costPrice: "", sellingPrice: "", wholesalePrice: "", minStock: "", isActive: true, trackBatches: false
 };
 
-/* Units of measurement offered in the product form (a unit already saved on a product stays selectable). */
-export const UNITS = ["pcs", "bottle", "box", "pack", "carton", "kg", "g", "liter", "ml", "meter", "yard", "roll", "pair", "dozen", "tube", "jar", "set"];
+/* Units of measurement offered in the product form (a unit already saved on a product stays selectable).
+ * A business type can have its own list (profile.units, e.g. cosmetics: pcs, bottle, tube, box, carton). */
+export const UNITS = ["pcs", "bottle", "box", "pack", "carton", "kg", "g", "liter", "ml", "meter", "yard", "roll", "pair", "dozen"];
+const unitName = (t, u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
 
 const NO_FILTERS = { q: "", brandId: "", categoryId: "", subcategory: "", status: "", stockAt: "", supplierId: "", active: "", expiry: "", variantOf: "" };
 const PAGE_SIZE = 25;
@@ -276,7 +278,10 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     setImage(file); setPreview(URL.createObjectURL(file)); setRemoveImage(false);
   };
   const shown = preview || (!removeImage && product.imagePath ? fileUrl(product.imagePath) : null);
-  const units = UNITS.includes(f.unit) || !f.unit ? UNITS : [f.unit, ...UNITS];
+  const unitList = profile.units || UNITS;
+  const units = unitList.includes(f.unit) || !f.unit ? unitList : [f.unit, ...unitList];
+  /* packaging (cosmetics): one of the business units other than the product's own, e.g. carton of 12 bottles */
+  const packUnits = (label) => { const list = unitList.filter((u) => u !== f.unit); return !label || list.includes(label) ? list : [label, ...list]; };
   const fullName = [f.name, ...profile.variants.map((v) => f[v])].filter((v) => v && String(v).trim()).join(" ");
   const setBarcode = (i, k, v) => setBarcodes((list) => list.map((b, j) => (j === i ? { ...b, [k]: v } : b)));
 
@@ -373,7 +378,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
         <Field label={t("ui.common.category")}><input className="input" value={f.category} onChange={set("category")} list="category-options" /></Field>
         <Field label={`${t("ui.products.subcategory")} ${t("ui.common.optional")}`}><input className="input" value={f.subcategory} onChange={set("subcategory")} /></Field>
         <Field label={t("ui.products.unit")}>
-          <select className="input" value={f.unit} onChange={set("unit")}>{units.map((u) => <option key={u} value={u}>{t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`)}</option>)}</select>
+          <select className="input" value={f.unit} onChange={set("unit")}>{units.map((u) => <option key={u} value={u}>{unitName(t, u)}</option>)}</select>
         </Field>
         <Field label={L("costPrice")} error={err.costPrice}><input className="input" type="number" min="0" step="any" value={f.costPrice} onChange={set("costPrice")} /></Field>
         <Field label={L("sellingPrice")} error={err.sellingPrice}><input className="input" type="number" min="0" step="any" value={f.sellingPrice} onChange={set("sellingPrice")} /></Field>
@@ -400,10 +405,16 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
               <div key={i} className="pack-codes__row">
                 <input className={"input" + (err[`barcodes.${i}.barcode`] ? " has-error" : "")} value={b.barcode} onChange={(e) => setBarcode(i, "barcode", e.target.value)}
                   placeholder={t("ui.products.barcode")} aria-label={t("ui.products.barcode")} />
-                <input className="input" value={b.label} onChange={(e) => setBarcode(i, "label", e.target.value)} placeholder={t("ui.products.packLabelPh")} aria-label={t("ui.products.packLabel")} />
+                {profile.units
+                  ? <select className="input" value={b.label} onChange={(e) => setBarcode(i, "label", e.target.value)} aria-label={t("ui.products.packLabel")}>
+                      <option value="">{t("ui.products.packLabel")}…</option>
+                      {packUnits(b.label).map((u) => <option key={u} value={u}>{unitName(t, u)}</option>)}
+                    </select>
+                  : <input className="input" value={b.label} onChange={(e) => setBarcode(i, "label", e.target.value)} placeholder={t("ui.products.packLabelPh")} aria-label={t("ui.products.packLabel")} />}
                 <input className={"input" + (err[`barcodes.${i}.qty`] ? " has-error" : "")} type="number" min="0" step="any" value={b.qty} onChange={(e) => setBarcode(i, "qty", e.target.value)}
                   aria-label={t("ui.products.packQty")} title={t("ui.products.packQty")} />
                 <button type="button" className="icon-btn" onClick={() => setBarcodes((list) => list.filter((_, j) => j !== i))} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
+                {b.label && Number(b.qty) > 0 && <small className="ff__hint pack-codes__means">{fill(t("ui.products.packMeans"), { pack: unitName(t, b.label), qty: qty(b.qty), unit: unitName(t, f.unit) })}</small>}
                 {err[`barcodes.${i}.barcode`] && <span className="ff__error">{fill(t("ui.errors.barcodeTaken"), { product: usedBy || f.name })}</span>}
                 {err[`barcodes.${i}.qty`] && <span className="ff__error">{t("ui.errors.invalidAmount")}</span>}
               </div>

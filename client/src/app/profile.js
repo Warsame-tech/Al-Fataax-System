@@ -7,9 +7,10 @@ import { useAuth } from "../auth/AuthContext.jsx";
  *   const profile = useProfile();
  *   profile.variants        ["size", "shade", "fragrance", "formula", "packSize"]   (cosmetics)
  *   profile.extraBarcodes   packaging barcodes      profile.batches   batch + expiry tracking
+ *   profile.units           units offered in the product form (cosmetics: pcs, bottle, tube, box, carton; null = all)
  *   label("costPrice")      "Purchase cost" for cosmetics, "Cost price" otherwise
  */
-const DEFAULT = { key: "default", variants: ["size"], extraBarcodes: false, batches: false, expirySoonDays: 90, labels: {} };
+const DEFAULT = { key: "default", variants: ["size"], extraBarcodes: false, batches: false, expirySoonDays: 90, labels: {}, units: null };
 
 export function useProfile() {
   const { business } = useAuth();

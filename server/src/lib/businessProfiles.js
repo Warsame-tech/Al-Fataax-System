@@ -9,6 +9,7 @@
  *   batches         batch number + expiry date per stock entry, sold first-expiry-first-out
  *   expirySoonDays  "expiring soon" window for batch alerts and filters
  *   labels          different words for the same product fields (keys of ui.products.*)
+ *   units           units of measurement offered in the product form (null = the full list)
  *
  * Add a business type here when its special interface is built; types without one use DEFAULT.
  */
@@ -18,7 +19,8 @@ const DEFAULT = {
   extraBarcodes: false,
   batches: false,
   expirySoonDays: 90,
-  labels: {}
+  labels: {},
+  units: null
 };
 
 const PROFILES = {
@@ -28,7 +30,9 @@ const PROFILES = {
     extraBarcodes: true,
     batches: true,
     expirySoonDays: 90,
-    labels: { costPrice: "purchaseCost", sellingPrice: "retailPrice", lowStockAlert: "reorderLevel", lowStockShort: "reorderLevel" }
+    labels: { costPrice: "purchaseCost", sellingPrice: "retailPrice", lowStockAlert: "reorderLevel", lowStockShort: "reorderLevel" },
+    // e.g. 1 bottle, or 1 carton of 12 bottles (packaging barcode: carton × 12)
+    units: ["pcs", "bottle", "tube", "box", "carton"]
   }
 };
 
