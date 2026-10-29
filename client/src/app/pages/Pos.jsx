@@ -62,13 +62,15 @@ function Register() {
     setScanned(p);
     scanTimer.current = setTimeout(() => setScanned(null), SCAN_CARD_MS);
   };
-  const add = (p) => {
+  /* n: units to add (1, or the units in a scanned packaging barcode, e.g. a box of 12) */
+  const add = (p, n = 1) => {
     if (p.stock <= 0) { setNotice(fill(t("ui.errors.insufficientStock"), { product: p.name, available: qty(p.stock) })); return false; }
-    setNotice(null);
+    const inCart = cart.find((l) => l.product.id === p.id)?.qty || 0;
+    setNotice(inCart + n > p.stock ? fill(t("ui.pos.packCapped"), { qty: qty(p.stock), unit: p.unit }) : null);
     setCart((c) => {
       const found = c.find((l) => l.product.id === p.id);
-      if (found) return c.map((l) => (l.product.id === p.id ? { ...l, qty: Math.min(l.qty + 1, p.stock) } : l));
-      return [...c, { product: p, qty: 1 }];
+      if (found) return c.map((l) => (l.product.id === p.id ? { ...l, qty: Math.min(l.qty + n, p.stock) } : l));
+      return [...c, { product: p, qty: Math.min(n, p.stock) }];
     });
     setActive(p.id);
     setPulse((n) => n + 1);
@@ -80,8 +82,8 @@ function Register() {
   /* Barcode / SKU lookup (USB scanner, camera, or typed code); falls back to a single name match. */
   const lookup = async (value) => {
     try {
-      const { product } = await apiRequest(`/api/products/barcode/${encodeURIComponent(value)}?location=default`);
-      add(product); showScanned(product);
+      const { product, pack } = await apiRequest(`/api/products/barcode/${encodeURIComponent(value)}?location=default`);
+      add(product, pack?.qty || 1); showScanned(product);
       return true;
     } catch {
       try {

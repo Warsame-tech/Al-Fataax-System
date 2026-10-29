@@ -1,6 +1,12 @@
 /*
- * A product is shown as its name followed by its size, e.g. "DOP Shampoo 400ml".
- * Names may repeat; the size (and barcode / SKU) tells products apart.
+ * A product is shown as its name followed by its variant fields, e.g. "DOP Shampoo 400ml" or
+ * (cosmetics) "Fit Me Foundation 30ml 220 Natural Beige". Names may repeat; the variant fields
+ * (and barcode / SKU) tell products apart.
  */
-export const productNameSql = (alias = "p") => `CONCAT_WS(' ', ${alias}.name, NULLIF(${alias}.size, ''))`;
-export const productName = (row) => [row?.name, row?.size].filter((v) => v && String(v).trim()).join(" ");
+const VARIANT_COLUMNS = ["size", "shade", "fragrance", "formula", "pack_size"];
+
+export const productNameSql = (alias = "p") =>
+  `CONCAT_WS(' ', ${alias}.name, ${VARIANT_COLUMNS.map((c) => `NULLIF(${alias}.${c}, '')`).join(", ")})`;
+
+export const productName = (row) =>
+  [row?.name, ...VARIANT_COLUMNS.map((c) => row?.[c])].filter((v) => v && String(v).trim()).join(" ");

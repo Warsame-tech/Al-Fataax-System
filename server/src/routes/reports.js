@@ -63,7 +63,7 @@ const REPORTS = {
 
   async inventory(bid) {
     const [rows] = await pool.query(
-      `SELECT CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, p.sku, c.name category, p.stock_qty, p.unit, p.cost_price, p.selling_price FROM products p
+      `SELECT CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku, c.name category, p.stock_qty, p.unit, p.cost_price, p.selling_price FROM products p
          LEFT JOIN categories c ON c.id = p.category_id WHERE p.business_id = ? AND p.is_active = 1 ORDER BY p.name`, [bid]);
     const list = rows.map((p) => ({ name: p.name, sku: p.sku, category: p.category, stock: num(p.stock_qty), unit: p.unit,
       costValue: round2(num(p.stock_qty) * num(p.cost_price)), retailValue: round2(num(p.stock_qty) * num(p.selling_price)) }));
@@ -148,7 +148,7 @@ const REPORTS = {
 
   async bestSellers(bid, r) {
     const [rows] = await pool.query(
-      `SELECT CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, p.sku, SUM(x.qty) qty, SUM(x.line_total) revenue, SUM(x.line_total - x.qty * x.unit_cost) profit FROM (
+      `SELECT CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku, SUM(x.qty) qty, SUM(x.line_total) revenue, SUM(x.line_total - x.qty * x.unit_cost) profit FROM (
          SELECT si.product_id, si.qty, si.line_total, si.unit_cost FROM sale_items si JOIN sales s ON s.id = si.sale_id
           WHERE si.business_id = ? AND s.status <> 'cancelled' AND s.sold_at BETWEEN ? AND ?
          UNION ALL SELECT ii.product_id, ii.qty, ii.line_total, ii.unit_cost FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id

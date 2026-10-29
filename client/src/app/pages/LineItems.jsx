@@ -6,12 +6,13 @@ import { useApi, useMoney, usePerm } from "../ui.jsx";
 import { fill, qty } from "../format.js";
 import SearchSelect from "../SearchSelect.jsx";
 import CameraScanner from "../CameraScanner.jsx";
+import { BatchFields } from "./Stock.jsx";
 
 /*
  * Editable product lines for invoices and purchases.
  * mode "sell": price from the chosen price list (editable only when allowPrice);
  *              the quantity can never be more than the stock on hand
- * mode "buy":  unit cost entered per line (defaults to the product's cost price)
+ * mode "buy":  unit cost entered per line (defaults to the product's cost price); batch no + expiry for products that track batches
  * Under the lines: "Scan barcode" (camera) and "Add item" (opens the product list to choose another product).
  */
 export default function LineItems({ lines, onChange, mode = "sell", priceList = "retail", allowPrice = false, errors = {} }) {
@@ -75,7 +76,10 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
             <tbody>
               {lines.map((l, i) => (
                 <tr key={l.product.id}>
-                  <td>{l.product.name}{sell && <small className="cell-sub">{fill(t("ui.invoices.inStock"), { qty: qty(l.product.stock), unit: l.product.unit })}</small>}</td>
+                  <td>
+                    {l.product.name}{sell && <small className="cell-sub">{fill(t("ui.invoices.inStock"), { qty: qty(l.product.stock), unit: l.product.unit })}</small>}
+                    {!sell && l.product.trackBatches && <BatchFields compact value={l} onChange={(patch) => update(i, patch)} />}
+                  </td>
                   <td className="num">
                     <input className={"input input--sm" + (errors[`items.${i}.qty`] || l.capped ? " has-error" : "")} type="number" min="0" step="any"
                       max={sell ? l.product.stock : undefined} value={l.qty} onChange={(e) => setQty(i, e.target.value)} />

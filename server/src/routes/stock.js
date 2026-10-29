@@ -7,6 +7,7 @@ import { ah, text, optText, id, quantity, withTx, ensureOwned, badRequest, confl
 import { lockProducts, moveStock } from "../lib/ledger.js";
 import { defaultLocationId, activeLocation } from "../lib/stock.js";
 import { productName } from "../lib/productName.js";
+import { readBatch } from "../lib/batches.js";
 
 /*
  * Stock Management (module "stock").
@@ -101,7 +102,7 @@ router.get("/current", requirePerm("stock.view"), ah(async (req, res) => {
   const loc = id(req.query.locationId);
   if (loc) { where.push("l.id = ?"); params.push(loc); }
   const q = text(req.query.q, 80);
-  if (q) { where.push("(CONCAT_WS(' ', p.name, NULLIF(p.size, '')) LIKE ? OR p.sku = ? OR p.barcode = ?)"); params.push(`%${q}%`, q, q); }
+  if (q) { where.push("(CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) LIKE ? OR p.sku = ? OR p.barcode = ?)"); params.push(`%${q}%`, q, q); }
   if (id(req.query.categoryId)) { where.push("p.category_id = ?"); params.push(id(req.query.categoryId)); }
   const status = ["in", "low", "out", "negative"].includes(req.query.status) ? req.query.status : null;
   if (status) { where.push(`${STATUS_SQL} = ?`); params.push(status); }
@@ -113,7 +114,7 @@ router.get("/current", requirePerm("stock.view"), ah(async (req, res) => {
    WHERE ${where.join(" AND ")}`;
   const [[count]] = await pool.query(`SELECT COUNT(*) n ${from}`, params);
   const [rows] = await pool.query(
-    `SELECT p.id, CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, p.sku, p.barcode, p.image_path, p.unit, p.min_stock, p.cost_price, c.name category,
+    `SELECT p.id, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku, p.barcode, p.image_path, p.unit, p.min_stock, p.cost_price, c.name category,
             l.id location_id, l.name location_name, COALESCE(ps.qty,0) qty, ps.alert_level, ${STATUS_SQL} status,
             (SELECT MAX(m.created_at) FROM stock_movements m WHERE m.product_id = p.id AND m.location_id = l.id) last_move
        ${from} ORDER BY FIELD(${STATUS_SQL}, 'negative','out','low','in'), p.name, l.name LIMIT ? OFFSET ?`,
@@ -170,7 +171,7 @@ router.get("/product/:id", canSee, ah(async (req, res) => {
 }));
 
 /* ===================== Opening stock ===================== */
-/* POST { productId, locationId, qty, reference?, notes? } — once per product and location (reverse it to redo). */
+/* POST { productId, locationId, qty, reference?, notes?, batchNo?, expiryDate? } — once per product and location (reverse it to redo). */
 router.post("/opening", requirePerm("stock.add"), ah(async (req, res) => {
   const b = req.body || {};
   const bid = req.business.id;
@@ -189,7 +190,7 @@ router.post("/opening", requirePerm("stock.add"), ah(async (req, res) => {
           AND NOT EXISTS (SELECT 1 FROM stock_movements r WHERE r.reversal_of = m.id) LIMIT 1`, [bid, product.id, loc.id]);
     if (dup) throw conflict("openingExists", { product: productName(product), location: loc.name });
     const m = await moveStock(conn, { businessId: bid, userId: req.user.id, product, qtyChange: qty, type: "opening", refType: "stock",
-      locationId: loc.id, reason: "opening", reference: optText(b.reference, 80), note: optText(b.notes, 255) });
+      locationId: loc.id, reason: "opening", reference: optText(b.reference, 80), note: optText(b.notes, 255), batches: readBatch(b, qty) });
     await audit(conn, { businessId: bid, userId: req.user.id, action: "stock.opening", entity: "product", entityId: product.id, meta: { location: loc.name, qty }, ip: req.ip });
     return m;
   });
@@ -197,12 +198,12 @@ router.post("/opening", requirePerm("stock.add"), ah(async (req, res) => {
 }));
 
 /* ===================== Add stock (one or many products) ===================== */
-/* POST { locationId, type: purchase|return_in|stock_in, reference?, supplierId?, notes?, items: [{ productId, qty }] } */
+/* POST { locationId, type: purchase|return_in|stock_in, reference?, supplierId?, notes?, items: [{ productId, qty, batchNo?, expiryDate? }] } */
 router.post("/add", requirePerm("stock.add"), ah(async (req, res) => {
   const b = req.body || {};
   const bid = req.business.id;
   const type = ADD_TYPES.includes(b.type) ? b.type : null;
-  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: quantity(x?.qty) })) : [];
+  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: quantity(x?.qty), batches: readBatch(x, quantity(x?.qty)) })) : [];
   const e = {};
   if (!type) e.type = "required";
   if (!items.length) e.items = "required";
@@ -222,7 +223,7 @@ router.post("/add", requirePerm("stock.add"), ah(async (req, res) => {
       const product = products.get(x.productId);
       if (!product.is_active) throw badRequest({ items: "inactiveProduct" });
       moves.push(await moveStock(conn, { businessId: bid, userId: req.user.id, product, qtyChange: x.qty, type, refType: "stock",
-        locationId: loc.id, reason: type, reference: optText(b.reference, 80), supplierId, note: optText(b.notes, 255) }));
+        locationId: loc.id, reason: type, reference: optText(b.reference, 80), supplierId, note: optText(b.notes, 255), batches: x.batches }));
     }
     await audit(conn, { businessId: bid, userId: req.user.id, action: "stock.added", entity: "location", entityId: loc.id,
       meta: { type, items: items.length, units: q3(items.reduce((s, x) => s + x.qty, 0)), reference: optText(b.reference, 80) }, ip: req.ip });
@@ -324,11 +325,11 @@ router.get("/movements", requirePerm("stock.view"), ah(async (req, res) => {
   if (req.query.type) { where.push("m.type = ?"); params.push(text(req.query.type, 30)); }
   if (req.query.from || req.query.to) { const r = range(req.query, 30); where.push("m.created_at BETWEEN ? AND ?"); params.push(r.start, r.end); }
   const q = text(req.query.q, 80);
-  if (q) { where.push("(CONCAT_WS(' ', p.name, NULLIF(p.size, '')) LIKE ? OR p.sku = ? OR p.barcode = ? OR m.reference = ?)"); params.push(`%${q}%`, q, q, q); }
+  if (q) { where.push("(CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) LIKE ? OR p.sku = ? OR p.barcode = ? OR m.reference = ?)"); params.push(`%${q}%`, q, q, q); }
   const from = `FROM stock_movements m JOIN products p ON p.id = m.product_id AND p.business_id = m.business_id WHERE ${where.join(" AND ")}`;
   const [[count]] = await pool.query(`SELECT COUNT(*) n ${from}`, params);
   const [rows] = await pool.query(
-    `SELECT m.*, CONCAT_WS(' ', p.name, NULLIF(p.size, '')) product_name, p.sku, p.unit product_unit, l.name location_name, u.full_name user_name, s.name supplier_name,
+    `SELECT m.*, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) product_name, p.sku, p.unit product_unit, l.name location_name, u.full_name user_name, s.name supplier_name,
             (SELECT r.id FROM stock_movements r WHERE r.reversal_of = m.id LIMIT 1) reversed_by
        ${from.replace("WHERE", `LEFT JOIN stock_locations l ON l.id = m.location_id
        LEFT JOIN users u ON u.id = m.user_id
@@ -381,7 +382,7 @@ router.post("/movements/:id/reverse", requirePerm("stock.adjust"), ah(async (req
 router.get("/low", requirePerm("stock.view"), ah(async (req, res) => {
   const bid = req.business.id;
   const [rows] = await pool.query(
-    `SELECT p.id, CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, p.sku, p.unit, p.image_path, l.id location_id, l.name location_name, ps.qty, ${ALERT} level,
+    `SELECT p.id, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku, p.unit, p.image_path, l.id location_id, l.name location_name, ps.qty, ${ALERT} level,
             (ps.alert_level IS NOT NULL) own_level
        FROM product_stock ps JOIN products p ON p.id = ps.product_id AND p.business_id = ps.business_id
        JOIN stock_locations l ON l.id = ps.location_id AND l.is_active = 1
@@ -398,7 +399,7 @@ router.get("/valuation", requirePerm("stock.view"), ah(async (req, res) => {
   const bid = req.business.id;
   const loc = id(req.query.locationId);
   const [rows] = await pool.query(
-    `SELECT p.id, CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, p.sku, p.unit, p.cost_price, p.selling_price, l.id location_id, l.name location_name, ps.qty
+    `SELECT p.id, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku, p.unit, p.cost_price, p.selling_price, l.id location_id, l.name location_name, ps.qty
        FROM product_stock ps JOIN products p ON p.id = ps.product_id AND p.business_id = ps.business_id
        JOIN stock_locations l ON l.id = ps.location_id
       WHERE ps.business_id = ? AND ps.qty <> 0 ${loc ? "AND l.id = ?" : ""} ORDER BY l.is_default DESC, l.name, p.name`, loc ? [bid, loc] : [bid]);
@@ -428,7 +429,7 @@ router.get("/report", requirePerm("stock.view"), ah(async (req, res) => {
        FROM stock_movements m WHERE m.business_id = ? AND m.created_at BETWEEN ? AND ? ${loc ? "AND m.location_id = ?" : ""}
       GROUP BY m.type ORDER BY m.type`, params);
   const [losses] = await pool.query(
-    `SELECT CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, m.reason, SUM(-m.qty_change) qty, SUM(-m.qty_change * COALESCE(m.unit_cost, 0)) value
+    `SELECT CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, m.reason, SUM(-m.qty_change) qty, SUM(-m.qty_change * COALESCE(m.unit_cost, 0)) value
        FROM stock_movements m JOIN products p ON p.id = m.product_id
       WHERE m.business_id = ? AND m.created_at BETWEEN ? AND ? ${loc ? "AND m.location_id = ?" : ""}
         AND m.qty_change < 0 AND m.type IN ('damaged','adjustment','count')

@@ -204,7 +204,7 @@ notificationsRouter.get("/", ah(async (req, res) => {
     stock.forEach((p) => items.push({ type: num(p.stock_qty) <= 0 ? "outOfStock" : "lowStock", ref: p.name, link, amount: num(p.stock_qty) }));
     // locations with their own alert level (e.g. a shop that needs 20 even when the warehouse has plenty)
     const [atLocations] = await pool.query(
-      `SELECT CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, l.name location, ps.qty FROM product_stock ps
+      `SELECT CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, l.name location, ps.qty FROM product_stock ps
          JOIN products p ON p.id = ps.product_id AND p.business_id = ps.business_id
          JOIN stock_locations l ON l.id = ps.location_id AND l.is_active = 1
         WHERE ps.business_id = ? AND p.is_active = 1 AND ps.alert_level IS NOT NULL AND ps.qty <= ps.alert_level

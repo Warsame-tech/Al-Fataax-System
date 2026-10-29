@@ -181,7 +181,7 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
   const bid = req.business.id;
   const s = await ensureOwned(pool, "sales", id(req.params.id), bid);
   const [items] = await pool.query(
-    `SELECT si.qty, si.unit_price, si.line_total, CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, p.sku FROM sale_items si JOIN products p ON p.id = si.product_id AND p.business_id = si.business_id
+    `SELECT si.qty, si.unit_price, si.line_total, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku FROM sale_items si JOIN products p ON p.id = si.product_id AND p.business_id = si.business_id
       WHERE si.sale_id = ? AND si.business_id = ? ORDER BY si.id`, [s.id, bid]);
   const [[cust]] = s.customer_id ? await pool.query("SELECT name, phone FROM customers WHERE id = ? AND business_id = ?", [s.customer_id, bid]) : [[null]];
   const [[cashier]] = await pool.query("SELECT full_name FROM users WHERE id = ? AND business_id = ?", [s.user_id, bid]);

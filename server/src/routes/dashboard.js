@@ -91,7 +91,7 @@ router.get("/", async (req, res, next) => {
             UNION ALL (SELECT 'expense', category, amount, CAST(expense_date AS DATETIME) FROM expenses WHERE business_id = ?)
             UNION ALL (SELECT 'payment', COALESCE(reference, ''), amount, paid_at FROM customer_payments WHERE business_id = ?)
             ORDER BY at DESC LIMIT 8`, [bid, bid, bid, bid, bid]),
-      many(`SELECT p.id, CONCAT_WS(' ', p.name, NULLIF(p.size, '')) name, SUM(x.qty) qty, SUM(x.line_total) revenue FROM (
+      many(`SELECT p.id, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, SUM(x.qty) qty, SUM(x.line_total) revenue FROM (
               SELECT si.product_id, si.qty, si.line_total FROM sale_items si
                 JOIN sales s ON s.id = si.sale_id AND s.business_id = si.business_id
                WHERE si.business_id = ? AND s.status <> 'cancelled' AND s.sold_at BETWEEN ? AND ?

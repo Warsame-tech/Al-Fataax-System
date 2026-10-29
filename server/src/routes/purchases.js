@@ -5,6 +5,7 @@ import { can, requirePerm } from "../lib/permissions.js";
 import { ah, id, money, quantity, withTx, ensureOwned, badRequest, conflict, num, round2, METHODS, text, range } from "../lib/http.js";
 import { nextNumber, lockProducts, moveStock } from "../lib/ledger.js";
 import { paySupplier, readPayment } from "./parties.js";
+import { readBatch } from "../lib/batches.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -12,7 +13,7 @@ router.use(requireAuth);
 /*
  * Records a received purchase: stock in, product cost updated to the latest purchase cost,
  * optional payment now (only users allowed to pay suppliers), outstanding = payable.
- * body: { supplierId, items:[{productId, qty, unitCost}], amountPaid?, method?, bankAccountId?, reference? }
+ * body: { supplierId, items:[{productId, qty, unitCost, batchNo?, expiryDate?}], amountPaid?, method?, bankAccountId?, reference? }
  */
 export async function createPurchase(conn, ctx, body) {
   const { businessId, userId, role } = ctx;
@@ -31,7 +32,7 @@ export async function createPurchase(conn, ctx, body) {
     if (!p) errors[`items.${i}.productId`] = "required";
     if (Number.isNaN(qty)) errors[`items.${i}.qty`] = "invalidAmount";
     if (Number.isNaN(unitCost)) errors[`items.${i}.unitCost`] = "invalidAmount";
-    return { product: p, qty, unitCost, lineTotal: round2(qty * unitCost) };
+    return { product: p, qty, unitCost, lineTotal: round2(qty * unitCost), batches: readBatch(it, qty) };
   });
   if (Object.keys(errors).length) throw badRequest(errors);
   const total = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
@@ -50,7 +51,13 @@ export async function createPurchase(conn, ctx, body) {
   for (const l of lines) {
     await conn.query("INSERT INTO purchase_items (business_id, purchase_id, product_id, qty, unit_cost, line_total) VALUES (?, ?, ?, ?, ?, ?)",
       [businessId, r.insertId, l.product.id, l.qty, l.unitCost, l.lineTotal]);
-    await moveStock(conn, { businessId, userId, product: l.product, qtyChange: l.qty, type: "purchase", refType: "purchase", refId: r.insertId });
+    await moveStock(conn, { businessId, userId, product: l.product, qtyChange: l.qty, type: "purchase", refType: "purchase", refId: r.insertId, batches: l.batches });
+    if (num(l.product.cost_price) !== l.unitCost) {
+      // purchase cost changes are part of the product's change history
+      await audit(conn, { businessId, userId, action: "product.changed", entity: "product", entityId: l.product.id,
+        meta: { changes: [{ field: "costPrice", from: num(l.product.cost_price), to: l.unitCost }], source: number } });
+      l.product.cost_price = l.unitCost;
+    }
     await conn.query("UPDATE products SET cost_price = ? WHERE id = ? AND business_id = ?", [l.unitCost, l.product.id, businessId]);
   }
   if (amountPaid > 0) {
@@ -81,7 +88,7 @@ router.get("/:id", requirePerm("purchases.view"), ah(async (req, res) => {
   const bid = req.business.id;
   const p = await ensureOwned(pool, "purchases", id(req.params.id), bid);
   const [items] = await pool.query(
-    `SELECT pi.qty, pi.unit_cost, pi.line_total, CONCAT_WS(' ', pr.name, NULLIF(pr.size, '')) name, pr.sku FROM purchase_items pi JOIN products pr ON pr.id = pi.product_id AND pr.business_id = pi.business_id
+    `SELECT pi.qty, pi.unit_cost, pi.line_total, CONCAT_WS(' ', pr.name, NULLIF(pr.size, ''), NULLIF(pr.shade, ''), NULLIF(pr.fragrance, ''), NULLIF(pr.formula, ''), NULLIF(pr.pack_size, '')) name, pr.sku FROM purchase_items pi JOIN products pr ON pr.id = pi.product_id AND pr.business_id = pi.business_id
       WHERE pi.purchase_id = ? AND pi.business_id = ? ORDER BY pi.id`, [p.id, bid]);
   const [[s]] = await pool.query("SELECT name, phone FROM suppliers WHERE id = ? AND business_id = ?", [p.supplier_id, bid]);
   const [payments] = await pool.query("SELECT amount, method, paid_at, reference FROM supplier_payments WHERE purchase_id = ? AND business_id = ? ORDER BY id", [p.id, bid]);

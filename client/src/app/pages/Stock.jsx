@@ -97,6 +97,28 @@ function useProductStock(productId) {
   return useApi(productId ? `/api/stock/product/${productId}` : null);
 }
 
+/* Batch number + expiry date for products that track batches (cosmetics). value: { batchNo, expiryDate } */
+export function BatchFields({ value, onChange, compact = false }) {
+  const { t } = useLanguage();
+  const today = isoDate(new Date());
+  const past = value.expiryDate && value.expiryDate < today;
+  const inputs = (
+    <>
+      <input className="input" value={value.batchNo || ""} onChange={(e) => onChange({ batchNo: e.target.value })} placeholder={t("ui.products.batchNoPh")} aria-label={t("ui.products.batchNo")} maxLength={60} />
+      <input className={"input" + (past ? " has-error" : "")} type="date" value={value.expiryDate || ""} onChange={(e) => onChange({ expiryDate: e.target.value })} aria-label={t("ui.products.expiryDate")} title={t("ui.products.expiryDate")} />
+    </>
+  );
+  if (compact) return <div className="batch-fields">{inputs}{past && <small className="ff__error">{t("ui.products.expiryPast")}</small>}</div>;
+  return (
+    <>
+      <Field label={`${t("ui.products.batchNo")} ${t("ui.common.optional")}`}><input className="input" value={value.batchNo || ""} onChange={(e) => onChange({ batchNo: e.target.value })} placeholder={t("ui.products.batchNoPh")} maxLength={60} /></Field>
+      <Field label={t("ui.products.expiryDate")} error={past ? "expiryPast" : undefined} hint={t("ui.products.expiryHint")}>
+        <input className={"input" + (past ? " has-error" : "")} type="date" value={value.expiryDate || ""} onChange={(e) => onChange({ expiryDate: e.target.value })} />
+      </Field>
+    </>
+  );
+}
+
 function Done({ text, onClose }) {
   return text ? <p className="form-status form-status--success" role="status">{text}{onClose && <button type="button" className="link-btn" onClick={onClose}> ✕</button>}</p> : null;
 }
@@ -216,7 +238,8 @@ function AddStock({ locationsApi }) {
   const totalUnits = r3(lines.reduce((s, l) => s + (Number(l.qty) || 0), 0));
 
   const save = async () => {
-    const body = { ...f, locationId, supplierId: f.type === "purchase" ? f.supplierId || null : null, items: lines.map((l) => ({ productId: l.product.id, qty: Number(l.qty) })) };
+    const body = { ...f, locationId, supplierId: f.type === "purchase" ? f.supplierId || null : null,
+      items: lines.map((l) => ({ productId: l.product.id, qty: Number(l.qty), batchNo: l.batchNo || "", expiryDate: l.expiryDate || "" })) };
     const r = await sub.run(() => apiRequest("/api/stock/add", { method: "POST", body }));
     setConfirming(false);
     if (r) { draft.finish(); setDone(fill(t("ui.stock.addDone"), { n: r.count, location: locationName })); setLines([]); setF((x) => ({ ...x, reference: "", notes: "" })); }
@@ -262,6 +285,11 @@ function AddStock({ locationsApi }) {
                   <span>{l.product.unit}</span>
                 </label>
                 <button type="button" className="icon-btn" onClick={() => setLines((ls) => ls.filter((x) => x.product.id !== l.product.id))} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
+                {l.product.trackBatches && (
+                  <div className="stock-lines__batch">
+                    <BatchFields compact value={l} onChange={(patch) => setLines((ls) => ls.map((x) => (x.product.id === l.product.id ? { ...x, ...patch } : x)))} />
+                  </div>
+                )}
               </li>
             ))}
           </ul>
@@ -278,7 +306,7 @@ function AddStock({ locationsApi }) {
         <Modal title={t("ui.stock.confirmAdd")} onClose={() => setConfirming(false)}>
           <div className="form-grid">
             <p className="modal__help">{fill(t("ui.stock.confirmAddHelp"), { location: locationName, type: t(`ui.stock.types.${f.type}`) })}</p>
-            <ul className="pay-list">{lines.map((l) => <li key={l.product.id}><strong>+{qty(l.qty)} {l.product.unit}</strong> · {l.product.name}</li>)}</ul>
+            <ul className="pay-list">{lines.map((l) => <li key={l.product.id}><strong>+{qty(l.qty)} {l.product.unit}</strong> · {l.product.name}{(l.batchNo || l.expiryDate) && <small className="muted"> · {[l.batchNo && `${t("ui.products.batchNo")} ${l.batchNo}`, l.expiryDate && `${t("ui.products.expiryDate")} ${l.expiryDate}`].filter(Boolean).join(" · ")}</small>}</li>)}</ul>
             <div className="form-actions sheet-actions">
               <button type="button" className="btn btn--outline" onClick={() => setConfirming(false)}>{t("ui.common.cancel")}</button>
               <button type="button" className="btn btn--primary" disabled={sub.busy} onClick={save}>{t(sub.busy ? "ui.common.saving" : "ui.stock.confirm")}</button>
@@ -296,16 +324,16 @@ function OpeningStock({ locationsApi }) {
   const errText = useErrorText();
   const [product, setProduct] = useState(null);
   const ps = useProductStock(product?.id);
-  const [f, setF] = useState({ locationId: "", qty: "", reference: "", notes: "" });
+  const [f, setF] = useState({ locationId: "", qty: "", reference: "", notes: "", batchNo: "", expiryDate: "" });
   const [confirming, setConfirming] = useState(false);
   const [done, setDone] = useState(null);
   const sub = useSubmit();
   const locationId = f.locationId || defaultLocation(locationsApi);
   const here = (ps.data?.locations || []).find((l) => String(l.locationId) === String(locationId));
   const save = async () => {
-    const r = await sub.run(() => apiRequest("/api/stock/opening", { method: "POST", body: { productId: product.id, locationId, qty: f.qty, reference: f.reference, notes: f.notes } }));
+    const r = await sub.run(() => apiRequest("/api/stock/opening", { method: "POST", body: { productId: product.id, locationId, qty: f.qty, reference: f.reference, notes: f.notes, batchNo: f.batchNo, expiryDate: f.expiryDate } }));
     setConfirming(false);
-    if (r) { setDone(fill(t("ui.stock.openingDone"), { name: product.name, qty: qty(r.after), location: here?.location || "" })); setProduct(null); setF({ ...f, qty: "", reference: "", notes: "" }); }
+    if (r) { setDone(fill(t("ui.stock.openingDone"), { name: product.name, qty: qty(r.after), location: here?.location || "" })); setProduct(null); setF({ ...f, qty: "", reference: "", notes: "", batchNo: "", expiryDate: "" }); }
   };
   return (
     <div className="stock-form">
@@ -321,6 +349,7 @@ function OpeningStock({ locationsApi }) {
             </Field>
             <Field label={`${t("ui.stock.reference")} ${t("ui.common.optional")}`}><input className="input" value={f.reference} onChange={(e) => setF({ ...f, reference: e.target.value })} /></Field>
             <Field label={`${t("ui.common.notes")} ${t("ui.common.optional")}`}><input className="input" value={f.notes} onChange={(e) => setF({ ...f, notes: e.target.value })} /></Field>
+            {product.trackBatches && <BatchFields value={f} onChange={(patch) => setF({ ...f, ...patch })} />}
           </div>
         )}
         {here?.hasOpening && <p className="form-status form-status--error">{fill(t("ui.stock.openingExistsHere"), { location: here.location })}</p>}

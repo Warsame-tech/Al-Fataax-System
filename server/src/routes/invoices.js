@@ -117,7 +117,7 @@ router.get("/:id", requirePerm("invoices.view"), ah(async (req, res) => {
       WHERE i.id = ? AND i.business_id = ?`, [invId, bid]);
   if (!inv) return res.status(404).json({ code: "notFound" });
   const [items] = await pool.query(
-    `SELECT ii.qty, ii.unit_price, ii.discount, ii.line_total, COALESCE(ii.description, CONCAT_WS(' ', p.name, NULLIF(p.size, ''))) name, p.sku, p.barcode
+    `SELECT ii.qty, ii.unit_price, ii.discount, ii.line_total, COALESCE(ii.description, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, ''))) name, p.sku, p.barcode
        FROM invoice_items ii JOIN products p ON p.id = ii.product_id AND p.business_id = ii.business_id
       WHERE ii.invoice_id = ? AND ii.business_id = ? ORDER BY ii.id`, [invId, bid]);
   const [payments] = await pool.query("SELECT amount, method, paid_at, reference FROM customer_payments WHERE invoice_id = ? AND business_id = ? ORDER BY paid_at, id", [invId, bid]);

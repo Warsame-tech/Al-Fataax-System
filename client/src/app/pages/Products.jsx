@@ -2,25 +2,55 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
+import { useAuth } from "../../auth/AuthContext.jsx";
 import { apiRequest, fileUrl } from "../../services/api.js";
-import { PageHeader, useApi, usePerm, useSubmit, Modal, Field, FormError, Money, EmptyState, Loading, SearchBox, downloadCsv, parseCsv } from "../ui.jsx";
+import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, Modal, Field, FormError, Money, EmptyState, Loading, SearchBox, downloadCsv, parseCsv } from "../ui.jsx";
 import { fill, qty, date } from "../format.js";
 import CameraScanner from "../CameraScanner.jsx";
 import { FoundCard } from "../ProductPicker.jsx";
 import { useDraft, DraftBar } from "../Drafts.jsx";
+import { useProfile, productLabel, variantText, expiryState } from "../profile.js";
 
-/* Product master data only — stock quantities are entered in the Stock module (opening stock, add stock). */
-export const EMPTY = { name: "", size: "", description: "", sku: "", barcode: "", category: "", subcategory: "", brand: "", unit: "pcs", costPrice: "", sellingPrice: "", wholesalePrice: "", minStock: "", isActive: true };
+/*
+ * Product master data only — stock quantities are entered in the Stock module (opening stock, add stock).
+ * The fields and tools follow the business type's profile (app/profile.js), e.g. cosmetics:
+ * variants (shade, fragrance, formula, pack size), packaging barcodes, batch & expiry tracking.
+ */
+export const EMPTY = {
+  name: "", size: "", shade: "", fragrance: "", formula: "", packSize: "", description: "", sku: "", barcode: "", category: "", subcategory: "", brand: "",
+  unit: "pcs", costPrice: "", sellingPrice: "", wholesalePrice: "", minStock: "", isActive: true, trackBatches: false
+};
 
 /* Units of measurement offered in the product form (a unit already saved on a product stays selectable). */
-export const UNITS = ["pcs", "bottle", "box", "pack", "carton", "kg", "g", "liter", "ml", "meter", "yard", "roll", "pair", "dozen"];
+export const UNITS = ["pcs", "bottle", "box", "pack", "carton", "kg", "g", "liter", "ml", "meter", "yard", "roll", "pair", "dozen", "tube", "jar", "set"];
 
-const NO_FILTERS = { q: "", brandId: "", categoryId: "", subcategory: "", status: "", stockAt: "", supplierId: "", active: "" };
+const NO_FILTERS = { q: "", brandId: "", categoryId: "", subcategory: "", status: "", stockAt: "", supplierId: "", active: "", expiry: "", variantOf: "" };
 const PAGE_SIZE = 25;
+
+/* A new variant starts from the product it belongs to: same name, brand, category, prices; new variant fields and codes. */
+const variantTemplate = (p) => ({
+  ...EMPTY, name: p.baseName ?? p.name, brand: p.brand || "", category: p.category || "", subcategory: p.subcategory || "", description: p.description || "",
+  unit: p.unit, costPrice: p.costPrice, sellingPrice: p.sellingPrice, wholesalePrice: p.wholesalePrice ?? "", minStock: p.minStock,
+  trackBatches: Boolean(p.trackBatches), variantOf: p.id
+});
+
+function ExpiryCell({ value, soonDays }) {
+  const { t, lang } = useLanguage();
+  if (!value) return "—";
+  const state = expiryState(value, soonDays);
+  return (
+    <span className={"expiry-pill" + (state ? ` is-${state}` : "")} title={state ? t(`ui.products.expiry.${state}`) : undefined}>
+      {date(value, lang)}
+    </span>
+  );
+}
 
 export default function Products() {
   const { t, lang } = useLanguage();
   const can = usePerm();
+  const profile = useProfile();
+  const L = (k) => productLabel(t, profile, k);
+  const showVariant = profile.variants.some((v) => v !== "size");
   const [f, setF] = useState(NO_FILTERS);
   const [sort, setSort] = useState({ by: "name", dir: "asc" });
   const [page, setPage] = useState(1);
@@ -30,9 +60,11 @@ export default function Products() {
     return new URLSearchParams({ ...params, sort: sort.by, dir: sort.dir, page, pageSize: PAGE_SIZE });
   }, [f, sort, page]);
   const list = useApi(`/api/products?${query}`);
-  const [editing, setEditing] = useState(null);   // product or EMPTY
+  const [editing, setEditing] = useState(null);   // product, EMPTY or a variant template
   const [history, setHistory] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [settings, setSettings] = useState(false);
+  const [notice, setNotice] = useState(null);
   const products = list.data?.products || [];
   const o = options.data || {};
   const set = (k, v) => { setF((x) => ({ ...x, [k]: v })); setPage(1); };
@@ -43,15 +75,25 @@ export default function Products() {
       <button type="button" onClick={() => sortBy(by)}>{children}<span aria-hidden="true">{sort.by === by ? (sort.dir === "asc" ? " ▲" : " ▼") : ""}</span></button>
     </th>
   );
+  const setStatus = async (p, archive) => {
+    try {
+      await apiRequest(`/api/products/${p.id}/${archive ? "archive" : "restore"}`, { method: "POST" });
+      setNotice(fill(t(archive ? "ui.products.archivedDone" : "ui.products.restoredDone"), { name: p.name }));
+      list.reload();
+    } catch { setNotice(t("ui.errors.failed")); }
+  };
 
   const exportCsv = () => downloadCsv("products.csv",
-    ["name", "size", "sku", "barcode", "brand", "category", "subcategory", "unit", "costPrice", "sellingPrice", "wholesalePrice", "lowStockAlertLevel", "stock"],
-    products.map((p) => [p.baseName ?? p.name, p.size, p.sku, p.barcode, p.brand, p.category, p.subcategory, p.unit, p.costPrice, p.sellingPrice, p.wholesalePrice ?? "", p.minStock, p.stock]));
+    ["name", "size", "shade", "fragrance", "formula", "packSize", "sku", "barcode", "brand", "category", "subcategory", "unit", "costPrice", "sellingPrice", "wholesalePrice", "lowStockAlertLevel", "stock", "status"],
+    products.map((p) => [p.baseName ?? p.name, p.size, p.shade, p.fragrance, p.formula, p.packSize, p.sku, p.barcode, p.brand, p.category, p.subcategory, p.unit, p.costPrice, p.sellingPrice,
+      p.wholesalePrice ?? "", p.minStock, p.stock, p.isActive ? "active" : "archived"]));
+  const lead = 8 + (showVariant ? 1 : 0);          // columns before "Current stock" (totals row)
 
   return (
     <div className="page">
       <PageHeader icon="package" title={t("ui.products.title")} actions={
         <>
+          {can("settings.edit") && <button type="button" className="btn btn--outline" onClick={() => setSettings(true)}><Icon name="settings" /><span>{t("ui.products.settings")}</span></button>}
           <button type="button" className="btn btn--outline" onClick={exportCsv}><Icon name="download" /><span>{t("ui.common.exportCsv")}</span></button>
           {can("products.edit") && <button type="button" className="btn btn--outline" onClick={() => setImporting(true)}><Icon name="upload" /><span>{t("ui.products.import")}</span></button>}
           {can("products.edit") && <button type="button" className="btn btn--primary" onClick={() => setEditing(EMPTY)}><Icon name="plus" /><span>{t("ui.products.add")}</span></button>}
@@ -59,7 +101,7 @@ export default function Products() {
       } />
 
       <div className="filters">
-        <SearchBox value={f.q} onChange={(v) => set("q", v)} placeholder={t("ui.products.searchPh")} />
+        <SearchBox value={f.q} onChange={(v) => set("q", v)} placeholder={t(showVariant ? "ui.products.searchPhVariants" : "ui.products.searchPh")} />
         <select className="input input--auto" value={f.brandId} onChange={(e) => set("brandId", e.target.value)} aria-label={t("ui.products.brand")}>
           <option value="">{t("ui.products.allBrands")}</option>
           {(o.brands || []).map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
@@ -76,6 +118,13 @@ export default function Products() {
           <option value="">{t("ui.stock.allStatuses")}</option>
           {["in", "low", "out", "negative"].map((s) => <option key={s} value={s}>{t(`ui.stock.status.${s}`)}</option>)}
         </select>
+        {profile.batches && (
+          <select className="input input--auto" value={f.expiry} onChange={(e) => set("expiry", e.target.value)} aria-label={t("ui.products.expiryFilter")}>
+            <option value="">{t("ui.products.expiry.all")}</option>
+            <option value="soon">{fill(t("ui.products.expiry.soonDays"), { n: profile.expirySoonDays })}</option>
+            <option value="expired">{t("ui.products.expiry.expired")}</option>
+          </select>
+        )}
         {(o.locations || []).length > 1 && (
           <select className="input input--auto" value={f.stockAt} onChange={(e) => set("stockAt", e.target.value)} aria-label={t("ui.stock.location")}>
             <option value="">{t("ui.products.anyLocation")}</option>
@@ -86,9 +135,15 @@ export default function Products() {
           <option value="">{t("ui.products.allSuppliers")}</option>
           {(o.suppliers || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
         </select>
-        <label className="checkbox"><input type="checkbox" checked={f.active === "all"} onChange={(e) => set("active", e.target.checked ? "all" : "")} /><span>{t("ui.products.showInactive")}</span></label>
+        <select className="input input--auto" value={f.active} onChange={(e) => set("active", e.target.value)} aria-label={t("ui.products.productStatus")}>
+          <option value="">{t("ui.products.statusFilter.active")}</option>
+          <option value="archived">{t("ui.products.statusFilter.archived")}</option>
+          <option value="all">{t("ui.products.statusFilter.all")}</option>
+        </select>
         {active > 0 && <button type="button" className="btn btn--outline btn--sm" onClick={() => { setF(NO_FILTERS); setPage(1); }}><Icon name="x" /><span>{fill(t("ui.products.resetFilters"), { n: active })}</span></button>}
       </div>
+      {f.variantOf && <p className="page-help"><Icon name="layers" /> {t("ui.products.showingVariants")} <button type="button" className="link-btn" onClick={() => set("variantOf", "")}>{t("ui.products.showAll")}</button></p>}
+      {notice && <p className="form-status form-status--info" role="status">{notice} <button type="button" className="link-btn" onClick={() => setNotice(null)} aria-label={t("ui.common.close")}>✕</button></p>}
 
       {list.loading && !list.data ? <Loading /> : products.length === 0 ? (
         <EmptyState icon="package" text={active ? t("ui.common.noResults") : t("ui.products.empty")} action={!active && can("products.edit") && <button className="btn btn--primary" onClick={() => setEditing(EMPTY)}><Icon name="plus" /><span>{t("ui.products.add")}</span></button>} />
@@ -96,10 +151,14 @@ export default function Products() {
         <div className="table-wrap">
           <table className="table">
             <thead><tr>
-              <Th by="name">{t("ui.common.name")}</Th><Th by="size">{t("ui.products.size")}</Th><Th by="sku">{t("ui.products.sku")}</Th><Th by="brand">{t("ui.products.brand")}</Th><Th by="category">{t("ui.common.category")}</Th>
-              <Th by="cost" num>{t("ui.products.costPrice")}</Th><Th by="price" num>{t("ui.products.sellingPrice")}</Th>
+              <Th by="name">{t("ui.common.name")}</Th><Th by="size">{t("ui.products.size")}</Th>
+              {showVariant && <th>{t("ui.products.variant")}</th>}
+              <Th by="sku">{t("ui.products.sku")}</Th><Th by="brand">{t("ui.products.brand")}</Th><Th by="category">{t("ui.common.category")}</Th>
+              <Th by="cost" num>{L("costPrice")}</Th><Th by="price" num>{L("sellingPrice")}</Th>
               <th className="num">{t("ui.products.wholesalePrice")}</th><Th by="stock" num>{t("ui.stock.current")}</Th><th>{t("ui.products.unit")}</th>
-              <th className="num">{t("ui.products.lowStockShort")}</th><Th by="value" num>{t("ui.products.stockValue")}</Th><th />
+              <th className="num">{L("lowStockShort")}</th>
+              {profile.batches && <Th by="expiry">{t("ui.products.nextExpiry")}</Th>}
+              <Th by="value" num>{t("ui.products.stockValue")}</Th><th />
             </tr></thead>
             <tbody>
               {products.map((p) => (
@@ -107,10 +166,20 @@ export default function Products() {
                   <td>
                     <div className="prod-cell">
                       <span className="prod-thumb">{p.imagePath ? <img src={fileUrl(p.imagePath)} alt="" loading="lazy" /> : <Icon name="package" />}</span>
-                      <div><strong>{p.name}</strong>{p.barcode && <small className="cell-sub"><Icon name="barcode" /> {p.barcode}</small>}</div>
+                      <div>
+                        <strong>{p.name}</strong>
+                        {p.barcode && <small className="cell-sub"><Icon name="barcode" /> {p.barcode}</small>}
+                        {!p.isActive && <small className="cell-sub archived-tag">{t("ui.products.statusValues.archived")}</small>}
+                        {showVariant && p.variantCount > 1 && !f.variantOf && (
+                          <button type="button" className="link-btn cell-sub" onClick={() => set("variantOf", String(p.variantOf || p.id))}>
+                            <Icon name="layers" /> {fill(t("ui.products.variantsCount"), { n: p.variantCount })}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </td>
                   <td>{p.size || "—"}</td>
+                  {showVariant && <td>{variantText(p) || "—"}</td>}
                   <td>{p.sku || "—"}</td>
                   <td>{p.brand || "—"}</td>
                   <td>{p.category || "—"}{p.subcategory && <small className="cell-sub">{p.subcategory}</small>}</td>
@@ -122,11 +191,18 @@ export default function Products() {
                   </td>
                   <td>{p.unit}</td>
                   <td className="num">{qty(p.minStock)}</td>
-                  <td className="num"><Money value={Math.round(p.stock * p.costPrice * 100) / 100} /></td>
+                  {profile.batches && <td>{p.trackBatches ? <ExpiryCell value={p.nextExpiry} soonDays={profile.expirySoonDays} /> : <span className="muted">{t("ui.products.notTracked")}</span>}</td>}
+                  <td className="num"><Money value={Math.round(p.stock * p.costPrice * 10000) / 10000} /></td>
                   <td className="row-actions">
                     <button type="button" className="icon-btn" title={t("ui.products.history")} onClick={() => setHistory(p)}><Icon name="history" /></button>
-                    {can("stock.adjust") && <Link className="icon-btn" title={t("ui.stock.adjust")} to={`/app/m/stock?tab=adjust&product=${p.id}`}><Icon name="swap" /></Link>}
+                    {can("stock.adjust") && p.isActive && <Link className="icon-btn" title={t("ui.stock.adjust")} to={`/app/m/stock?tab=adjust&product=${p.id}`}><Icon name="swap" /></Link>}
+                    {can("products.edit") && showVariant && <button type="button" className="icon-btn" title={t("ui.products.addVariant")} onClick={() => setEditing(variantTemplate(p))}><Icon name="copy" /></button>}
                     {can("products.edit") && <button type="button" className="icon-btn" title={t("ui.common.edit")} onClick={() => setEditing(p)}><Icon name="settings" /></button>}
+                    {can("products.edit") && (
+                      <button type="button" className="icon-btn" title={t(p.isActive ? "ui.products.archive" : "ui.products.restore")} onClick={() => setStatus(p, p.isActive)}>
+                        <Icon name={p.isActive ? "archive" : "archive-restore"} />
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -134,9 +210,9 @@ export default function Products() {
             {list.data.summary && (
               <tfoot className="table-summary">
                 <tr>
-                  <td colSpan="8"><strong>{fill(t("ui.products.totalProducts"), { n: list.data.summary.count })}</strong>{list.data.total > PAGE_SIZE && <small className="cell-sub">{t("ui.products.totalAllPages")}</small>}</td>
+                  <td colSpan={lead}><strong>{fill(t("ui.products.totalProducts"), { n: list.data.summary.count })}</strong>{list.data.total > PAGE_SIZE && <small className="cell-sub">{t("ui.products.totalAllPages")}</small>}</td>
                   <td className="num"><strong>{qty(list.data.summary.units)}</strong></td>
-                  <td colSpan="2" />
+                  <td colSpan={profile.batches ? 3 : 2} />
                   <td className="num"><strong><Money value={list.data.summary.stockValue} /></strong></td>
                   <td />
                 </tr>
@@ -154,24 +230,35 @@ export default function Products() {
       )}
       {list.data && list.data.total <= PAGE_SIZE && <p className="muted pager__info">{fill(t("ui.stock.results"), { n: list.data.total })}</p>}
 
-      {editing && <ProductForm product={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); list.reload(); options.reload(); }} onOpen={(p) => setEditing(p)} />}
+      {editing && <ProductForm key={editing.id || `new-${editing.variantOf || ""}`} product={editing} onClose={() => setEditing(null)}
+        onSaved={() => { setEditing(null); list.reload(); options.reload(); }} onOpen={(p) => setEditing(p)} />}
       {history && <HistoryModal product={history} lang={lang} onClose={() => setHistory(null)} />}
       {importing && <ImportModal onClose={() => setImporting(false)} onDone={() => { setImporting(false); list.reload(); options.reload(); }} />}
+      {settings && <ProductSettings onClose={() => setSettings(false)} />}
     </div>
   );
 }
 
 /* Add / edit product form. Scanning a barcode checks it first: if another product already has it,
- * that product is shown (highlighted) instead of creating a duplicate.
- * onSaved(result, fields): result is { id } when created. onOpen(product): switch to editing that product. */
+ * that product is shown (highlighted) instead of creating a duplicate (unless the business allows duplicates).
+ * The fields follow the business profile (variants, packaging barcodes, batch tracking, labels).
+ * onSaved(result, fields): result is { id } when created. onOpen(product): switch to editing that product (or a new variant). */
 export function ProductForm({ product, onClose, onSaved, onOpen }) {
   const { t } = useLanguage();
   const can = usePerm();
+  const profile = useProfile();
+  const { business } = useAuth();
+  const L = (k) => productLabel(t, profile, k);
   const isNew = !product.id;
-  const [f, setF] = useState(isNew ? EMPTY : {
-    ...EMPTY, ...product, name: product.baseName ?? product.name, size: product.size || "", description: product.description || "", category: product.category || "", subcategory: product.subcategory || "",
-    brand: product.brand || "", sku: product.sku || "", barcode: product.barcode || "", wholesalePrice: product.wholesalePrice ?? "", minStock: product.minStock
+  const [f, setF] = useState(isNew ? { ...EMPTY, ...product } : {
+    ...EMPTY, ...product, name: product.baseName ?? product.name, size: product.size || "", shade: product.shade || "", fragrance: product.fragrance || "",
+    formula: product.formula || "", packSize: product.packSize || "", description: product.description || "", category: product.category || "",
+    subcategory: product.subcategory || "", brand: product.brand || "", sku: product.sku || "", barcode: product.barcode || "",
+    wholesalePrice: product.wholesalePrice ?? "", minStock: product.minStock, trackBatches: Boolean(product.trackBatches)
   });
+  const [barcodes, setBarcodes] = useState([]);        // packaging barcodes [{ barcode, label, qty }]
+  const details = useApi(isNew ? null : `/api/products/${product.id}/details`);
+  useEffect(() => { if (details.data) setBarcodes(details.data.barcodes); }, [details.data]);
   const sub = useSubmit();
   const draft = useDraft("product");
   const [image, setImage] = useState(null);            // newly chosen File
@@ -190,6 +277,8 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
   };
   const shown = preview || (!removeImage && product.imagePath ? fileUrl(product.imagePath) : null);
   const units = UNITS.includes(f.unit) || !f.unit ? UNITS : [f.unit, ...UNITS];
+  const fullName = [f.name, ...profile.variants.map((v) => f[v])].filter((v) => v && String(v).trim()).join(" ");
+  const setBarcode = (i, k, v) => setBarcodes((list) => list.map((b, j) => (j === i ? { ...b, [k]: v } : b)));
 
   /* barcode check (scanner, camera or typed + Enter / leaving the field) */
   const checkBarcode = async (code) => {
@@ -197,6 +286,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     setOwner(null);
     if (!value) return;
     setF((x) => ({ ...x, barcode: value }));
+    if (business?.allowDuplicateCodes) return;
     try {
       const { product: found } = await apiRequest(`/api/products/check-barcode/${encodeURIComponent(value)}`);
       if (found && found.id !== product.id) setOwner(found);
@@ -208,6 +298,8 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     if (owner) return;
     const fd = new FormData();
     Object.keys(EMPTY).forEach((k) => fd.append(k, f[k] === null || f[k] === undefined ? "" : String(f[k])));
+    if (profile.extraBarcodes) fd.append("barcodes", JSON.stringify(barcodes.filter((b) => String(b.barcode).trim())));
+    if (isNew && f.variantOf) fd.append("variantOf", String(f.variantOf));
     if (image) fd.append("image", image);
     if (removeImage) fd.append("removeImage", "true");
     const ok = await sub.run(() => apiRequest(isNew ? "/api/products" : `/api/products/${product.id}`, { method: isNew ? "POST" : "PUT", body: fd }));
@@ -215,13 +307,15 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
   };
   const err = sub.fieldErrors;
   const usedBy = sub.formError?.data?.usedBy;
+  const variants = (details.data?.variants || []).filter((v) => v.id !== product.id);
+  const title = isNew ? (f.variantOf ? fill(t("ui.products.newVariantOf"), { name: f.name }) : t("ui.products.add")) : t("ui.products.edit");
   return (
-    <Modal title={t(isNew ? "ui.products.add" : "ui.products.edit")} onClose={onClose} wide>
+    <Modal title={title} onClose={onClose} wide>
       <form onSubmit={save} className="form-grid form-grid--2 sheet-form">
         {isNew && (
           <div className="ff ff--full">
-            <DraftBar draft={draft} canSave={Boolean(f.name || f.barcode)} title={[f.name, f.size].filter(Boolean).join(" ") || f.barcode}
-              getData={() => ({ f })} onLoad={(d) => { setOwner(null); setF({ ...EMPTY, ...d.f }); }} />
+            <DraftBar draft={draft} canSave={Boolean(f.name || f.barcode)} title={fullName || f.barcode}
+              getData={() => ({ f, barcodes })} onLoad={(d) => { setOwner(null); setF({ ...EMPTY, ...d.f }); setBarcodes(d.barcodes || []); }} />
             {image && <small className="ff__hint">{t("ui.drafts.noPhoto")}</small>}
           </div>
         )}
@@ -262,26 +356,80 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
         </div>
 
         <Field label={t("ui.common.name")} error={err.name}><input className="input" value={f.name} onChange={set("name")} placeholder={t("ui.products.namePh")} /></Field>
-        <Field label={`${t("ui.products.size")} ${t("ui.common.optional")}`} error={err.size} hint={f.name && f.size ? fill(t("ui.products.showsAs"), { name: `${f.name} ${f.size}` }) : t("ui.products.sizeHint")}>
-          <input className="input" value={f.size} onChange={set("size")} placeholder={t("ui.products.sizePh")} />
+        <Field label={t("ui.products.sku")} error={err.sku} hint={err.sku === "duplicate" && usedBy ? fill(t("ui.products.skuUsedBy"), { name: usedBy }) : undefined}>
+          <input className="input" value={f.sku} onChange={set("sku")} />
         </Field>
+
+        {profile.variants.length > 1 && <p className="form-sub ff--full"><Icon name="layers" /> {t("ui.products.variantSection")}</p>}
+        {profile.variants.map((v) => (
+          <Field key={v} label={`${t(`ui.products.${v}`)} ${t("ui.common.optional")}`} error={err[v]}>
+            <input className="input" value={f[v]} onChange={set(v)} placeholder={t(`ui.products.${v}Ph`)} />
+          </Field>
+        ))}
+        <p className="ff__hint ff--full">{f.name && fullName !== f.name ? fill(t("ui.products.showsAs"), { name: fullName }) : t(profile.variants.length > 1 ? "ui.products.variantHint" : "ui.products.sizeHint")}</p>
+
         <Field label={`${t("ui.common.description")} ${t("ui.common.optional")}`} full><textarea className="input" rows={2} value={f.description} onChange={set("description")} /></Field>
-        <Field label={t("ui.products.sku")} error={err.sku}><input className="input" value={f.sku} onChange={set("sku")} /></Field>
         <Field label={t("ui.products.brand")}><input className="input" value={f.brand} onChange={set("brand")} list="brand-options" /></Field>
         <Field label={t("ui.common.category")}><input className="input" value={f.category} onChange={set("category")} list="category-options" /></Field>
         <Field label={`${t("ui.products.subcategory")} ${t("ui.common.optional")}`}><input className="input" value={f.subcategory} onChange={set("subcategory")} /></Field>
         <Field label={t("ui.products.unit")}>
           <select className="input" value={f.unit} onChange={set("unit")}>{units.map((u) => <option key={u} value={u}>{t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`)}</option>)}</select>
         </Field>
-        <Field label={t("ui.products.lowStockAlert")} error={err.minStock} hint={t("ui.products.lowStockAlertHint")}><input className="input" type="number" min="0" step="any" value={f.minStock} onChange={set("minStock")} /></Field>
-        <Field label={t("ui.products.costPrice")} error={err.costPrice}><input className="input" type="number" min="0" step="0.01" value={f.costPrice} onChange={set("costPrice")} /></Field>
-        <Field label={t("ui.products.sellingPrice")} error={err.sellingPrice}><input className="input" type="number" min="0" step="0.01" value={f.sellingPrice} onChange={set("sellingPrice")} /></Field>
-        <Field label={`${t("ui.products.wholesalePrice")} ${t("ui.common.optional")}`} error={err.wholesalePrice}><input className="input" type="number" min="0" step="0.01" value={f.wholesalePrice} onChange={set("wholesalePrice")} /></Field>
-        <label className="checkbox"><input type="checkbox" checked={f.isActive} onChange={set("isActive")} /><span>{t("ui.products.active")}</span></label>
+        <Field label={L("costPrice")} error={err.costPrice}><input className="input" type="number" min="0" step="any" value={f.costPrice} onChange={set("costPrice")} /></Field>
+        <Field label={L("sellingPrice")} error={err.sellingPrice}><input className="input" type="number" min="0" step="any" value={f.sellingPrice} onChange={set("sellingPrice")} /></Field>
+        <Field label={`${t("ui.products.wholesalePrice")} ${t("ui.common.optional")}`} error={err.wholesalePrice}><input className="input" type="number" min="0" step="any" value={f.wholesalePrice} onChange={set("wholesalePrice")} /></Field>
+        <Field label={L("lowStockAlert")} error={err.minStock} hint={t("ui.products.lowStockAlertHint")}><input className="input" type="number" min="0" step="any" value={f.minStock} onChange={set("minStock")} /></Field>
+        <Field label={t("ui.products.productStatus")}>
+          <select className="input" value={f.isActive ? "active" : "archived"} onChange={(e) => setF((x) => ({ ...x, isActive: e.target.value === "active" }))}>
+            <option value="active">{t("ui.products.statusValues.active")}</option>
+            <option value="archived">{t("ui.products.statusValues.archived")}</option>
+          </select>
+        </Field>
+        {profile.batches && (
+          <div className="ff">
+            <label className="checkbox"><input type="checkbox" checked={f.trackBatches} onChange={set("trackBatches")} /><span>{t("ui.products.trackBatches")}</span></label>
+            <small className="ff__hint">{t("ui.products.trackBatchesHint")}</small>
+          </div>
+        )}
+
+        {profile.extraBarcodes && (
+          <div className="ff ff--full pack-codes">
+            <span className="ff__label">{t("ui.products.packBarcodes")}</span>
+            <small className="ff__hint">{t("ui.products.packBarcodesHint")}</small>
+            {barcodes.map((b, i) => (
+              <div key={i} className="pack-codes__row">
+                <input className={"input" + (err[`barcodes.${i}.barcode`] ? " has-error" : "")} value={b.barcode} onChange={(e) => setBarcode(i, "barcode", e.target.value)}
+                  placeholder={t("ui.products.barcode")} aria-label={t("ui.products.barcode")} />
+                <input className="input" value={b.label} onChange={(e) => setBarcode(i, "label", e.target.value)} placeholder={t("ui.products.packLabelPh")} aria-label={t("ui.products.packLabel")} />
+                <input className={"input" + (err[`barcodes.${i}.qty`] ? " has-error" : "")} type="number" min="0" step="any" value={b.qty} onChange={(e) => setBarcode(i, "qty", e.target.value)}
+                  aria-label={t("ui.products.packQty")} title={t("ui.products.packQty")} />
+                <button type="button" className="icon-btn" onClick={() => setBarcodes((list) => list.filter((_, j) => j !== i))} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
+                {err[`barcodes.${i}.barcode`] && <span className="ff__error">{fill(t("ui.errors.barcodeTaken"), { product: usedBy || f.name })}</span>}
+                {err[`barcodes.${i}.qty`] && <span className="ff__error">{t("ui.errors.invalidAmount")}</span>}
+              </div>
+            ))}
+            <div><button type="button" className="btn btn--outline btn--sm" onClick={() => setBarcodes((list) => [...list, { barcode: "", label: "", qty: 1 }])}><Icon name="plus" /><span>{t("ui.products.addPackBarcode")}</span></button></div>
+          </div>
+        )}
+
+        {!isNew && profile.variants.length > 1 && (
+          <div className="ff ff--full variant-list">
+            <span className="ff__label">{t("ui.products.otherVariants")}</span>
+            {variants.length === 0 ? <small className="ff__hint">{t("ui.products.noVariants")}</small> : (
+              <ul>
+                {variants.map((v) => (
+                  <li key={v.id}><button type="button" className="link-btn" onClick={() => onOpen?.(v)}>{v.name}</button><small className="muted"> · {qty(v.stock)} {v.unit}{!v.isActive ? ` · ${t("ui.products.statusValues.archived")}` : ""}</small></li>
+                ))}
+              </ul>
+            )}
+            {onOpen && <div><button type="button" className="btn btn--outline btn--sm" onClick={() => onOpen(variantTemplate({ ...product, ...f, id: product.id }))}><Icon name="copy" /><span>{t("ui.products.addVariant")}</span></button></div>}
+          </div>
+        )}
+
         <datalist id="brand-options">{(options.data?.brands || []).map((b) => <option key={b.id} value={b.name} />)}</datalist>
         <datalist id="category-options">{(options.data?.categories || []).map((c) => <option key={c.id} value={c.name} />)}</datalist>
         {isNew && <p className="page-help ff--full"><Icon name="info" /> {t("ui.products.stockSeparate")}</p>}
-        <FormError error={err.barcode ? null : sub.formError} />
+        <FormError error={err.barcode || err.sku || Object.keys(err).some((k) => k.startsWith("barcodes.")) ? null : sub.formError} />
         <div className="form-actions ff--full sheet-actions">
           <button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button>
           <button type="submit" className="btn btn--primary" disabled={sub.busy || Boolean(owner)}>{t(sub.busy ? "ui.common.saving" : "ui.common.save")}</button>
@@ -292,29 +440,113 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
   );
 }
 
+/* Owner setting: may two products share a SKU or barcode? (normally no) */
+function ProductSettings({ onClose }) {
+  const { t } = useLanguage();
+  const { business, refresh } = useAuth();
+  const [allow, setAllow] = useState(Boolean(business?.allowDuplicateCodes));
+  const sub = useSubmit();
+  const save = async (e) => {
+    e.preventDefault();
+    if (await sub.run(() => apiRequest("/api/products/settings", { method: "PUT", body: { allowDuplicateCodes: allow } }))) { await refresh(); onClose(); }
+  };
+  return (
+    <Modal title={t("ui.products.settings")} onClose={onClose}>
+      <form onSubmit={save} className="form-grid">
+        <label className="checkbox"><input type="checkbox" checked={allow} onChange={(e) => setAllow(e.target.checked)} /><span>{t("ui.products.allowDuplicates")}</span></label>
+        <p className="modal__help">{t("ui.products.allowDuplicatesHelp")}</p>
+        <FormError error={sub.formError} />
+        <div className="form-actions sheet-actions">
+          <button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button>
+          <button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.common.save")}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+/* Product history: stock movements · changes to costs, prices, reorder level and status · batches on hand */
 function HistoryModal({ product, lang, onClose }) {
   const { t } = useLanguage();
-  const h = useApi(`/api/products/${product.id}/movements`);
+  const profile = useProfile();
+  const m = useMoney();
+  const L = (k) => productLabel(t, profile, k);
+  const [tab, setTab] = useState("movements");
+  const moves = useApi(`/api/products/${product.id}/movements`);
+  const changes = useApi(tab === "changes" ? `/api/products/${product.id}/changes` : null);
+  const details = useApi(tab === "batches" ? `/api/products/${product.id}/details` : null);
+  const FIELD = { costPrice: L("costPrice"), sellingPrice: L("sellingPrice"), wholesalePrice: t("ui.products.wholesalePrice"), minStock: L("lowStockAlert"),
+    status: t("ui.products.productStatus"), trackBatches: t("ui.products.trackBatches") };
+  const value = (field, v) => {
+    if (v === null || v === undefined || v === "") return "—";
+    if (field === "status") return t(`ui.products.statusValues.${v}`);
+    if (field === "trackBatches") return t(v ? "ui.common.yes" : "ui.common.no");
+    if (field === "minStock") return qty(v);
+    return m(v);
+  };
+  const tabs = [
+    { id: "movements", label: t("ui.products.tabs.movements"), icon: "history" },
+    { id: "changes", label: t("ui.products.tabs.changes"), icon: "activity" },
+    ...(profile.batches || product.trackBatches ? [{ id: "batches", label: t("ui.products.tabs.batches"), icon: "calendar" }] : [])
+  ];
   return (
     <Modal title={`${t("ui.products.history")} · ${product.name}`} onClose={onClose} wide>
-      {h.loading ? <Loading /> : (h.data?.movements || []).length === 0 ? <EmptyState text={t("ui.common.noResults")} /> : (
+      <Tabs tabs={tabs} value={tab} onChange={setTab} />
+      {tab === "movements" && (moves.loading ? <Loading /> : (moves.data?.movements || []).length === 0 ? <EmptyState text={t("ui.common.noResults")} /> : (
         <div className="table-wrap">
           <table className="table table--compact">
             <thead><tr><th>{t("ui.common.date")}</th><th>{t("ui.audit.action")}</th><th className="num">{t("ui.common.qty")}</th><th>{t("ui.common.notes")}</th><th>{t("ui.common.user")}</th></tr></thead>
             <tbody>
-              {h.data.movements.map((m, i) => (
+              {moves.data.movements.map((mv, i) => (
                 <tr key={i}>
-                  <td>{date(m.at, lang, true)}</td>
-                  <td>{t(`ui.stock.types.${m.type}`)}</td>
-                  <td className={"num " + (m.change < 0 ? "is-neg" : "is-pos")}>{m.change > 0 ? "+" : ""}{qty(m.change)}</td>
-                  <td>{m.note || "—"}</td>
-                  <td>{m.user || "—"}</td>
+                  <td>{date(mv.at, lang, true)}</td>
+                  <td>{t(`ui.stock.types.${mv.type}`)}</td>
+                  <td className={"num " + (mv.change < 0 ? "is-neg" : "is-pos")}>{mv.change > 0 ? "+" : ""}{qty(mv.change)}</td>
+                  <td>{mv.note || "—"}</td>
+                  <td>{mv.user || "—"}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
-      )}
+      ))}
+      {tab === "changes" && (!changes.data ? <Loading /> : changes.data.changes.length === 0 ? <EmptyState text={t("ui.products.noChanges")} /> : (
+        <div className="table-wrap">
+          <table className="table table--compact">
+            <thead><tr><th>{t("ui.common.date")}</th><th>{t("ui.products.change")}</th><th>{t("ui.common.user")}</th></tr></thead>
+            <tbody>
+              {changes.data.changes.map((c, i) => (
+                <tr key={i}>
+                  <td>{date(c.at, lang, true)}</td>
+                  <td>
+                    {c.action === "product.created"
+                      ? <>{t("ui.products.created")}: {L("costPrice")} {value("costPrice", c.costPrice)} · {L("sellingPrice")} {value("sellingPrice", c.sellingPrice)}</>
+                      : (c.changes || []).map((x, j) => <div key={j}><strong>{FIELD[x.field] || x.field}</strong>: {value(x.field, x.from)} → {value(x.field, x.to)}{c.source ? <small className="muted"> · {c.source}</small> : null}</div>)}
+                  </td>
+                  <td>{c.user || "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+      {tab === "batches" && (!details.data ? <Loading /> : details.data.batches.length === 0 ? <EmptyState text={t(product.trackBatches ? "ui.products.noBatches" : "ui.products.batchesOff")} /> : (
+        <div className="table-wrap">
+          <table className="table table--compact">
+            <thead><tr><th>{t("ui.stock.location")}</th><th>{t("ui.products.batchNo")}</th><th>{t("ui.products.expiryDate")}</th><th className="num">{t("ui.common.qty")}</th></tr></thead>
+            <tbody>
+              {details.data.batches.map((b) => (
+                <tr key={b.id}>
+                  <td>{b.location}</td>
+                  <td>{b.batchNo || <span className="muted">{t("ui.products.noBatchNo")}</span>}</td>
+                  <td><ExpiryCell value={b.expiryDate} soonDays={profile.expirySoonDays} /></td>
+                  <td className="num">{qty(b.qty)} {product.unit}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
     </Modal>
   );
 }

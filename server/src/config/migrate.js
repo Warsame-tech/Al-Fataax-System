@@ -128,6 +128,52 @@ const TABLES = [
       CONSTRAINT fk_pm_cash     FOREIGN KEY (cash_account_id) REFERENCES cash_accounts(id),
       CONSTRAINT fk_pm_bank     FOREIGN KEY (bank_account_id) REFERENCES bank_accounts(id)
     ) ENGINE=InnoDB`
+  },
+  {
+    table: "product_barcodes",
+    ddl: `CREATE TABLE IF NOT EXISTS product_barcodes (
+      id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id INT UNSIGNED NOT NULL,
+      product_id  INT UNSIGNED NOT NULL,
+      barcode     VARCHAR(80)  NOT NULL,
+      pack_label  VARCHAR(60)  NULL,                 -- e.g. Box, Carton, Gift set
+      pack_qty    DECIMAL(14,3) NOT NULL DEFAULT 1,  -- units in this packaging (scanning it sells / adds this many)
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_pb_barcode (business_id, barcode),
+      INDEX idx_pb_product (product_id),
+      CONSTRAINT fk_pb_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+      CONSTRAINT fk_pb_product  FOREIGN KEY (product_id)  REFERENCES products(id)
+    ) ENGINE=InnoDB`
+  },
+  {
+    table: "product_batches",
+    ddl: `CREATE TABLE IF NOT EXISTS product_batches (
+      id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id INT UNSIGNED NOT NULL,
+      product_id  INT UNSIGNED NOT NULL,
+      location_id INT UNSIGNED NOT NULL,
+      batch_no    VARCHAR(60)  NOT NULL DEFAULT '',  -- '' = stock without a batch number
+      expiry_date DATE NULL,
+      qty         DECIMAL(14,3) NOT NULL DEFAULT 0,
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_batch_lookup (product_id, location_id, batch_no, expiry_date),
+      INDEX idx_batch_expiry (business_id, expiry_date),
+      CONSTRAINT fk_batch_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+      CONSTRAINT fk_batch_product  FOREIGN KEY (product_id)  REFERENCES products(id),
+      CONSTRAINT fk_batch_location FOREIGN KEY (location_id) REFERENCES stock_locations(id)
+    ) ENGINE=InnoDB`
+  },
+  {
+    table: "stock_movement_batches",
+    ddl: `CREATE TABLE IF NOT EXISTS stock_movement_batches (
+      id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      movement_id BIGINT UNSIGNED NOT NULL,
+      batch_id    INT UNSIGNED NOT NULL,
+      qty         DECIMAL(14,3) NOT NULL,            -- + into the batch, − out of it
+      INDEX idx_smb_movement (movement_id),
+      INDEX idx_smb_batch (batch_id)
+    ) ENGINE=InnoDB`
   }
 ];
 
@@ -162,11 +208,23 @@ const COLUMNS = [
 ];
 
 /* Indexes added after the fact (name → DDL); checked against information_schema.STATISTICS. */
+// Product variants (cosmetics: shade, fragrance, formula, pack size), variant groups, batch tracking, duplicate codes setting.
+COLUMNS.push(
+  { table: "products", column: "shade", ddl: "ALTER TABLE products ADD COLUMN shade VARCHAR(60) NULL AFTER size" },
+  { table: "products", column: "fragrance", ddl: "ALTER TABLE products ADD COLUMN fragrance VARCHAR(60) NULL AFTER shade" },
+  { table: "products", column: "formula", ddl: "ALTER TABLE products ADD COLUMN formula VARCHAR(60) NULL AFTER fragrance" },
+  { table: "products", column: "pack_size", ddl: "ALTER TABLE products ADD COLUMN pack_size VARCHAR(40) NULL AFTER formula" },
+  { table: "products", column: "variant_of", ddl: "ALTER TABLE products ADD COLUMN variant_of INT UNSIGNED NULL AFTER pack_size" },
+  { table: "products", column: "track_batches", ddl: "ALTER TABLE products ADD COLUMN track_batches TINYINT(1) NOT NULL DEFAULT 0 AFTER min_stock" },
+  { table: "business_settings", column: "allow_duplicate_codes", ddl: "ALTER TABLE business_settings ADD COLUMN allow_duplicate_codes TINYINT(1) NOT NULL DEFAULT 0 AFTER invoice_footer" }
+);
+
 const INDEXES = [
   { table: "products", name: "idx_products_category", ddl: "ALTER TABLE products ADD INDEX idx_products_category (business_id, category_id)" },
   { table: "products", name: "idx_products_brand", ddl: "ALTER TABLE products ADD INDEX idx_products_brand (business_id, brand_id)" },
   { table: "stock_movements", name: "idx_moves_location", ddl: "ALTER TABLE stock_movements ADD INDEX idx_moves_location (business_id, location_id, created_at)" },
-  { table: "stock_movements", name: "idx_moves_reversal", ddl: "ALTER TABLE stock_movements ADD INDEX idx_moves_reversal (reversal_of)" }
+  { table: "stock_movements", name: "idx_moves_reversal", ddl: "ALTER TABLE stock_movements ADD INDEX idx_moves_reversal (reversal_of)" },
+  { table: "products", name: "idx_products_variant", ddl: "ALTER TABLE products ADD INDEX idx_products_variant (business_id, variant_of)" }
 ];
 
 export async function migrate() {
@@ -216,6 +274,16 @@ export async function migrate() {
     await pool.query(`ALTER TABLE \`${col.t}\` MODIFY \`${col.c}\` DECIMAL(14,4) ${col.n === "YES" ? "NULL" : "NOT NULL"}${def}`);
   }
   if (narrow.length) console.log(`Database upgraded: ${narrow.length} money columns now keep 4 decimals`);
+  // SKU / barcode: unique per business unless the business allows duplicates (checked in routes/products.js),
+  // so the strict database keys become normal indexes.
+  for (const [uq, ix, col] of [["uq_product_sku", "idx_products_sku", "sku"], ["uq_product_barcode", "idx_products_barcode", "barcode"]]) {
+    const [[u]] = await pool.query(
+      "SELECT COUNT(*) n FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'products' AND INDEX_NAME = ?", [uq]);
+    if (u.n) {
+      await pool.query(`ALTER TABLE products DROP INDEX ${uq}, ADD INDEX ${ix} (business_id, ${col})`);
+      console.log(`Database upgraded: products.${col} duplicates are checked by the app`);
+    }
+  }
   for (const ix of INDEXES) {
     const [[row]] = await pool.query(
       "SELECT COUNT(*) n FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?", [ix.table, ix.name]

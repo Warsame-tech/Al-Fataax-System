@@ -1017,3 +1017,25 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 .lines__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .lines__actions .btn { text-transform: uppercase; letter-spacing: .02em; }
 .lines__cap { display: block; max-width: 180px; margin-left: auto; text-align: right; white-space: normal; }
+
+/* ---------- Business-type products (cosmetics: variants, packaging barcodes, batches & expiry) ---------- */
+.form-sub { display: flex; align-items: center; gap: 6px; margin: 6px 0 -4px; font-size: .82rem; font-weight: 700; color: var(--navy); }
+.form-sub .icon { width: 15px; height: 15px; flex: none; }
+.expiry-pill { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef1f7; font-size: .78rem; font-weight: 600; white-space: nowrap; }
+.expiry-pill.is-soon { background: #fff4e0; color: #9a5b00; }
+.expiry-pill.is-expired { background: #fde8e8; color: #b42318; }
+.archived-tag { color: #9a5b00; font-weight: 600; }
+.pack-codes { display: grid; gap: 8px; }
+.pack-codes__row { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) 90px auto; gap: 8px; align-items: center; }
+.pack-codes__row .ff__error { grid-column: 1 / -1; }
+.variant-list ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.variant-list li { font-size: .88rem; }
+.batch-fields { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.batch-fields .input { width: auto; flex: 1 1 130px; min-height: 32px; font-size: .84rem; }
+.batch-fields .ff__error { flex-basis: 100%; }
+.stock-lines li:has(.stock-lines__batch) { flex-wrap: wrap; }
+.stock-lines__batch { flex-basis: 100%; padding-left: 52px; }
+.stock-lines__batch .batch-fields { margin-top: 0; }
+@media (max-width: 560px) {
+  .pack-codes__row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}

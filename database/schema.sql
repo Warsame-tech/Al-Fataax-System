@@ -131,6 +131,7 @@ CREATE TABLE IF NOT EXISTS business_settings (
   receipt_prefix   VARCHAR(10) NOT NULL DEFAULT 'RC-',
   purchase_prefix  VARCHAR(10) NOT NULL DEFAULT 'PO-',
   invoice_footer   VARCHAR(255) NULL,
+  allow_duplicate_codes TINYINT(1) NOT NULL DEFAULT 0,  -- products may share a SKU / barcode
   timezone         VARCHAR(40) NOT NULL DEFAULT 'Africa/Mogadishu',
   updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_settings_business FOREIGN KEY (business_id) REFERENCES businesses(id)
@@ -174,6 +175,11 @@ CREATE TABLE IF NOT EXISTS products (
   subcategory     VARCHAR(120) NULL,
   name            VARCHAR(190) NOT NULL,          -- names may repeat; size / barcode / SKU tell products apart
   size            VARCHAR(40)  NULL,              -- e.g. 400ml, 1kg — shown after the name everywhere
+  shade           VARCHAR(60)  NULL,              -- variant fields (cosmetics): shown after the name too
+  fragrance       VARCHAR(60)  NULL,
+  formula         VARCHAR(60)  NULL,
+  pack_size       VARCHAR(40)  NULL,
+  variant_of      INT UNSIGNED NULL,              -- variant group: the first product of the group
   description     TEXT NULL,
   sku             VARCHAR(80)  NULL,
   barcode         VARCHAR(80)  NULL,
@@ -184,11 +190,13 @@ CREATE TABLE IF NOT EXISTS products (
   wholesale_price DECIMAL(14,4) NULL,
   stock_qty       DECIMAL(14,3) NOT NULL DEFAULT 0,  -- maintained only inside stock-movement transactions
   min_stock       DECIMAL(14,3) NOT NULL DEFAULT 0,  -- Low Stock Alert Level (per location: product_stock.alert_level)
+  track_batches   TINYINT(1) NOT NULL DEFAULT 0,     -- batch number + expiry per stock entry (product_batches)
   is_active       TINYINT(1) NOT NULL DEFAULT 1,
   created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  UNIQUE KEY uq_product_sku (business_id, sku),
-  UNIQUE KEY uq_product_barcode (business_id, barcode),
+  INDEX idx_products_sku (business_id, sku),         -- unique per business unless allow_duplicate_codes (checked by the app)
+  INDEX idx_products_barcode (business_id, barcode),
+  INDEX idx_products_variant (business_id, variant_of),
   INDEX idx_products_name (business_id, name),
   CONSTRAINT fk_products_business FOREIGN KEY (business_id) REFERENCES businesses(id),
   CONSTRAINT fk_products_category FOREIGN KEY (category_id) REFERENCES categories(id),
@@ -601,6 +609,46 @@ CREATE TABLE IF NOT EXISTS notifications (
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_notif_business (business_id, is_read, created_at),
   CONSTRAINT fk_notif_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS product_barcodes (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id INT UNSIGNED NOT NULL,
+  product_id  INT UNSIGNED NOT NULL,
+  barcode     VARCHAR(80)  NOT NULL,
+  pack_label  VARCHAR(60)  NULL,                 -- e.g. Box, Carton, Gift set
+  pack_qty    DECIMAL(14,3) NOT NULL DEFAULT 1,  -- units in this packaging (scanning it sells / adds this many)
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_pb_barcode (business_id, barcode),
+  INDEX idx_pb_product (product_id),
+  CONSTRAINT fk_pb_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+  CONSTRAINT fk_pb_product  FOREIGN KEY (product_id)  REFERENCES products(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS product_batches (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id INT UNSIGNED NOT NULL,
+  product_id  INT UNSIGNED NOT NULL,
+  location_id INT UNSIGNED NOT NULL,
+  batch_no    VARCHAR(60)  NOT NULL DEFAULT '',  -- '' = stock without a batch number
+  expiry_date DATE NULL,
+  qty         DECIMAL(14,3) NOT NULL DEFAULT 0,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_batch_lookup (product_id, location_id, batch_no, expiry_date),
+  INDEX idx_batch_expiry (business_id, expiry_date),
+  CONSTRAINT fk_batch_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+  CONSTRAINT fk_batch_product  FOREIGN KEY (product_id)  REFERENCES products(id),
+  CONSTRAINT fk_batch_location FOREIGN KEY (location_id) REFERENCES stock_locations(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS stock_movement_batches (
+  id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  movement_id BIGINT UNSIGNED NOT NULL,
+  batch_id    INT UNSIGNED NOT NULL,
+  qty         DECIMAL(14,3) NOT NULL,            -- + into the batch, − out of it
+  INDEX idx_smb_movement (movement_id),
+  INDEX idx_smb_batch (batch_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS audit_logs (

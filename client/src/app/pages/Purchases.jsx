@@ -110,7 +110,7 @@ function PurchaseForm({ onDone }) {
   const total = lines.reduce((s, l) => s + (Number(l.qty) || 0) * (Number(l.price) || 0), 0);
   const save = async (e) => {
     e.preventDefault();
-    const body = { ...f, items: lines.map((l) => ({ productId: l.product.id, qty: l.qty, unitCost: l.price })) };
+    const body = { ...f, items: lines.map((l) => ({ productId: l.product.id, qty: l.qty, unitCost: l.price, batchNo: l.batchNo || "", expiryDate: l.expiryDate || "" })) };
     if (await sub.run(() => apiRequest("/api/purchases", { method: "POST", body }))) { await draft.finish(); onDone(); }
   };
   return (

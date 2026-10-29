@@ -5,6 +5,7 @@
 import { badRequest, HttpError, notFound } from "./http.js";
 import { defaultLocationId, lockStockRow } from "./stock.js";
 import { productName } from "./productName.js";
+import { moveBatches } from "./batches.js";
 
 /* ---------- document numbers (serialized by locking the settings row) ---------- */
 const NUMBERING = {
@@ -71,11 +72,13 @@ export async function lockProducts(conn, businessId, ids) {
  * The only way stock changes. Works on one location (default: the business default location),
  * never lets that location go below zero, keeps products.stock_qty (total of all locations) in step,
  * and writes one ledger row with the balances before / after.
+ * Products that track batches also keep their batches in step (lib/batches.js); batches: [{ batchNo, expiryDate, qty }]
+ * gives the batch numbers / expiry dates of stock coming in.
  * Returns { id, before, after } (the location balances).
  */
 export async function moveStock(conn, {
   businessId, userId, product, qtyChange, type, refType = null, refId = null, note = null,
-  locationId = null, reason = null, reference = null, supplierId = null, transferRef = null, reversalOf = null
+  locationId = null, reason = null, reference = null, supplierId = null, transferRef = null, reversalOf = null, batches = null
 }) {
   const loc = locationId || (await defaultLocationId(conn, businessId));
   const row = await lockStockRow(conn, businessId, product.id, loc);
@@ -93,6 +96,10 @@ export async function moveStock(conn, {
       product.cost_price === undefined ? null : product.cost_price,
       refType, refId, reason, reference, supplierId, transferRef, reversalOf, note, userId]
   );
+  if (Number(product.track_batches)) {
+    await moveBatches(conn, { businessId, productId: product.id, locationId: loc, qtyChange, movementId: m.insertId, type,
+      refType, refId, transferRef, reversalOf, batches });
+  }
   product.stock_qty = total; // keep the in-memory row in sync for repeated lines
   return { id: m.insertId, before, after };
 }
