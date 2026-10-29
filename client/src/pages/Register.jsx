@@ -108,7 +108,7 @@ export default function Register() {
                 <div className="form__grid">
                   <div className="field">
                     <label htmlFor="businessType">{t("register.businessType")}</label>
-                    <select className="input" id="businessType" name="businessType" value={form.businessType} onChange={update} {...aria("businessType")}>
+                    <select className="input input--type" id="businessType" name="businessType" value={form.businessType} onChange={update} {...aria("businessType")}>
                       <option value="">{t("register.choose")}</option>
                       {TYPES.map((x) => <option key={x} value={x}>{t(`register.types.${x}`)}</option>)}
                     </select>

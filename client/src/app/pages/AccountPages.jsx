@@ -400,7 +400,7 @@ export function BusinessInfo() {
         <fieldset disabled={!canEdit} className="form-grid form-grid--2 ff--full plain-fieldset">
           <Field label={t("register.businessName")} error={sub.fieldErrors.name}><input className="input" value={f.name} onChange={set("name")} /></Field>
           <Field label={t("ui.business.type")} error={sub.fieldErrors.businessType}>
-            <select className="input" value={f.businessType} onChange={set("businessType")}>{(TYPES.includes(f.businessType) || !f.businessType ? TYPES : [f.businessType, ...TYPES]).map((x) => <option key={x} value={x}>{t(`register.types.${x}`)}</option>)}</select>
+            <select className="input input--type" value={f.businessType} onChange={set("businessType")}>{(TYPES.includes(f.businessType) || !f.businessType ? TYPES : [f.businessType, ...TYPES]).map((x) => <option key={x} value={x}>{t(`register.types.${x}`)}</option>)}</select>
           </Field>
           <Field label={t("ui.business.ownerName")} error={sub.fieldErrors.ownerName}><input className="input" value={f.ownerName} onChange={set("ownerName")} /></Field>
           <Field label={t("ui.common.phone")} error={sub.fieldErrors.phone}><input className="input" value={f.phone} onChange={set("phone")} /></Field>

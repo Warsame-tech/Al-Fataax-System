@@ -1033,3 +1033,14 @@ textarea.input { min-height: 140px; resize: vertical; }
 .faq__toggle .icon { width: 16px; height: 16px; }
 .faq__item[open] .faq__toggle { transform: rotate(45deg); background: var(--orange); border-color: var(--orange); color: #fff; }
 .faq__item p { padding: 0 22px 20px; font-size: .95rem; line-height: 1.7; color: #565a72; }
+
+/* Business type dropdown (sign-up, Settings): large, bold, very clear font */
+.input.input--type {
+  min-height: 54px;
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: .01em;
+  color: var(--navy, #0d1440);
+}
+.input.input--type option { font-family: "Segoe UI", Arial, Helvetica, sans-serif; font-size: 1.05rem; font-weight: 700; }
