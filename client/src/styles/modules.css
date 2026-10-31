@@ -1115,3 +1115,26 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 .input--type-sm { font-weight: 700; }
 @media (max-width: 560px) { .receive-grid { grid-template-columns: 1fr 1fr; } }
 .device-entry .input, .receive-grid .input, .receive-list .batch-fields .input { width: 100%; max-width: none; text-align: left; }
+
+/* ---------- Product lists, colour swatches, size / colour pickers (clothing) ---------- */
+.swatch { display: inline-block; flex: none; width: 14px; height: 14px; margin-right: 6px; border-radius: 50%; border: 1px solid rgba(0, 0, 0, .18); vertical-align: -2px; }
+.swatch--none { background: conic-gradient(#dc2626, #facc15, #16a34a, #2563eb, #7c3aed, #dc2626); }
+.lists { display: grid; gap: 10px; margin-top: 10px; }
+.lists--two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.lists h4 { margin: 0 0 6px; color: var(--navy); }
+.lists__items { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.lists__items--pick { max-height: 340px; overflow: auto; }
+.lists__item { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border: 1px solid #e8ebf3; border-radius: 10px; }
+.lists__item.is-open { background: #eaf2fe; border-color: #9dbcf8; }
+.lists__name { flex: 1; min-width: 0; text-align: left; font-weight: 600; }
+.lists__add { display: flex; gap: 8px; align-items: center; }
+.lists__add .input { flex: 1; }
+.lists__color { width: 40px; height: 34px; padding: 2px; border: 1px solid #e3e6ef; border-radius: 8px; background: #fff; cursor: pointer; }
+.lists__builtin { display: grid; gap: 4px; }
+.chip-list li { display: inline-flex; align-items: center; }
+.chip-pick { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.chip-pick button { display: inline-flex; align-items: center; padding: 6px 12px; border: 1px solid #d5d9e6; border-radius: 999px; background: #fff; font-weight: 600; cursor: pointer; }
+.chip-pick button[aria-pressed="true"] { background: var(--navy); border-color: var(--navy); color: #fff; }
+.sselect__value { display: inline-flex; align-items: center; }
+@media (max-width: 760px) { .lists--two { grid-template-columns: 1fr; } }
+.qty-unit > .sselect { flex: 1; min-width: 0; }

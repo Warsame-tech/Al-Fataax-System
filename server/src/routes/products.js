@@ -42,6 +42,7 @@ const shape = (p) => ({
   genericName: p.generic_name || "", dosageForm: p.dosage_form || "", manufacturer: p.manufacturer || "", supplierId: p.supplier_id || null,
   supplier: p.supplier_name || null, rxRequired: Boolean(p.rx_required), storageInstructions: p.storage_instructions || "", packaging: packagingOf(p),
   // electronics: type, model, specs, tracking (qty / serial / imei / serial_imei), warranty policy, minimum price
+  collection: p.collection || "", season: p.season || "",
   productType: p.product_type || "", modelNumber: p.model_number || "", countryOfOrigin: p.country_of_origin || "", notes: p.notes || "",
   specs: specsOf(p), tracking: p.tracking || "qty", minPrice: p.min_price === null || p.min_price === undefined ? null : num(p.min_price),
   warrantyMonths: p.warranty_months ?? null, warrantyProvider: p.warranty_provider || "", warrantyTerms: p.warranty_terms || "",
@@ -278,6 +279,7 @@ function readProduct(body, { creating }) {
     genericName: optText(body.genericName, 190), dosageForm: optText(body.dosageForm, 40), manufacturer: optText(body.manufacturer, 150),
     supplierId: id(body.supplierId), rxRequired: body.rxRequired === true || body.rxRequired === "true",
     storageInstructions: optText(body.storageInstructions, 255),
+    collection: optText(body.collection, 80), season: optText(body.season, 40),
     productType: optText(body.productType, 60), modelNumber: optText(body.modelNumber, 80), countryOfOrigin: optText(body.countryOfOrigin, 60),
     notes: optText(body.notes, 2000), specs: body.specs === undefined ? undefined : JSON.stringify(readSpecs(body.specs)),
     tracking: TRACKING.includes(body.tracking) ? body.tracking : "qty",
@@ -376,13 +378,13 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
       if (d.variantOf) { const parent = await ensureOwned(conn, "products", d.variantOf, bid); group = parent.variant_of || parent.id; }
       const [r] = await conn.query(
         `INSERT INTO products (business_id, category_id, brand_id, subcategory, name, generic_name, dosage_form, manufacturer, supplier_id, rx_required, storage_instructions,
-                               product_type, model_number, country_of_origin, notes, specs, tracking, min_price, warranty_months, warranty_provider, warranty_terms,
+                               product_type, model_number, collection, season, country_of_origin, notes, specs, tracking, min_price, warranty_months, warranty_provider, warranty_terms,
                                size, shade, fragrance, formula, pack_size, variant_of, description,
                                sku, barcode, image_path, unit, packaging, cost_price, selling_price, wholesale_price, min_stock, track_batches, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [bid, await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.genericName, d.dosageForm, d.manufacturer,
           await supplierOf(conn, bid, d.supplierId), d.rxRequired ? 1 : 0, d.storageInstructions,
-          d.productType, d.modelNumber, d.countryOfOrigin, d.notes, d.specs ?? null, d.tracking, d.minPrice, d.warrantyMonths, d.warrantyProvider, d.warrantyTerms,
+          d.productType, d.modelNumber, d.collection, d.season, d.countryOfOrigin, d.notes, d.specs ?? null, d.tracking, d.minPrice, d.warrantyMonths, d.warrantyProvider, d.warrantyTerms,
           d.size, d.shade, d.fragrance, d.formula, d.packSize,
           group, d.description, d.sku, d.barcode, image, d.unit, d.packaging ?? null, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0]
       );
@@ -416,13 +418,13 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
       const next = image || (req.body?.removeImage === "true" ? null : p.image_path);
       await conn.query(
         `UPDATE products SET category_id = ?, brand_id = ?, subcategory = ?, name = ?, generic_name = ?, dosage_form = ?, manufacturer = ?, supplier_id = ?, rx_required = ?,
-                storage_instructions = ?, product_type = ?, model_number = ?, country_of_origin = ?, notes = ?, specs = ?, tracking = ?, min_price = ?,
+                storage_instructions = ?, product_type = ?, model_number = ?, collection = ?, season = ?, country_of_origin = ?, notes = ?, specs = ?, tracking = ?, min_price = ?,
                 warranty_months = ?, warranty_provider = ?, warranty_terms = ?, size = ?, shade = ?, fragrance = ?, formula = ?, pack_size = ?, description = ?,
                 sku = ?, barcode = ?, image_path = ?, unit = ?, packaging = ?, cost_price = ?, selling_price = ?, wholesale_price = ?, min_stock = ?, track_batches = ?, is_active = ?
           WHERE id = ? AND business_id = ?`,
         [await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.genericName, d.dosageForm, d.manufacturer,
           await supplierOf(conn, bid, d.supplierId), d.rxRequired ? 1 : 0, d.storageInstructions,
-          d.productType, d.modelNumber, d.countryOfOrigin, d.notes, d.specs === undefined ? p.specs : d.specs, d.tracking, d.minPrice,
+          d.productType, d.modelNumber, d.collection, d.season, d.countryOfOrigin, d.notes, d.specs === undefined ? p.specs : d.specs, d.tracking, d.minPrice,
           d.warrantyMonths, d.warrantyProvider, d.warrantyTerms, d.size, d.shade, d.fragrance, d.formula, d.packSize,
           d.description, d.sku, d.barcode, next, d.unit, d.packaging === undefined ? p.packaging : d.packaging, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0, p.id, bid]
       );
@@ -436,6 +438,52 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
     removeImage(oldImage);
     res.json({ code: "saved" });
   } catch (err) { removeImage(image); throw err; }
+}));
+
+/*
+ * POST /api/products/:id/variants { variants: [{ size?, shade?, formula?, packSize?, sku?, barcode?, sellingPrice?, costPrice? }] }
+ * Creates several variants of a product at once (e.g. every size × colour of a shirt). Each variant is its own product
+ * in the same variant group with its own SKU, barcode, prices, stock and minimum stock; the rest is copied from the product.
+ * Combinations that already exist in the group are skipped. No stock is added (use Opening stock / purchases).
+ */
+router.post("/:id/variants", requirePerm("products.edit"), ah(async (req, res) => {
+  const bid = req.business.id;
+  const list = Array.isArray(req.body?.variants) ? req.body.variants.slice(0, 200) : [];
+  if (!list.length) throw badRequest({ variants: "required" });
+  const result = await withTx(async (conn) => {
+    const parent = await ensureOwned(conn, "products", id(req.params.id), bid, true);
+    const group = parent.variant_of || parent.id;
+    const [existing] = await conn.query("SELECT size, shade, formula, pack_size FROM products WHERE business_id = ? AND COALESCE(variant_of, id) = ?", [bid, group]);
+    const key = (v) => [v.size, v.shade, v.formula, v.pack_size].map((x) => String(x || "").trim().toLowerCase()).join("|");
+    const seen = new Set(existing.map(key));
+    const created = [];
+    let skipped = 0;
+    for (const [i, raw] of list.entries()) {
+      const v = { size: optText(raw?.size, 40), shade: optText(raw?.shade, 60), formula: optText(raw?.formula, 60), pack_size: optText(raw?.packSize, 40) };
+      if (seen.has(key(v))) { skipped++; continue; }
+      seen.add(key(v));
+      const d = { sku: optText(raw?.sku, 80), barcode: optText(raw?.barcode, 80), barcodes: [] };
+      try { await checkCodes(conn, req.business, d); } catch (err) { throw new HttpError(400, "validation", Object.fromEntries(Object.entries(err.errors || {}).map(([k, x]) => [`variants.${i}.${k}`, x])), err.extra); }
+      const selling = raw?.sellingPrice === undefined || raw?.sellingPrice === "" ? num(parent.selling_price) : money(raw.sellingPrice);
+      const cost = raw?.costPrice === undefined || raw?.costPrice === "" ? num(parent.cost_price) : money(raw.costPrice);
+      if (Number.isNaN(selling) || Number.isNaN(cost)) throw badRequest({ [`variants.${i}.sellingPrice`]: "invalidAmount" });
+      const [r] = await conn.query(
+        `INSERT INTO products (business_id, category_id, brand_id, subcategory, name, generic_name, dosage_form, manufacturer, supplier_id, rx_required, storage_instructions,
+                               product_type, model_number, collection, season, country_of_origin, notes, specs, tracking, min_price, warranty_months, warranty_provider, warranty_terms,
+                               size, shade, fragrance, formula, pack_size, variant_of, description, sku, barcode, image_path, unit, packaging,
+                               cost_price, selling_price, wholesale_price, min_stock, track_batches, is_active)
+         SELECT business_id, category_id, brand_id, subcategory, name, generic_name, dosage_form, manufacturer, supplier_id, rx_required, storage_instructions,
+                product_type, model_number, collection, season, country_of_origin, notes, specs, tracking, min_price, warranty_months, warranty_provider, warranty_terms,
+                ?, ?, fragrance, ?, ?, ?, description, ?, ?, NULL, unit, packaging, ?, ?, wholesale_price, min_stock, track_batches, 1
+           FROM products WHERE id = ?`,
+        [v.size, v.shade, v.formula, v.pack_size, group, d.sku, d.barcode, cost, selling, parent.id]);
+      await audit(conn, { businessId: bid, userId: req.user.id, action: "product.created", entity: "product", entityId: r.insertId,
+        meta: { costPrice: cost, sellingPrice: selling, status: "active", variantOf: group }, ip: req.ip });
+      created.push(r.insertId);
+    }
+    return { created: created.length, skipped, ids: created };
+  });
+  res.status(201).json(result);
 }));
 
 /* POST /api/products/:id/archive and /restore — archived products are hidden from sales, purchases and stock entry */

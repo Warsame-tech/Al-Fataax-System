@@ -255,6 +255,21 @@ const TABLES = [
       created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       INDEX idx_warev (warranty_id, id)
     ) ENGINE=InnoDB`
+  },
+  {
+    table: "catalog_options",
+    ddl: `CREATE TABLE IF NOT EXISTS catalog_options (
+      id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id INT UNSIGNED NOT NULL,
+      kind        VARCHAR(20)  NOT NULL,      -- subcategory, color, size, collection, season, unit
+      name        VARCHAR(80)  NOT NULL,
+      parent      VARCHAR(120) NULL,          -- subcategory: its category · size: its size system
+      code        VARCHAR(20)  NULL,          -- color: #rrggbb swatch
+      sort_order  INT NOT NULL DEFAULT 0,
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_catalog (business_id, kind, parent, name),
+      CONSTRAINT fk_catalog_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+    ) ENGINE=InnoDB`
   }
 ];
 
@@ -329,6 +344,11 @@ COLUMNS.push(
   { table: "business_settings", column: "spec_fields", ddl: "ALTER TABLE business_settings ADD COLUMN spec_fields TEXT NULL AFTER allow_duplicate_codes" },
   { table: "purchases", column: "expected_date", ddl: "ALTER TABLE purchases ADD COLUMN expected_date DATE NULL AFTER purchased_at, ADD COLUMN payment_terms VARCHAR(80) NULL AFTER expected_date, ADD COLUMN discount DECIMAL(14,4) NOT NULL DEFAULT 0 AFTER total, ADD COLUMN extra_costs DECIMAL(14,4) NOT NULL DEFAULT 0 AFTER discount, ADD COLUMN ordered_total DECIMAL(14,4) NULL AFTER extra_costs, ADD COLUMN notes VARCHAR(255) NULL AFTER payment_terms, ADD COLUMN location_id INT UNSIGNED NULL AFTER notes" },
   { table: "purchase_items", column: "received_qty", ddl: "ALTER TABLE purchase_items ADD COLUMN received_qty DECIMAL(14,3) NOT NULL DEFAULT 0 AFTER qty, ADD COLUMN damaged_qty DECIMAL(14,3) NOT NULL DEFAULT 0 AFTER received_qty, ADD COLUMN returned_qty DECIMAL(14,3) NOT NULL DEFAULT 0 AFTER damaged_qty" }
+);
+
+// Clothing: collection and season (variant attributes reuse size / shade = colour / formula = fabric type / pack_size = width).
+COLUMNS.push(
+  { table: "products", column: "collection", ddl: "ALTER TABLE products ADD COLUMN collection VARCHAR(80) NULL AFTER model_number, ADD COLUMN season VARCHAR(40) NULL AFTER collection" }
 );
 
 const INDEXES = [

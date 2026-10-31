@@ -182,7 +182,9 @@ CREATE TABLE IF NOT EXISTS products (
   rx_required     TINYINT(1)   NOT NULL DEFAULT 0,
   storage_instructions VARCHAR(255) NULL,
   product_type    VARCHAR(60)  NULL,              -- electronics: product type (Smartphone, Laptop, USB Cable…), model number, country of origin
-  model_number    VARCHAR(80)  NULL,
+  model_number    VARCHAR(80)  NULL,              -- clothing: model / style
+  collection      VARCHAR(80)  NULL,              -- clothing: collection and season
+  season          VARCHAR(40)  NULL,
   country_of_origin VARCHAR(60) NULL,
   size            VARCHAR(40)  NULL,              -- e.g. 400ml, 1kg — shown after the name everywhere
   shade           VARCHAR(60)  NULL,              -- variant fields (cosmetics): shown after the name too
@@ -762,6 +764,19 @@ CREATE TABLE IF NOT EXISTS warranty_events (
   user_id     INT UNSIGNED NULL,
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_warev (warranty_id, id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS catalog_options (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id INT UNSIGNED NOT NULL,
+  kind        VARCHAR(20)  NOT NULL,      -- subcategory, color, size, collection, season, unit
+  name        VARCHAR(80)  NOT NULL,
+  parent      VARCHAR(120) NULL,          -- subcategory: its category · size: its size system
+  code        VARCHAR(20)  NULL,          -- color: #rrggbb swatch
+  sort_order  INT NOT NULL DEFAULT 0,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_catalog (business_id, kind, parent, name),
+  CONSTRAINT fk_catalog_business FOREIGN KEY (business_id) REFERENCES businesses(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS audit_logs (

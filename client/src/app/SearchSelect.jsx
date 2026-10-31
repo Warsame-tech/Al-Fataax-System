@@ -9,8 +9,13 @@ import { useLanguage } from "../i18n/LanguageContext.jsx";
  *   onCreate  optional: shows "+ Add “typed text”" at the end, called with the typed text
  *   clearOnPick  show the placeholder again after choosing (pickers that add lines)
  *   openSignal  optional number: each time it changes the dropdown opens (e.g. an "Add item" button elsewhere)
+ *   freeText  the value is text that may not be in the options (e.g. a new category typed with "Add"): show it as is
+ *   options may carry swatch: "#hex" (colours) — shown as a dot before the label
  */
-export default function SearchSelect({ options, value, onChange, placeholder, searchPlaceholder, onCreate, createLabel, disabled = false, invalid = false, clearOnPick = false, icon, openSignal }) {
+/* colour dot (no code: a striped "multicolour" dot) */
+export const Swatch = ({ code }) => <i className={"swatch" + (code ? "" : " swatch--none")} style={code ? { background: code } : undefined} aria-hidden="true" />;
+
+export default function SearchSelect({ options, value, onChange, placeholder, searchPlaceholder, onCreate, createLabel, disabled = false, invalid = false, clearOnPick = false, icon, openSignal, freeText = false }) {
   const { t } = useLanguage();
   const [open, setOpen] = useState(false);
   const [q, setQ] = useState("");
@@ -62,7 +67,10 @@ export default function SearchSelect({ options, value, onChange, placeholder, se
       <button type="button" className={"input sselect__btn" + (invalid ? " has-error" : "")} disabled={disabled} aria-haspopup="listbox" aria-expanded={open}
         onClick={() => setOpen((v) => !v)}>
         {icon && <Icon name={icon} className="sselect__icon" />}
-        <span className={"sselect__value" + (selected && !clearOnPick ? "" : " is-placeholder")}>{selected && !clearOnPick ? selected.label : placeholder || t("ui.common.choose")}</span>
+        <span className={"sselect__value" + ((selected || (freeText && value)) && !clearOnPick ? "" : " is-placeholder")}>
+          {selected?.swatch !== undefined && !clearOnPick && <Swatch code={selected.swatch} />}
+          {selected && !clearOnPick ? selected.label : freeText && value ? value : placeholder || t("ui.common.choose")}
+        </span>
         <Icon name="chevron-down" className="sselect__chev" />
       </button>
       {open && (
@@ -76,7 +84,7 @@ export default function SearchSelect({ options, value, onChange, placeholder, se
             {list.map((o, i) => (
               <li key={o.value} data-i={i} role="option" aria-selected={String(o.value) === String(value)} aria-disabled={o.disabled || undefined}
                 className={(i === hover ? "is-hover " : "") + (o.disabled ? "is-disabled" : "")} onMouseEnter={() => setHover(i)} onMouseDown={(e) => { e.preventDefault(); choose(o); }}>
-                <span>{o.label}</span>
+                <span>{o.swatch !== undefined && <Swatch code={o.swatch} />}{o.label}</span>
                 {o.sub && <small>{o.sub}</small>}
               </li>
             ))}
