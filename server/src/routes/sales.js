@@ -10,6 +10,7 @@ import { unitsPer, packOf } from "../lib/packaging.js";
 import { isTracked, sellDevices, returnSoldDevices, deviceLabel } from "../lib/devices.js";
 import { createWarranties, voidWarranties } from "../lib/warranties.js";
 import { defaultLocationId } from "../lib/stock.js";
+import { currentRates, weightPrice, unsellable } from "../lib/jewelry.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -20,7 +21,7 @@ router.use(requireAuth);
  * per pack, stock is taken in base units (qty × units per pack) and the pack is kept on the line (sell).
  * A pack's price is its own price, or the base price × units per pack.
  */
-export function priceLines(items, products, { allowCustomPrice, priceList = "retail" }) {
+export function priceLines(items, products, { allowCustomPrice, priceList = "retail", rates = null }) {
   const lines = [];
   const errors = {};
   items.forEach((it, i) => {
@@ -28,10 +29,13 @@ export function priceLines(items, products, { allowCustomPrice, priceList = "ret
     const qty = quantity(it.qty);
     if (!p || !p.is_active) { errors[`items.${i}.productId`] = "required"; return; }
     if (Number.isNaN(qty)) { errors[`items.${i}.qty`] = "invalidAmount"; return; }
+    if (unsellable(p)) { errors[`items.${i}.productId`] = "itemNotSellable"; return; }
+    // jewelry sold by weight: today's price (net weight × rate + making + extra), recorded with its breakdown
+    const live = weightPrice(p, rates);
     const unit = typeof it.unit === "string" && it.unit && it.unit !== p.unit ? it.unit : null;
     const per = unit ? unitsPer(p, unit) : 1;
     if (!per || (unit && !packOf(p, unit)?.sell)) { errors[`items.${i}.unit`] = "required"; return; }
-    const basePrice = priceList === "wholesale" && p.wholesale_price !== null ? num(p.wholesale_price) : num(p.selling_price);
+    const basePrice = live ? live.price : priceList === "wholesale" && p.wholesale_price !== null ? num(p.wholesale_price) : num(p.selling_price);
     const pack = unit ? packOf(p, unit) : null;
     const listPrice = pack && pack.price !== null && priceList !== "wholesale" ? num(pack.price) : round2(basePrice * per);
     let unitPrice = listPrice;
@@ -50,7 +54,7 @@ export function priceLines(items, products, { allowCustomPrice, priceList = "ret
     const warrantyMonths = it.warrantyMonths === undefined || it.warrantyMonths === null || it.warrantyMonths === "" ? null : Number(it.warrantyMonths);
     if (warrantyMonths !== null && (!Number.isInteger(warrantyMonths) || warrantyMonths < 0 || warrantyMonths > 240)) { errors[`items.${i}.warrantyMonths`] = "invalidAmount"; return; }
     lines.push({
-      deviceIds: it.deviceIds, warrantyMonths,
+      deviceIds: it.deviceIds, warrantyMonths, priceDetail: live ? { ...live.detail, unitPrice: unitPrice } : null,
       product: p, qty: baseQty, unitPrice: unit ? round2(unitPrice / per) : unitPrice, unitCost: num(p.cost_price), lineTotal: round2(qty * unitPrice),
       sell: unit ? { unit, qty, price: unitPrice } : null
     });
@@ -133,7 +137,8 @@ export async function createSale(conn, ctx, body) {
   if (!split && method === "credit" && !customerId) throw badRequest({ customerId: "requiredForCredit" });
 
   const products = await lockProducts(conn, businessId, items.map((i) => i.productId).filter(Boolean));
-  const lines = priceLines(items, products, { allowCustomPrice: can(role, "sales.discount") });
+  const rates = [...products.values()].some((p) => p.pricing_mode === "weight") ? await currentRates(conn, businessId) : null;
+  const lines = priceLines(items, products, { allowCustomPrice: can(role, "sales.discount"), rates });
   const subtotal = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
   if (discount > subtotal) throw badRequest({ discount: "tooLarge" });
   const vat = vatFor(body.vat, round2(subtotal - discount));   // optional 5% VAT on the amount after discount
@@ -169,12 +174,13 @@ export async function createSale(conn, ctx, body) {
   const loc = await defaultLocationId(conn, businessId);       // the POS sells from the default location
   for (const [i, l] of lines.entries()) {
     const [it] = await conn.query(
-      `INSERT INTO sale_items (business_id, sale_id, product_id, qty, unit_price, unit_cost, line_total, sell_unit, sell_qty, sell_price) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [businessId, saleId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null]
+      `INSERT INTO sale_items (business_id, sale_id, product_id, qty, unit_price, unit_cost, line_total, sell_unit, sell_qty, sell_price, price_detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [businessId, saleId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null, l.priceDetail ? JSON.stringify(l.priceDetail) : null]
     );
     const devices = await sellDevices(conn, { businessId, userId, product: l.product, line: l, index: i, locationId: loc, refType: "sale", refId: saleId, itemId: it.insertId, customerId });
     await moveStock(conn, { businessId, userId, product: l.product, qtyChange: -l.qty, type: "sale", refType: "sale", refId: saleId, locationId: loc, devices: true });
     await createWarranties(conn, { businessId, product: l.product, devices, qty: l.qty, months: l.warrantyMonths, customerId, refType: "sale", refId: saleId, userId, date: ctx.at || null });
+    if (Number(l.product.unique_item) && Number(l.product.stock_qty) <= 0) await conn.query("UPDATE products SET item_status = 'sold' WHERE id = ?", [l.product.id]);
   }
   for (const pay of collected) {
     const [p] = await conn.query(
@@ -212,7 +218,7 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
   const bid = req.business.id;
   const s = await ensureOwned(pool, "sales", id(req.params.id), bid);
   const [items] = await pool.query(
-    `SELECT si.id, si.product_id, si.qty, si.unit_price, si.line_total, si.sell_unit, si.sell_qty, si.sell_price, p.unit base_unit, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku FROM sale_items si JOIN products p ON p.id = si.product_id AND p.business_id = si.business_id
+    `SELECT si.id, si.product_id, si.qty, si.unit_price, si.line_total, si.sell_unit, si.sell_qty, si.sell_price, si.price_detail, p.unit base_unit, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku FROM sale_items si JOIN products p ON p.id = si.product_id AND p.business_id = si.business_id
       WHERE si.sale_id = ? AND si.business_id = ? ORDER BY si.id`, [s.id, bid]);
   const [[cust]] = s.customer_id ? await pool.query("SELECT name, phone FROM customers WHERE id = ? AND business_id = ?", [s.customer_id, bid]) : [[null]];
   const [devs] = await pool.query("SELECT id, serial_no, imei1, imei2, sold_item_id FROM devices WHERE business_id = ? AND sold_ref_type = 'sale' AND sold_ref_id = ?", [bid, s.id]);
@@ -229,6 +235,7 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
     items: items.map((i) => ({ name: i.name, sku: i.sku, qty: i.sell_unit ? num(i.sell_qty) : num(i.qty), unitPrice: i.sell_unit ? num(i.sell_price) : num(i.unit_price),
       unit: i.sell_unit || null, baseQty: num(i.qty), baseUnit: i.base_unit, total: num(i.line_total),
       devices: devs.filter((d) => d.sold_item_id === i.id).map((d) => ({ id: d.id, label: deviceLabel(d) })),
+      priceDetail: i.price_detail ? JSON.parse(i.price_detail) : null,
       warranty: (() => { const w = wars.find((x) => x.product_id === i.product_id); return w ? { months: w.months, endDate: w.end_date, status: w.status } : null; })() })),
     payments: payments.map((p) => ({ amount: num(p.amount), method: p.method, label: p.pm_name ? (p.pm_number ? `${p.pm_name} (${p.pm_number})` : p.pm_name) : null, at: p.paid_at }))
   });
@@ -253,6 +260,7 @@ router.post("/:id/cancel", requirePerm("sales.cancel"), ah(async (req, res) => {
       await conn.query("INSERT INTO return_items (business_id, return_id, product_id, qty, unit_price, unit_cost, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [bid, ret.insertId, i.product_id, i.qty, i.unit_price, i.unit_cost, i.line_total]);
       await moveStock(conn, { businessId: bid, userId: uid, product: products.get(i.product_id), qtyChange: num(i.qty), type: "return_in", refType: "sale", refId: s.id, note: reason, devices: true });
+      if (Number(products.get(i.product_id).unique_item)) await conn.query("UPDATE products SET item_status = 'returned' WHERE id = ?", [i.product_id]);
     }
     // sold devices come back to stock; the sale's warranties become void
     await returnSoldDevices(conn, { businessId: bid, userId: uid, refType: "sale", refId: s.id, locationId: await defaultLocationId(conn, bid), note: reason });

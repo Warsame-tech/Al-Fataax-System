@@ -15,6 +15,7 @@ import { PRODUCT_TYPES, TRACKING, typeOf, specFieldsFor, variantFromSpecs, track
 import { useCatalog, asOptions } from "../catalog.js";
 import { ProductLists, VariantMatrix } from "../Catalog.jsx";
 import SearchSelect from "../SearchSelect.jsx";
+import { usePurities, metalName, useWeight } from "../Jewelry.jsx";
 
 /*
  * Product master data only — stock quantities are entered in the Stock module (opening stock, add stock).
@@ -29,7 +30,9 @@ export const EMPTY = {
   // electronics (profile.electronics / serials / warranties)
   productType: "", modelNumber: "", countryOfOrigin: "", notes: "", tracking: "qty", minPrice: "", warrantyMonths: "", warrantyProvider: "", warrantyTerms: "",
   // clothing (profile.fashion)
-  collection: "", season: ""
+  collection: "", season: "",
+  // jewelry (profile.jewelry)
+  metal: "", purity: "", grossWeight: "", stoneWeight: "", pricingMode: "fixed", makingCharge: "", makingType: "per_gram", extraCharge: "", uniqueItem: false, itemStatus: "active"
 };
 const unitName = (t, u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
 const uniqList = (list) => [...new Set(list.filter(Boolean))];
@@ -71,6 +74,7 @@ export default function Products() {
   const profile = useProfile();
   const L = (k) => productLabel(t, profile, k);
   const showVariant = profile.variants.some((v) => v !== "size");
+  const fmtW = useWeight();
   const groups = showVariant || profile.variantGroups;          // product families: "Add variant", "n variants"
   const [specSettings, setSpecSettings] = useState(false);
   const [lists, setLists] = useState(false);
@@ -111,7 +115,7 @@ export default function Products() {
     products.map((p) => [p.baseName ?? p.name, p.size, p.shade, p.fragrance, p.formula, p.packSize, p.sku, p.barcode, p.brand, p.category, p.subcategory, p.unit, p.costPrice, p.sellingPrice,
       p.wholesalePrice ?? "", p.minStock, p.stock, p.isActive ? "active" : "archived"]));
   const hidden = (k) => profile.hiddenFields?.includes(k);
-  const lead = 7 + (showVariant ? 1 : 0) + (hidden("wholesalePrice") ? 0 : 1) + (profile.medicine ? 2 : 0) + (profile.electronics ? 2 : 0);   // columns before "Current stock" (totals row)
+  const lead = 7 + (showVariant ? 1 : 0) + (hidden("wholesalePrice") ? 0 : 1) + (profile.medicine ? 2 : 0) + (profile.electronics ? 2 : 0) + (profile.jewelry ? 2 : 0);   // columns before "Current stock" (totals row)
 
   return (
     <div className="page">
@@ -189,6 +193,7 @@ export default function Products() {
               {showVariant && <th>{t("ui.products.variant")}</th>}
               {profile.medicine && <><th>{t("ui.products.dosageForm")}</th><th>{t("ui.products.packagingShort")}</th></>}
               {profile.electronics && <><th>{t("ui.products.productType")}</th><th>{t("ui.products.modelNumber")}</th></>}
+              {profile.jewelry && <><th>{t("ui.jewelry.metalPurity")}</th><th className="num">{t("ui.jewelry.netWeight")}</th></>}
               <Th by="sku">{t("ui.products.sku")}</Th><Th by="brand">{L("brand")}</Th><Th by="category">{L("category")}</Th>
               <Th by="cost" num>{L("costPrice")}</Th><Th by="price" num>{L("sellingPrice")}</Th>
               {!hidden("wholesalePrice") && <th className="num">{t("ui.products.wholesalePrice")}</th>}<Th by="stock" num>{t("ui.stock.current")}</Th><th>{L("unit")}</th>
@@ -208,6 +213,7 @@ export default function Products() {
                         {p.barcode && <small className="cell-sub"><Icon name="barcode" /> {p.barcode}</small>}
                         {!p.isActive && <small className="cell-sub archived-tag">{t("ui.products.statusValues.archived")}</small>}
                         {p.tracking && p.tracking !== "qty" && <small className="cell-sub"><span className="track-tag">{trackingShort(p.tracking)}</span></small>}
+                        {profile.jewelry && (p.uniqueItem || (p.itemStatus && p.itemStatus !== "active")) && <small className="cell-sub">{p.uniqueItem && <span className="track-tag">{t("ui.jewelry.uniqueShort")}</span>} {p.itemStatus !== "active" && <span className={`gb-status is-${p.itemStatus}`}>{t(`ui.jewelry.itemStatus.${p.itemStatus}`)}</span>}</small>}
                         {groups && p.variantCount > 1 && !f.variantOf && (
                           <button type="button" className="link-btn cell-sub" onClick={() => set("variantOf", String(p.variantOf || p.id))}>
                             <Icon name="layers" /> {fill(t("ui.products.variantsCount"), { n: p.variantCount })}
@@ -219,6 +225,10 @@ export default function Products() {
                   <td>{p.size || "—"}</td>
                   {showVariant && <td>{variantText(p) || "—"}</td>}
                   {profile.electronics && <><td>{p.productType || "—"}</td><td>{p.modelNumber || "—"}</td></>}
+                  {profile.jewelry && <>
+                    <td>{p.metal ? `${metalName(t, p.metal)} ${p.purity || ""}` : "—"}{p.pricingMode === "weight" && <small className="cell-sub">{p.noRate ? t("ui.jewelry.noRateShort") : t("ui.jewelry.byWeight")}</small>}</td>
+                    <td className="num">{p.netWeight ? fmtW(p.netWeight) : "—"}</td>
+                  </>}
                   {profile.medicine && <>
                     <td>{p.dosageForm ? t(`ui.products.forms.${p.dosageForm}`) : "—"}</td>
                     <td className="nowrap">{p.packaging.length ? <span title={breakdown(p, p.packaging[0].name, 1, (u) => unitName(t, u))}>{p.packaging.map((l) => `${qty(l.per)}`).join(" × ")}<small className="cell-sub">{p.packaging.map((l) => l.name).join(" › ")} › {unitName(t, p.unit)}</small></span> : "—"}</td>
@@ -291,6 +301,7 @@ export default function Products() {
  * onSaved(result, fields): result is { id } when created. onOpen(product): switch to editing that product (or a new variant). */
 export function ProductForm({ product, onClose, onSaved, onOpen }) {
   const { t } = useLanguage();
+  const m = useMoney();
   const can = usePerm();
   const profile = useProfile();
   const { business } = useAuth();
@@ -306,8 +317,20 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     productType: product.productType || "", modelNumber: product.modelNumber || "", countryOfOrigin: product.countryOfOrigin || "", notes: product.notes || "",
     tracking: product.tracking || "qty", minPrice: product.minPrice ?? "", warrantyMonths: product.warrantyMonths ?? "",
     warrantyProvider: product.warrantyProvider || "", warrantyTerms: product.warrantyTerms || "",
-    collection: product.collection || "", season: product.season || ""
+    collection: product.collection || "", season: product.season || "",
+    metal: product.metal || "", purity: product.purity || "", grossWeight: product.grossWeight ?? "", stoneWeight: product.stoneWeight ?? "",
+    pricingMode: product.pricingMode || "fixed", makingCharge: product.makingCharge ?? "", makingType: product.makingType || "per_gram",
+    extraCharge: product.extraCharge ?? "", uniqueItem: Boolean(product.uniqueItem), itemStatus: product.itemStatus || "active",
+    sellingPrice: product.fixedPrice ?? product.sellingPrice ?? ""
   });
+  /* jewelry: purity options and today's rates (price preview) */
+  const purities = usePurities();
+  const jRates = useApi(profile.jewelry ? "/api/jewelry/rates" : null);
+  const jRate = (jRates.data?.rates || []).find((r) => r.metal === f.metal && r.purity === f.purity)?.rate;
+  const jNet = Math.max(0, Math.round(((Number(f.grossWeight) || 0) - (Number(f.stoneWeight) || 0)) * 10000) / 10000);
+  const jMaking = f.makingType === "fixed" ? Number(f.makingCharge) || 0 : jNet * (Number(f.makingCharge) || 0);
+  const jPrice = jRate !== undefined ? Math.round((jNet * jRate + jMaking + (Number(f.extraCharge) || 0)) * 100) / 100 : null;
+  const wStep = 1 / 10 ** (jRates.data?.weightDecimals ?? 3);
   /* dropdown lists: ready-made for the business type + the business's own (Product lists) */
   const cat = useCatalog();
   const [matrix, setMatrix] = useState(false);
@@ -523,6 +546,52 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
         )}
         <p className="ff__hint ff--full">{f.name && fullName !== f.name ? fill(t("ui.products.showsAs"), { name: fullName }) : t(profile.electronics ? "ui.products.variantHintElec" : profile.fashion ? "ui.products.variantHintFashion" : profile.variants.length > 1 ? "ui.products.variantHint" : "ui.products.sizeHint")}</p>
 
+        {profile.jewelry && (
+          <>
+            <p className="form-sub ff--full"><Icon name="gem" /> {t("ui.jewelry.section")}</p>
+            <Field label={t("ui.jewelry.metal")}>
+              <select className="input" value={f.metal} onChange={(e) => setF((x) => ({ ...x, metal: e.target.value, purity: "" }))}>
+                <option value="">{t("ui.common.choose")}</option>
+                {(profile.metals || ["gold", "silver"]).map((x) => <option key={x} value={x}>{metalName(t, x)}</option>)}
+              </select>
+            </Field>
+            <Field label={t("ui.jewelry.purity")}>
+              <select className="input" value={f.purity} onChange={set("purity")} disabled={!f.metal}>
+                <option value="">{t("ui.common.choose")}</option>
+                {purities(f.metal).map((x) => <option key={x} value={x}>{x}</option>)}
+              </select>
+            </Field>
+            <Field label={t("ui.jewelry.grossWeight")} error={err.grossWeight}><input className="input" type="number" min="0" step={wStep} value={f.grossWeight} onChange={set("grossWeight")} placeholder={t("ui.jewelry.grams")} /></Field>
+            <Field label={`${t("ui.jewelry.stoneWeight")} ${t("ui.common.optional")}`} error={err.stoneWeight}><input className="input" type="number" min="0" step={wStep} value={f.stoneWeight} onChange={set("stoneWeight")} placeholder={t("ui.jewelry.grams")} /></Field>
+            <Field label={t("ui.jewelry.netWeight")} hint={t("ui.jewelry.netHint")}><input className="input packaging__total" readOnly tabIndex={-1} value={`${jNet.toFixed(jRates.data?.weightDecimals ?? 3)} g`} /></Field>
+            <Field label={t("ui.jewelry.pricing")} error={err.pricingMode}>
+              <div className="seg">{["fixed", "weight"].map((v) => <button key={v} type="button" aria-pressed={f.pricingMode === v} onClick={() => setF((x) => ({ ...x, pricingMode: v }))}>{t(`ui.jewelry.pricingModes.${v}`)}</button>)}</div>
+            </Field>
+            {f.pricingMode === "weight" && (
+              <>
+                <Field label={`${t("ui.jewelry.making")} ${t("ui.common.optional")}`} error={err.makingCharge}>
+                  <div className="qty-unit">
+                    <input className="input" type="number" min="0" step="any" value={f.makingCharge} onChange={set("makingCharge")} placeholder={t("ui.jewelry.making")} />
+                    <select className="input input--auto" value={f.makingType} onChange={set("makingType")}><option value="per_gram">{t("ui.jewelry.perGram")}</option><option value="fixed">{t("ui.jewelry.fixedAmount")}</option></select>
+                  </div>
+                </Field>
+                <Field label={`${t("ui.jewelry.extra")} ${t("ui.common.optional")}`} error={err.extraCharge}><input className="input" type="number" min="0" step="any" value={f.extraCharge} onChange={set("extraCharge")} placeholder={t("ui.jewelry.extra")} /></Field>
+                <p className="ff--full jewel-price">{jPrice !== null
+                  ? fill(t("ui.jewelry.pricePreview"), { net: jNet.toFixed(jRates.data?.weightDecimals ?? 3), rate: m(jRate), making: m(jMaking), extra: m(Number(f.extraCharge) || 0), price: m(jPrice) })
+                  : t(f.metal && f.purity ? "ui.jewelry.noRateHint" : "ui.jewelry.pickPurity")}</p>
+              </>
+            )}
+            <div className="ff">
+              <label className="checkbox"><input type="checkbox" checked={f.uniqueItem} onChange={set("uniqueItem")} /><span>{t("ui.jewelry.unique")}</span></label>
+              <small className="ff__hint">{t("ui.jewelry.uniqueHint")}</small>
+            </div>
+            <Field label={t("ui.jewelry.itemStatusLabel")}>
+              <select className="input" value={f.itemStatus} onChange={set("itemStatus")} disabled={f.itemStatus === "sold"}>
+                {(f.itemStatus === "sold" ? ["sold"] : ["active", "returned", "damaged"]).map((x) => <option key={x} value={x}>{t(`ui.jewelry.itemStatus.${x}`)}</option>)}
+              </select>
+            </Field>
+          </>
+        )}
         {!profile.hiddenFields?.includes("description") && <Field label={`${t("ui.common.description")} ${t("ui.common.optional")}`} full><textarea className="input" rows={2} value={f.description} onChange={set("description")} placeholder={t("ui.common.description")} /></Field>}
         {profile.electronics && <Field label={`${t("ui.products.countryOfOrigin")} ${t("ui.common.optional")}`}><input className="input" value={f.countryOfOrigin} onChange={set("countryOfOrigin")} placeholder={t("ui.products.countryOfOrigin")} /></Field>}
         {(profile.medicine || profile.electronics) && (
@@ -546,7 +615,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
         )}
         {profile.packaging && <PackagingEditor pack={pack} setPack={setPack} unit={f.unit} sellingPrice={f.sellingPrice} errors={err} />}
         <Field label={L("costPrice")} error={err.costPrice}><input className="input" type="number" min="0" step="any" value={f.costPrice} onChange={set("costPrice")} placeholder={L("costPrice")} /></Field>
-        <Field label={L("sellingPrice")} error={err.sellingPrice}><input className="input" type="number" min="0" step="any" value={f.sellingPrice} onChange={set("sellingPrice")} placeholder={L("sellingPrice")} /></Field>
+        <Field label={profile.jewelry && f.pricingMode === "weight" ? t("ui.jewelry.fallbackPrice") : L("sellingPrice")} error={err.sellingPrice}><input className="input" type="number" min="0" step="any" value={f.sellingPrice} onChange={set("sellingPrice")} placeholder={L("sellingPrice")} /></Field>
         {!profile.hiddenFields?.includes("wholesalePrice") && <Field label={`${t("ui.products.wholesalePrice")} ${t("ui.common.optional")}`} error={err.wholesalePrice}><input className="input" type="number" min="0" step="any" value={f.wholesalePrice} onChange={set("wholesalePrice")} placeholder={t("ui.products.wholesalePrice")} /></Field>}
         {profile.electronics && <Field label={`${t("ui.products.minPrice")} ${t("ui.common.optional")}`} error={err.minPrice} hint={t("ui.products.minPriceHint")}><input className="input" type="number" min="0" step="any" value={f.minPrice} onChange={set("minPrice")} placeholder={t("ui.products.minPrice")} /></Field>}
         <Field label={L("lowStockAlert")} error={err.minStock} hint={t("ui.products.lowStockAlertHint")}><input className="input" type="number" min="0" step="any" value={f.minStock} onChange={set("minStock")} placeholder={L("lowStockAlert")} /></Field>

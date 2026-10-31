@@ -1138,3 +1138,14 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 .sselect__value { display: inline-flex; align-items: center; }
 @media (max-width: 760px) { .lists--two { grid-template-columns: 1fr; } }
 .qty-unit > .sselect { flex: 1; min-width: 0; }
+
+/* ---------- Jewelry ---------- */
+.jewel-price { margin: 0; padding: 10px 12px; border-radius: 10px; background: #fff8e6; color: #7a5a00; font-weight: 700; }
+.gb-status { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef1f7; font-size: .76rem; font-weight: 700; white-space: nowrap; }
+.gb-status.is-pending_inspection, .gb-status.is-offered { background: #fff4e0; color: #9a5b00; }
+.gb-status.is-approved, .gb-status.is-paid { background: #eef1ff; color: #2c3494; }
+.gb-status.is-for_resale, .gb-status.is-active, .gb-status.is-returned { background: #e7f6ee; color: #146c43; }
+.gb-status.is-rejected, .gb-status.is-damaged, .gb-status.is-scrap { background: #fde8e8; color: #b42318; }
+.gb-status.is-sold { background: #eef1ff; color: #2c3494; }
+.gb-receipt h3 { margin: 0 0 8px; color: var(--navy); }
+@media print { .gb-detail .no-print { display: none !important; } }

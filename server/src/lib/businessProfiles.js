@@ -27,6 +27,9 @@
  *   sizeSystems     { "Letter (XS–XXL)": [...], … } and categorySizes: which size system a category uses
  *   colors          [[name, "#hex"], …] colour list with swatches
  *   categoryVariants  which variant attributes a category uses (size, shade = colour, formula = fabric type, packSize = width)
+ *   jewelry         metal, purity / karat, gross / stone / net weight, fixed or weight-based price (lib/jewelry.js),
+ *                   unique pieces or quantities, item status, metal rates, used-gold purchases
+ *   metals / purities  metals offered and their purity options (the business adds its own in Product lists)
  *
  * Add a business type here when its special interface is built; types without one use DEFAULT.
  */
@@ -47,6 +50,7 @@ const DEFAULT = {
   warranties: false,
   variantGroups: false,
   fashion: false,
+  jewelry: false,
   categories: {}
 };
 
@@ -135,7 +139,16 @@ const PROFILES = {
       "Uniforms": ["size", "shade"]
     }
   },
-  jewelry: { key: "jewelry", categories: CATEGORIES.jewelry },
+  jewelry: {
+    key: "jewelry",
+    variants: ["size"],                       // ring / bangle size
+    labels: { subcategory: "itemType" },
+    units: ["pcs", "pair", "set", "g"],
+    jewelry: true,
+    categories: CATEGORIES.jewelry,
+    metals: ["gold", "silver"],
+    purities: { gold: ["24K", "22K", "21K", "18K", "14K"], silver: ["999", "925", "900"] }
+  },
   fabric: { key: "fabric", categories: CATEGORIES.fabric },
   cosmetics: {
     key: "cosmetics",

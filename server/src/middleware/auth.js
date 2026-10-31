@@ -47,7 +47,7 @@ export async function requireAuth(req, res, next) {
               r.role, r.role_id, ro.name AS role_name, ro.permissions AS role_permissions,
               b.id AS business_id, b.name AS business_name, b.status AS business_status,
               b.logo_path, b.phone, b.email, b.address, b.business_type,
-              s.currency, s.invoice_prefix, s.invoice_footer, s.allow_duplicate_codes
+              s.currency, s.invoice_prefix, s.invoice_footer, s.allow_duplicate_codes, s.weight_decimals
          FROM users u
          JOIN businesses b ON b.id = u.business_id
          JOIN business_user_roles r ON r.user_id = u.id AND r.business_id = b.id
@@ -80,6 +80,7 @@ export async function requireAuth(req, res, next) {
       email: row.email, address: row.address, type: row.business_type,
       currency: row.currency || "USD", invoicePrefix: row.invoice_prefix, invoiceFooter: row.invoice_footer,
       allowDuplicateCodes: Boolean(row.allow_duplicate_codes),
+      weightDecimals: row.weight_decimals === null || row.weight_decimals === undefined ? 3 : Number(row.weight_decimals),
       profile: profileFor(row.business_type)        // this business type's own interface (lib/businessProfiles.js)
     };
     next();

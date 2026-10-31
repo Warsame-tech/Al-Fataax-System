@@ -21,6 +21,7 @@ export function ProductLists({ onClose }) {
     { id: "category", label: t("ui.lists.tabs.category"), icon: "layers" },
     { id: "brand", label: t("ui.lists.tabs.brand"), icon: "sparkles" },
     { id: "unit", label: t("ui.lists.tabs.unit"), icon: "package" },
+    ...(profile.jewelry ? [{ id: "purity", label: t("ui.lists.tabs.purity"), icon: "gem" }] : []),
     ...(profile.fashion ? [
       { id: "color", label: t("ui.lists.tabs.color"), icon: "image" },
       { id: "size", label: t("ui.lists.tabs.size"), icon: "grid" },
@@ -39,6 +40,7 @@ export function ProductLists({ onClose }) {
           {tab === "brand" && <SimpleList cat={cat} kind="brand" own={cat.raw.brands} />}
           {tab === "unit" && <SimpleList cat={cat} kind="unit" own={cat.raw.options.unit} builtIn={(profile.units || []).map((u) => unitLabel(t, u))} />}
           {tab === "color" && <ColorList cat={cat} />}
+          {tab === "purity" && <PurityList cat={cat} />}
           {tab === "size" && <SizeList cat={cat} />}
           {tab === "collection" && <SimpleList cat={cat} kind="collection" own={cat.raw.options.collection} />}
           {tab === "season" && <SimpleList cat={cat} kind="season" own={cat.raw.options.season} builtIn={cat.seasons.filter((s) => !cat.raw.options.season.some((x) => x.name === s))} />}
@@ -172,6 +174,29 @@ function CategoryList({ cat }) {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function PurityList({ cat }) {
+  const { t } = useLanguage();
+  const profile = useProfile();
+  const a = useListActions(cat, "purity");
+  const metals = profile.metals || ["gold", "silver"];
+  const [metal, setMetal] = useState(metals[0]);
+  const own = (cat.raw.options.purity || []).filter((p) => p.parent === metal);
+  return (
+    <div className="lists">
+      <Field label={t("ui.jewelry.metal")}>
+        <select className="input" value={metal} onChange={(e) => setMetal(e.target.value)}>{metals.map((x) => <option key={x} value={x}>{t(`ui.jewelry.metals.${x}`)}</option>)}</select>
+      </Field>
+      <BuiltIn items={(profile.purities || {})[metal] || []} />
+      <ul className="lists__items">
+        {own.length === 0 && <li className="muted">{t("ui.lists.noneYet")}</li>}
+        {own.map((x) => <OwnItem key={x.id} item={x} onRename={(name) => a.rename(x.id, { name })} onRemove={() => a.remove(x.id)} />)}
+      </ul>
+      <AddRow placeholder={t("ui.lists.add.purity")} busy={a.sub.busy} onAdd={(name) => a.add({ name, parent: metal })} />
+      {a.sub.formError && <p className="form-status form-status--error">{a.errText(a.sub.formError)}</p>}
     </div>
   );
 }

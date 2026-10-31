@@ -16,7 +16,7 @@ import { useAuth } from "../auth/AuthContext.jsx";
  *   label("costPrice")      "Purchase cost" for cosmetics, "Cost price" otherwise
  */
 const DEFAULT = { key: "default", variants: ["size"], extraBarcodes: false, batches: false, expirySoonDays: 90, labels: {}, units: null, hiddenFields: [], medicine: false, packaging: false, purchaseOrders: false,
-  electronics: false, serials: false, warranties: false, variantGroups: false, fashion: false, categories: {} };
+  electronics: false, serials: false, warranties: false, variantGroups: false, fashion: false, jewelry: false, categories: {} };
 
 export function useProfile() {
   const { business } = useAuth();

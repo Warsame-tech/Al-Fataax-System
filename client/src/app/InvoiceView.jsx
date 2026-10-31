@@ -9,6 +9,7 @@ import { money, qty, date, fill } from "./format.js";
 import { usePerm, ReasonModal } from "./ui.jsx";
 import { PaymentModal } from "./pages/Parties.jsx";
 import { savePdf } from "./pdf.js";
+import { PriceDetailLine } from "./Jewelry.jsx";
 
 /*
  * Printable invoice (Print / Save as PDF from the browser).
@@ -129,6 +130,7 @@ export default function InvoiceView({ preview = false }) {
                 <td className="invoice__barcode">{it.barcode || "—"}</td>
                 <td>{it.name}{it.sku && <small>{it.sku}</small>}
                   {it.devices?.map((d) => <small key={d.id} className="invoice__device">{d.label}</small>)}
+                  <PriceDetailLine detail={it.priceDetail} className="invoice__device" />
                   {it.warranty && it.warranty.status !== "void" && <small className="invoice__device">{fill(t("ui.warranty.receiptLine"), { n: it.warranty.months, date: date(it.warranty.endDate, lang) })}</small>}
                 </td>
                 <td className="num">{qty(it.qty)}{it.unit ? ` ${it.unit}` : ""}</td>

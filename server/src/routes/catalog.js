@@ -15,11 +15,11 @@ import { ah, id, text, optText, withTx, badRequest, conflict, notFound } from ".
 const router = Router();
 router.use(requireAuth);
 
-const OPTION_KINDS = ["subcategory", "color", "size", "collection", "season", "unit"];
+const OPTION_KINDS = ["subcategory", "color", "size", "collection", "season", "unit", "purity"];
 const KINDS = ["category", "brand", ...OPTION_KINDS];
 /* product column holding each text value (renames follow) */
-const PRODUCT_COLUMN = { subcategory: "subcategory", color: "shade", size: "size", collection: "collection", season: "season", unit: "unit" };
-const MAX = { subcategory: 120, color: 60, size: 40, collection: 80, season: 40, unit: 20, category: 120, brand: 120 };
+const PRODUCT_COLUMN = { subcategory: "subcategory", color: "shade", size: "size", collection: "collection", season: "season", unit: "unit", purity: "purity" };
+const MAX = { purity: 20, subcategory: 120, color: 60, size: 40, collection: 80, season: 40, unit: 20, category: 120, brand: 120 };
 
 const readKind = (k) => { if (!KINDS.includes(k)) throw notFound(); return k; };
 const readCode = (v) => {
@@ -51,8 +51,9 @@ router.post("/:kind", requirePerm("products.edit"), ah(async (req, res) => {
   const bid = req.business.id;
   const name = text(req.body?.name, MAX[kind]);
   if (!name) throw badRequest({ name: "required" });
-  const parent = kind === "subcategory" || kind === "size" ? text(req.body?.parent, 120) || null : null;
-  if ((kind === "subcategory" || kind === "size") && !parent) throw badRequest({ parent: "required" });
+  const withParent = ["subcategory", "size", "purity"].includes(kind);       // purity: its metal
+  const parent = withParent ? text(req.body?.parent, 120) || null : null;
+  if (withParent && !parent) throw badRequest({ parent: "required" });
   const code = kind === "color" ? readCode(req.body?.code) : null;
   const newId = await withTx(async (conn) => {
     if (kind === "category" || kind === "brand") {

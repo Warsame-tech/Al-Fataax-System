@@ -270,6 +270,69 @@ const TABLES = [
       UNIQUE KEY uq_catalog (business_id, kind, parent, name),
       CONSTRAINT fk_catalog_business FOREIGN KEY (business_id) REFERENCES businesses(id)
     ) ENGINE=InnoDB`
+  },
+  {
+    table: "metal_rates",
+    ddl: `CREATE TABLE IF NOT EXISTS metal_rates (
+      id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id INT UNSIGNED NOT NULL,
+      metal       VARCHAR(20)  NOT NULL,           -- gold, silver, …
+      purity      VARCHAR(20)  NOT NULL,           -- 22K, 18K, 925…
+      rate        DECIMAL(14,4) NOT NULL,          -- price per gram of that purity
+      user_id     INT UNSIGNED NULL,
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_rates (business_id, metal, purity, id),
+      CONSTRAINT fk_rates_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+    ) ENGINE=InnoDB`
+  },
+  {
+    table: "gold_buys",
+    ddl: `CREATE TABLE IF NOT EXISTS gold_buys (
+      id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id     INT UNSIGNED NOT NULL,
+      ref_no          VARCHAR(30)  NOT NULL,
+      customer_id     INT UNSIGNED NULL,
+      customer_name   VARCHAR(150) NULL,
+      customer_phone  VARCHAR(30)  NULL,
+      id_document     VARCHAR(80)  NULL,           -- ID card / passport no., when required
+      description     VARCHAR(255) NOT NULL,
+      metal           VARCHAR(20)  NOT NULL,
+      gross_weight    DECIMAL(14,4) NOT NULL,
+      stone_weight    DECIMAL(14,4) NOT NULL DEFAULT 0,
+      declared_purity VARCHAR(20)  NULL,
+      tested_purity   VARCHAR(20)  NULL,
+      inspection      VARCHAR(500) NULL,
+      valuation       VARCHAR(10)  NOT NULL DEFAULT 'weight',  -- weight | manual
+      rate_used       DECIMAL(14,4) NULL,
+      deduction_pct   DECIMAL(6,2) NOT NULL DEFAULT 0,          -- buying margin / melting loss
+      suggested_value DECIMAL(14,4) NULL,
+      offer_amount    DECIMAL(14,4) NULL,
+      agreed_price    DECIMAL(14,4) NULL,
+      approved_by     INT UNSIGNED NULL,
+      approved_at     DATETIME NULL,
+      payment_method  VARCHAR(20)  NULL,
+      paid_amount     DECIMAL(14,4) NOT NULL DEFAULT 0,
+      status          VARCHAR(20)  NOT NULL DEFAULT 'pending_inspection',
+        -- pending_inspection → offered → approved → paid (held) → for_resale | scrap ;  rejected
+      product_id      INT UNSIGNED NULL,           -- the stock item made from it (for resale)
+      user_id         INT UNSIGNED NULL,
+      created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_gold_buy (business_id, ref_no),
+      CONSTRAINT fk_gb_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+    ) ENGINE=InnoDB`
+  },
+  {
+    table: "gold_buy_events",
+    ddl: `CREATE TABLE IF NOT EXISTS gold_buy_events (
+      id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      gold_buy_id INT UNSIGNED NOT NULL,
+      event       VARCHAR(30)  NOT NULL,
+      detail      TEXT NULL,                       -- JSON
+      user_id     INT UNSIGNED NULL,
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_gbe (gold_buy_id, id)
+    ) ENGINE=InnoDB`
   }
 ];
 
@@ -349,6 +412,15 @@ COLUMNS.push(
 // Clothing: collection and season (variant attributes reuse size / shade = colour / formula = fabric type / pack_size = width).
 COLUMNS.push(
   { table: "products", column: "collection", ddl: "ALTER TABLE products ADD COLUMN collection VARCHAR(80) NULL AFTER model_number, ADD COLUMN season VARCHAR(40) NULL AFTER collection" }
+);
+
+// Jewelry: metal, purity, weights, pricing (fixed / by weight), unique pieces and item status; rate snapshot on sale lines.
+COLUMNS.push(
+  { table: "products", column: "metal", ddl: "ALTER TABLE products ADD COLUMN metal VARCHAR(20) NULL AFTER season, ADD COLUMN purity VARCHAR(20) NULL AFTER metal, ADD COLUMN gross_weight DECIMAL(14,4) NULL AFTER purity, ADD COLUMN stone_weight DECIMAL(14,4) NULL AFTER gross_weight, ADD COLUMN pricing_mode VARCHAR(10) NOT NULL DEFAULT 'fixed' AFTER stone_weight, ADD COLUMN making_charge DECIMAL(14,4) NULL AFTER pricing_mode, ADD COLUMN making_type VARCHAR(10) NOT NULL DEFAULT 'per_gram' AFTER making_charge, ADD COLUMN extra_charge DECIMAL(14,4) NULL AFTER making_type, ADD COLUMN unique_item TINYINT(1) NOT NULL DEFAULT 0 AFTER extra_charge, ADD COLUMN item_status VARCHAR(20) NOT NULL DEFAULT 'active' AFTER unique_item" },
+  { table: "sale_items", column: "price_detail", ddl: "ALTER TABLE sale_items ADD COLUMN price_detail TEXT NULL AFTER sell_price" },
+  { table: "invoice_items", column: "price_detail", ddl: "ALTER TABLE invoice_items ADD COLUMN price_detail TEXT NULL AFTER sell_price" },
+  { table: "purchase_items", column: "price_detail", ddl: "ALTER TABLE purchase_items ADD COLUMN price_detail TEXT NULL AFTER expiry_date" },
+  { table: "business_settings", column: "weight_decimals", ddl: "ALTER TABLE business_settings ADD COLUMN weight_decimals TINYINT UNSIGNED NOT NULL DEFAULT 3 AFTER spec_fields" }
 );
 
 const INDEXES = [

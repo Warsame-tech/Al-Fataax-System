@@ -132,7 +132,8 @@ CREATE TABLE IF NOT EXISTS business_settings (
   purchase_prefix  VARCHAR(10) NOT NULL DEFAULT 'PO-',
   invoice_footer   VARCHAR(255) NULL,
   allow_duplicate_codes TINYINT(1) NOT NULL DEFAULT 0,  -- products may share a SKU / barcode
-  spec_fields      TEXT NULL,                            -- extra technical specification fields per product type (JSON)
+  spec_fields      TEXT NULL,
+  weight_decimals  TINYINT UNSIGNED NOT NULL DEFAULT 3,  -- jewelry: decimals shown / entered for weights                            -- extra technical specification fields per product type (JSON)
   timezone         VARCHAR(40) NOT NULL DEFAULT 'Africa/Mogadishu',
   updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_settings_business FOREIGN KEY (business_id) REFERENCES businesses(id)
@@ -185,6 +186,16 @@ CREATE TABLE IF NOT EXISTS products (
   model_number    VARCHAR(80)  NULL,              -- clothing: model / style
   collection      VARCHAR(80)  NULL,              -- clothing: collection and season
   season          VARCHAR(40)  NULL,
+  metal           VARCHAR(20)  NULL,              -- jewelry: gold / silver, purity (22K, 925…), weights in grams
+  purity          VARCHAR(20)  NULL,
+  gross_weight    DECIMAL(14,4) NULL,
+  stone_weight    DECIMAL(14,4) NULL,             -- net metal weight = gross − stone
+  pricing_mode    VARCHAR(10)  NOT NULL DEFAULT 'fixed',   -- fixed | weight (net weight × rate + making + extra)
+  making_charge   DECIMAL(14,4) NULL,
+  making_type     VARCHAR(10)  NOT NULL DEFAULT 'per_gram', -- per_gram | fixed
+  extra_charge    DECIMAL(14,4) NULL,
+  unique_item     TINYINT(1)   NOT NULL DEFAULT 0, -- one individual piece (stock 0 or 1)
+  item_status     VARCHAR(20)  NOT NULL DEFAULT 'active', -- active, sold, returned, damaged
   country_of_origin VARCHAR(60) NULL,
   size            VARCHAR(40)  NULL,              -- e.g. 400ml, 1kg — shown after the name everywhere
   shade           VARCHAR(60)  NULL,              -- variant fields (cosmetics): shown after the name too
@@ -413,6 +424,7 @@ CREATE TABLE IF NOT EXISTS sale_items (
   sell_unit   VARCHAR(30) NULL,            -- sold in a pack (box, strip…): the pack, how many, price per pack; qty / unit_price stay in base units
   sell_qty    DECIMAL(14,3) NULL,
   sell_price  DECIMAL(14,4) NULL,
+  price_detail TEXT NULL,                  -- jewelry: rate, purity, weights and charges used (JSON)
   INDEX idx_sale_items_sale (sale_id),
   INDEX idx_sale_items_product (business_id, product_id),
   CONSTRAINT fk_sale_items_business FOREIGN KEY (business_id) REFERENCES businesses(id),
@@ -465,6 +477,7 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   sell_unit   VARCHAR(30) NULL,            -- sold in a pack (box, strip…): the pack, how many, price per pack; qty / unit_price stay in base units
   sell_qty    DECIMAL(14,3) NULL,
   sell_price  DECIMAL(14,4) NULL,
+  price_detail TEXT NULL,                  -- jewelry: rate, purity, weights and charges used (JSON)
   INDEX idx_inv_items_invoice (invoice_id),
   INDEX idx_inv_items_product (business_id, product_id),
   CONSTRAINT fk_inv_items_business FOREIGN KEY (business_id) REFERENCES businesses(id),
@@ -539,6 +552,7 @@ CREATE TABLE IF NOT EXISTS purchase_items (
   buy_cost    DECIMAL(14,4) NULL,
   batch_no    VARCHAR(60) NULL,            -- batch / expiry of the goods (used when an ordered purchase is received)
   expiry_date DATE NULL,
+  price_detail TEXT NULL,                  -- jewelry: rate at the time of purchase (JSON)
   INDEX idx_pitems_purchase (purchase_id),
   CONSTRAINT fk_pitems_business FOREIGN KEY (business_id) REFERENCES businesses(id),
   CONSTRAINT fk_pitems_purchase FOREIGN KEY (purchase_id) REFERENCES purchases(id),
@@ -777,6 +791,63 @@ CREATE TABLE IF NOT EXISTS catalog_options (
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_catalog (business_id, kind, parent, name),
   CONSTRAINT fk_catalog_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS metal_rates (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id INT UNSIGNED NOT NULL,
+  metal       VARCHAR(20)  NOT NULL,           -- gold, silver, …
+  purity      VARCHAR(20)  NOT NULL,           -- 22K, 18K, 925…
+  rate        DECIMAL(14,4) NOT NULL,          -- price per gram of that purity
+  user_id     INT UNSIGNED NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_rates (business_id, metal, purity, id),
+  CONSTRAINT fk_rates_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS gold_buys (
+  id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id     INT UNSIGNED NOT NULL,
+  ref_no          VARCHAR(30)  NOT NULL,
+  customer_id     INT UNSIGNED NULL,
+  customer_name   VARCHAR(150) NULL,
+  customer_phone  VARCHAR(30)  NULL,
+  id_document     VARCHAR(80)  NULL,           -- ID card / passport no., when required
+  description     VARCHAR(255) NOT NULL,
+  metal           VARCHAR(20)  NOT NULL,
+  gross_weight    DECIMAL(14,4) NOT NULL,
+  stone_weight    DECIMAL(14,4) NOT NULL DEFAULT 0,
+  declared_purity VARCHAR(20)  NULL,
+  tested_purity   VARCHAR(20)  NULL,
+  inspection      VARCHAR(500) NULL,
+  valuation       VARCHAR(10)  NOT NULL DEFAULT 'weight',  -- weight | manual
+  rate_used       DECIMAL(14,4) NULL,
+  deduction_pct   DECIMAL(6,2) NOT NULL DEFAULT 0,          -- buying margin / melting loss
+  suggested_value DECIMAL(14,4) NULL,
+  offer_amount    DECIMAL(14,4) NULL,
+  agreed_price    DECIMAL(14,4) NULL,
+  approved_by     INT UNSIGNED NULL,
+  approved_at     DATETIME NULL,
+  payment_method  VARCHAR(20)  NULL,
+  paid_amount     DECIMAL(14,4) NOT NULL DEFAULT 0,
+  status          VARCHAR(20)  NOT NULL DEFAULT 'pending_inspection',
+    -- pending_inspection → offered → approved → paid (held) → for_resale | scrap ;  rejected
+  product_id      INT UNSIGNED NULL,           -- the stock item made from it (for resale)
+  user_id         INT UNSIGNED NULL,
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_gold_buy (business_id, ref_no),
+  CONSTRAINT fk_gb_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS gold_buy_events (
+  id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  gold_buy_id INT UNSIGNED NOT NULL,
+  event       VARCHAR(30)  NOT NULL,
+  detail      TEXT NULL,                       -- JSON
+  user_id     INT UNSIGNED NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_gbe (gold_buy_id, id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS audit_logs (

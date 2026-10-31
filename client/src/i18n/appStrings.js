@@ -23,7 +23,10 @@ const en = {
     pattern: "Please match the requested format.", date: "Please enter a valid date.", invalid: "Please check this value."
   },
   errors: {
-    alreadyInList: "{name} is already in the list.", inUse: "It is used by {n} products, so it can't be removed.", invalidColor: "Choose a valid colour.",
+    alreadyInList: "{name} is already in the list.", stoneAboveGross: "The stone weight can't be more than the gross weight.",
+    weightNeedsMetal: "A price by weight needs the metal, purity and gross weight.", uniqueOne: "{product} is a unique piece: only 1 can be in stock.",
+    itemNotSellable: "This item can't be sold (damaged or pending inspection).", goldBuyStep: "This step is not possible at the item's current stage.",
+    noRate: "No rate is set for this metal and purity.", inUse: "It is used by {n} products, so it can't be removed.", invalidColor: "Choose a valid colour.",
     devicesCount: "Enter one serial number / IMEI for each unit ({given} of {expected}).", invalidImei: "An IMEI has 15 digits.",
     duplicateDevice: "The same number is entered twice ({device}).", imeiExists: "This IMEI is already registered: {device}.",
     serialExists: "This serial number is already registered: {device}.", deviceSold: "{device} has already been sold.",
@@ -91,13 +94,42 @@ const en = {
   },
   lists: {
     title: "Product lists", help: "Register categories, brands and other values once; they appear as dropdowns in the product form. Ready-made values for your business type are already there.",
-    tabs: { category: "Categories", brand: "Brands", unit: "Units", color: "Colors", size: "Sizes", collection: "Collections", season: "Seasons" },
+    tabs: { category: "Categories", brand: "Brands", unit: "Units", color: "Colors", size: "Sizes", collection: "Collections", season: "Seasons", purity: "Purity" },
     builtIn: "Ready-made", readyMade: "ready-made", noneYet: "Nothing added yet.", usedBy: "{n} products", subcategoriesOf: "Subcategories · {name}",
-    add: { category: "New category", subcategory: "New subcategory", brand: "New brand", unit: "New unit, e.g. Bundle", color: "New colour name", size: "New size", collection: "New collection, e.g. Eid 2026", season: "New season" },
+    add: { category: "New category", subcategory: "New subcategory", brand: "New brand", unit: "New unit, e.g. Bundle", color: "New colour name", size: "New size", collection: "New collection, e.g. Eid 2026", season: "New season", purity: "New purity, e.g. 20K" },
     colorCode: "Colour", sizeSystem: "Size system", systemUsedBy: "Used by: {list}", newSystem: "New size system", newSystemPh: "e.g. Hijab sizes",
     createVariants: "Create variants", matrixTitle: "Create variants · {name}",
     matrixHelp: "Choose the sizes and colours you sell. Each combination becomes a variant with its own SKU, price and stock; existing ones are skipped. Stock is added later (Opening stock or purchases).",
     willCreate: "{n} variants will be created", pickSome: "Choose at least one size or colour.", createN: "Create {n} variants"
+  },
+  jewelry: {
+    metals: { gold: "Gold", silver: "Silver" }, metal: "Metal", purity: "Purity / karat", metalPurity: "Metal / purity", section: "Metal, purity and weight",
+    grossWeight: "Gross weight (g)", stoneWeight: "Stone / non-metal weight (g)", netWeight: "Net metal weight", netHint: "Gross weight − stone weight", grams: "Grams",
+    pricing: "Pricing", pricingModes: { fixed: "Fixed price", weight: "By weight" }, making: "Making charge", perGram: "per gram", fixedAmount: "fixed amount",
+    extra: "Additional charges", fallbackPrice: "Fixed price (used only if no rate is set)", byWeight: "priced by weight", noRateShort: "no rate set",
+    pricePreview: "Today: {net} g × {rate} + making {making} + {extra} = {price}", noRateHint: "No rate is set for this purity yet: set it in Gold & silver rates.",
+    pickPurity: "Choose the metal and purity to see today's price.", unique: "Individual piece (unique item)",
+    uniqueHint: "One piece with its own tag (SKU / barcode): stock is 0 or 1 and it shows as sold after the sale. Leave off for interchangeable items counted by quantity.",
+    uniqueShort: "Unique", itemStatusLabel: "Item status", itemStatus: { active: "In stock", returned: "Returned", damaged: "Damaged", sold: "Sold", pending_inspection: "Pending inspection" },
+    ratesHelp: "Rates are per gram of each metal and purity. A new rate applies to sales from now on; sales and purchases already made keep the rate they used.",
+    todayRates: "Today's rates", current: "Current", newRate: "New rate / g", addPurityHint: "Other purities can be added in Products → Product lists → Purity.",
+    weightDecimals: "Weight precision (decimals)", weightDecimalsHint: "Weights are entered and shown with this many decimals, e.g. {example} g.",
+    ratesSaved: "Rates saved.", saveRates: "Save rates", rateHistory: "Rate history", noRates: "No rates set yet.",
+    newBuy: "Buy used gold", buyHelp: "Gold bought from customers stays on hold — it is not for sale until it is inspected, approved, paid and released for resale.",
+    searchPh: "Search reference, customer, phone or item", noBuys: "No used-gold purchases yet.", price: "Price",
+    status: { pending_inspection: "Pending inspection", offered: "Offer made", approved: "Approved", paid: "Paid · on hold", for_resale: "For resale", scrap: "Scrap / melting", rejected: "Rejected" },
+    declared: "declared {p}", tested: "tested {p}", newBuyHelp: "Record the item as received. It is inspected and valued in the next step.",
+    walkIn: "Walk-in customer", customerName: "Customer name", idDocument: "ID document no.", itemDescription: "e.g. Old 22K bracelet with stones",
+    declaredPurity: "Declared purity", receiveItem: "Receive for inspection", receiptTitle: "Used gold purchase", ref: "Reference", weights: "Weights",
+    suggested: "Suggested value", agreed: "Agreed price", approvedBy: "approved by {name}", paid: "Paid", findings: "Inspection findings",
+    stepInspect: "2. Inspection and valuation", testedPurity: "Tested purity", valuation: "Valuation", valuations: { weight: "By weight and purity", manual: "Manual" },
+    deduction: "Deduction (%)", deductionHint: "Buying margin / melting loss taken off the value.", offer: "Offer to the customer",
+    suggestedIs: "Suggested: {amount} (rate {rate} / g)", saveInspection: "Save inspection and offer", stepApprove: "3. Approval", approve: "Approve purchase",
+    stepPay: "4. Pay the customer {amount}", payCustomer: "Pay and keep on hold", stepDecide: "5. After inspection hold",
+    holdHelp: "The item is paid for and on hold. Release it as a stock item for resale, or keep it as scrap for melting.",
+    toScrap: "Keep as scrap", toResale: "Add to stock for resale", inStockNow: "Added to stock as a unique item.", history: "Approval history",
+    reject: "Reject / not bought", rejectHelp: "Record why the item was not bought. It stays in the history.",
+    events: { received: "Received for inspection", inspected: "Inspected and valued", approved: "Approved", paid: "Paid", rejected: "Rejected", scrap: "Kept as scrap", for_resale: "Released for resale" }
   },
   products: {
     color: "Color", colorPh: "Color", fabricType: "Fabric type", fabricTypePh: "Fabric type", width: "Width", widthPh: "Width",
@@ -305,7 +337,7 @@ const en = {
     accountName: "Account name", accountNumber: "Account number", entry: "Deposit / withdraw", direction: "Type", in: "Money in", out: "Money out",
     transfer: "Transfer", fromAcc: "From account", toAcc: "To account", transactions: "Transactions", account: "Account", empty: "No transactions in this period.",
     totalBalance: "Total balance",
-    types: { customer_payment: "Customer payment", supplier_payment: "Supplier payment", expense: "Expense", other_income: "Other income", transfer: "Transfer", adjustment: "Deposit / withdrawal", refund: "Refund" }
+    types: { customer_payment: "Customer payment", supplier_payment: "Supplier payment", expense: "Expense", other_income: "Other income", transfer: "Transfer", adjustment: "Deposit / withdrawal", refund: "Refund", gold_buy: "Used gold bought" }
   },
   reports: {
     title: "Reports", choose: "Report",
@@ -403,7 +435,10 @@ const so = {
     pattern: "Fadlan raac qaabka la rabo.", date: "Fadlan geli taariikh sax ah.", invalid: "Fadlan hubi qiimahan."
   },
   errors: {
-    alreadyInList: "{name} horay ayuu liiska ugu jiray.", inUse: "Waxaa isticmaala {n} alaabood, sidaas darteed lama saari karo.", invalidColor: "Dooro midab sax ah.",
+    alreadyInList: "{name} horay ayuu liiska ugu jiray.", stoneAboveGross: "Miisaanka dhagxaantu kama badnaan karo miisaanka guud.",
+    weightNeedsMetal: "Qiimaynta miisaanka waxay u baahan tahay macdanta, saafinimada iyo miisaanka guud.", uniqueOne: "{product} waa xabbad keli ah: kaliya 1 ayaa kaydka ku jiri kara.",
+    itemNotSellable: "Shaygan lama iibin karo (dhaawacan ama sugaya baaritaan).", goldBuyStep: "Tallaabadan lama samayn karo heerka shaygu hadda joogo.",
+    noRate: "Macdantan iyo saafinimadan qiime looma dejin.", inUse: "Waxaa isticmaala {n} alaabood, sidaas darteed lama saari karo.", invalidColor: "Dooro midab sax ah.",
     devicesCount: "Geli hal serial / IMEI xabbad kasta ({given} ka mid ah {expected}).", invalidImei: "IMEI-gu wuxuu leeyahay 15 god.",
     duplicateDevice: "Lambar isku mid ah ayaa laba jeer la geliyay ({device}).", imeiExists: "IMEI-gan horay ayaa loo diiwaangeliyay: {device}.",
     serialExists: "Serial-kan horay ayaa loo diiwaangeliyay: {device}.", deviceSold: "{device} horay ayaa loo iibiyay.",
@@ -471,13 +506,42 @@ const so = {
   },
   lists: {
     title: "Liisaska alaabta", help: "Diiwaangeli qaybaha, calaamadaha iyo qiimayaasha kale hal mar; waxay ka muuqdaan liisas hoos u dhaca foomka alaabta. Qiimayaal diyaarsan oo nooca ganacsigaaga ah ayaa horay ugu jira.",
-    tabs: { category: "Qaybaha", brand: "Calaamadaha", unit: "Cabbirrada", color: "Midabyada", size: "Cabbirrada dharka", collection: "Ururinta", season: "Xilliyada" },
+    tabs: { category: "Qaybaha", brand: "Calaamadaha", unit: "Cabbirrada", color: "Midabyada", size: "Cabbirrada dharka", collection: "Ururinta", season: "Xilliyada", purity: "Saafinimada" },
     builtIn: "Diyaarsan", readyMade: "diyaarsan", noneYet: "Weli waxba lama darin.", usedBy: "{n} alaabood", subcategoriesOf: "Qaybaha hoose · {name}",
-    add: { category: "Qayb cusub", subcategory: "Qayb hoose cusub", brand: "Calaamad cusub", unit: "Cabbir cusub, tusaale Xidhmo", color: "Magaca midab cusub", size: "Cabbir cusub", collection: "Ururin cusub, tusaale Ciid 2026", season: "Xilli cusub" },
+    add: { category: "Qayb cusub", subcategory: "Qayb hoose cusub", brand: "Calaamad cusub", unit: "Cabbir cusub, tusaale Xidhmo", color: "Magaca midab cusub", size: "Cabbir cusub", collection: "Ururin cusub, tusaale Ciid 2026", season: "Xilli cusub", purity: "Saafinimo cusub, tusaale 20K" },
     colorCode: "Midabka", sizeSystem: "Nidaamka cabbirrada", systemUsedBy: "Waxaa isticmaala: {list}", newSystem: "Nidaam cabbir cusub", newSystemPh: "tusaale Cabbirrada xijaabka",
     createVariants: "Samee noocyada", matrixTitle: "Samee noocyada · {name}",
     matrixHelp: "Dooro cabbirrada iyo midabyada aad iibiso. Isku-dar kasta wuxuu noqonayaa nooc SKU, qiimo iyo kayd u gaar ah leh; kuwa horay u jiray waa laga boodayaa. Kaydka mar dambe ayaa lagu darayaa (Kaydka bilowga ama iibsiyo).",
     willCreate: "{n} nooc ayaa la samaynayaa", pickSome: "Dooro ugu yaraan hal cabbir ama midab.", createN: "Samee {n} nooc"
+  },
+  jewelry: {
+    metals: { gold: "Dahab", silver: "Lacag (silver)" }, metal: "Macdanta", purity: "Saafinimada / karat", metalPurity: "Macdan / saafinimo", section: "Macdanta, saafinimada iyo miisaanka",
+    grossWeight: "Miisaanka guud (g)", stoneWeight: "Miisaanka dhagxaanta (g)", netWeight: "Miisaanka macdanta saafiga ah", netHint: "Miisaanka guud − miisaanka dhagxaanta", grams: "Garaam",
+    pricing: "Qiimaynta", pricingModes: { fixed: "Qiimo go'an", weight: "Miisaan ahaan" }, making: "Kharashka samaynta", perGram: "garaamkiiba", fixedAmount: "lacag go'an",
+    extra: "Kharashyo dheeri ah", fallbackPrice: "Qiimo go'an (kaliya haddii qiime maalinle aan la dejin)", byWeight: "miisaan ahaan", noRateShort: "qiime maalinle ma jiro",
+    pricePreview: "Maanta: {net} g × {rate} + samayn {making} + {extra} = {price}", noRateHint: "Saafinimadan weli qiime looma dejin: ka deji Qiimaha dahabka & lacagta.",
+    pickPurity: "Dooro macdanta iyo saafinimada si aad u aragto qiimaha maanta.", unique: "Xabbad gaar ah (shay keli ah)",
+    uniqueHint: "Hal xabbad oo calaamad u gaar ah leh (SKU / baarkood): kaydku waa 0 ama 1, waxayna noqonaysaa la iibiyay kadib iibka. Ka tag haddii alaabtu tahay kuwo isku mid ah oo tiro lagu tiriyo.",
+    uniqueShort: "Keli", itemStatusLabel: "Xaaladda shayga", itemStatus: { active: "Kaydka ku jira", returned: "La soo celiyay", damaged: "Dhaawacan", sold: "La iibiyay", pending_inspection: "Sugaya baaritaan" },
+    ratesHelp: "Qiimuhu waa garaamkii macdan iyo saafinimo kasta. Qiime cusub wuxuu khuseeyaa iibka hadda kadib; iibka iyo iibsiyada horay u dhacay waxay haystaan qiimihii ay isticmaaleen.",
+    todayRates: "Qiimaha maanta", current: "Hadda", newRate: "Qiime cusub / g", addPurityHint: "Saafinimooyin kale waxaa lagu dari karaa Alaabta → Liisaska alaabta → Saafinimada.",
+    weightDecimals: "Saxnaanta miisaanka (jajab)", weightDecimalsHint: "Miisaanka waxaa lagu geliyaa laguna muujiyaa intaas jajab ah, tusaale {example} g.",
+    ratesSaved: "Qiimaha waa la kaydiyay.", saveRates: "Kaydi qiimaha", rateHistory: "Taariikhda qiimaha", noRates: "Weli qiime lama dejin.",
+    newBuy: "Iibso dahab duug ah", buyHelp: "Dahabka laga iibsado macaamiisha wuu sugayaa — lama iibin karo ilaa la baaro, la ansixiyo, la bixiyo lana sii daayo dib-u-iibin.",
+    searchPh: "Raadi tixraac, macmiil, telefoon ama shay", noBuys: "Weli iibsi dahab duug ah ma jiro.", price: "Qiimaha",
+    status: { pending_inspection: "Sugaya baaritaan", offered: "Dalab la sameeyay", approved: "La ansixiyay", paid: "La bixiyay · la hayaa", for_resale: "Dib-u-iibin", scrap: "Burbur / dhalaalin", rejected: "La diiday" },
+    declared: "la sheegay {p}", tested: "la tijaabiyay {p}", newBuyHelp: "Diiwaangeli shayga sida loo helay. Tallaabada xigta ayaa la baarayaa lana qiimaynayaa.",
+    walkIn: "Macmiil socod ah", customerName: "Magaca macmiilka", idDocument: "Lambarka aqoonsiga", itemDescription: "tusaale Jijin 22K duug ah oo dhagxaan leh",
+    declaredPurity: "Saafinimada la sheegay", receiveItem: "U qaado baaritaan", receiptTitle: "Iibsi dahab duug ah", ref: "Tixraac", weights: "Miisaanka",
+    suggested: "Qiimaha la soo jeediyay", agreed: "Qiimaha lagu heshiiyay", approvedBy: "waxaa ansixiyay {name}", paid: "La bixiyay", findings: "Natiijada baaritaanka",
+    stepInspect: "2. Baaritaan iyo qiimayn", testedPurity: "Saafinimada la tijaabiyay", valuation: "Qiimaynta", valuations: { weight: "Miisaan iyo saafinimo", manual: "Gacan" },
+    deduction: "Jarid (%)", deductionHint: "Faa'iidada iibsiga / khasaaraha dhalaalinta oo laga jaro qiimaha.", offer: "Dalabka macmiilka",
+    suggestedIs: "La soo jeediyay: {amount} (qiime {rate} / g)", saveInspection: "Kaydi baaritaanka iyo dalabka", stepApprove: "3. Ansixin", approve: "Ansixi iibsiga",
+    stepPay: "4. Bixi macmiilka {amount}", payCustomer: "Bixi oo hay", stepDecide: "5. Kadib haynta",
+    holdHelp: "Shayga waa la bixiyay waana la hayaa. Sii daa si uu u noqdo alaab kayd ah oo dib loo iibiyo, ama u hay burbur la dhalaaliyo.",
+    toScrap: "U hay burbur", toResale: "Ku dar kaydka si dib loo iibiyo", inStockNow: "Waxaa lagu daray kaydka shay keli ah.", history: "Taariikhda ansixinta",
+    reject: "Diid / lama iibsan", rejectHelp: "Qor sababta aan shayga loo iibsan. Wuxuu ku jirayaa taariikhda.",
+    events: { received: "Loo qaatay baaritaan", inspected: "La baaray lana qiimeeyay", approved: "La ansixiyay", paid: "La bixiyay", rejected: "La diiday", scrap: "Loo hayaa burbur", for_resale: "Loo sii daayay dib-u-iibin" }
   },
   products: {
     color: "Midabka", colorPh: "Midabka", fabricType: "Nooca maradda", fabricTypePh: "Nooca maradda", width: "Ballaca", widthPh: "Ballaca",
@@ -685,7 +749,7 @@ const so = {
     accountName: "Magaca akoonka", accountNumber: "Lambarka akoonka", entry: "Dhigasho / bixis", direction: "Nooca", in: "Lacag soo gashay", out: "Lacag baxday",
     transfer: "Wareejin", fromAcc: "Akoonka laga wareejinayo", toAcc: "Akoonka loo wareejinayo", transactions: "Dhaqdhaqaaqyada", account: "Akoon", empty: "Muddadan dhaqdhaqaaq ma jiro.",
     totalBalance: "Wadarta haraaga",
-    types: { customer_payment: "Lacag macmiil", supplier_payment: "Lacag alaab-qeybiye", expense: "Kharash", other_income: "Dakhli kale", transfer: "Wareejin", adjustment: "Dhigasho / bixis", refund: "Celin lacag" }
+    types: { customer_payment: "Lacag macmiil", supplier_payment: "Lacag alaab-qeybiye", expense: "Kharash", other_income: "Dakhli kale", transfer: "Wareejin", adjustment: "Dhigasho / bixis", refund: "Celin lacag", gold_buy: "Dahab duug ah oo la iibsaday" }
   },
   reports: {
     title: "Warbixinnada", choose: "Warbixin",

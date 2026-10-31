@@ -328,7 +328,9 @@ const translations = {
         settings: "Settings",
         audit: "Activity log",
         devices: "Devices (serial / IMEI)",
-        warranties: "Warranties"
+        warranties: "Warranties",
+        metalRates: "Gold & silver rates",
+        usedGold: "Used gold purchases"
       },
       coming: {
         title: "{name} is coming next",
@@ -747,7 +749,9 @@ const translations = {
         settings: "Dejinta",
         audit: "Diiwaanka dhaqdhaqaaqa",
         devices: "Qalabka (serial / IMEI)",
-        warranties: "Dammaanadaha"
+        warranties: "Dammaanadaha",
+        metalRates: "Qiimaha dahabka & lacagta",
+        usedGold: "Iibsiga dahab duug ah"
       },
       coming: {
         title: "{name} ayaa xiga",

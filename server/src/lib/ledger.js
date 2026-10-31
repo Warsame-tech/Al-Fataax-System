@@ -89,6 +89,8 @@ export async function moveStock(conn, {
   const after = Math.round((before + qtyChange) * 1000) / 1000;
   if (after < 0) throw new HttpError(409, "insufficientStock", null, { product: productName(product), available: before });
   const total = Math.round((Number(product.stock_qty) + qtyChange) * 1000) / 1000;
+  // jewelry: a unique piece is one item (stock 0 or 1)
+  if (Number(product.unique_item) && total > 1) throw new HttpError(409, "uniqueOne", null, { product: productName(product) });
   await conn.query("UPDATE product_stock SET qty = ? WHERE id = ?", [after, row.id]);
   await conn.query("UPDATE products SET stock_qty = ? WHERE id = ? AND business_id = ?", [total, product.id, businessId]);
   const [m] = await conn.query(

@@ -9,6 +9,7 @@ import { readBatch } from "../lib/batches.js";
 import { unitsPer } from "../lib/packaging.js";
 import { defaultLocationId } from "../lib/stock.js";
 import { isTracked, readNewDevices, addDevices, pickDevices, updateDevices, deviceLabel } from "../lib/devices.js";
+import { currentRates } from "../lib/jewelry.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -68,6 +69,11 @@ export async function createPurchase(conn, ctx, body) {
       buy: unit ? { unit, qty, cost } : null, batchNo: batch?.batchNo || null, expiryDate: batch?.expiryDate || null, devices: it?.devices };
   });
   if (Object.keys(errors).length) throw badRequest(errors);
+  // jewelry: keep the metal rate of the day on the purchase line
+  const rates = lines.some((l) => l.product.metal) ? await currentRates(conn, businessId) : null;
+  for (const l of lines) {
+    if (rates && l.product.metal) l.detail = { metal: l.product.metal, purity: l.product.purity, rate: rates.get(`${l.product.metal}|${l.product.purity}`) ?? null, grossWeight: l.product.gross_weight === null ? null : num(l.product.gross_weight) };
+  }
   const ordered = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
   const discount = body.discount ? money(body.discount) : 0;
   const extra = body.extraCosts ? money(body.extraCosts) : 0;
@@ -95,9 +101,10 @@ export async function createPurchase(conn, ctx, body) {
   );
   for (const [i, l] of lines.entries()) {
     const [it] = await conn.query(
-      `INSERT INTO purchase_items (business_id, purchase_id, product_id, qty, received_qty, unit_cost, line_total, buy_unit, buy_qty, buy_cost, batch_no, expiry_date)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [businessId, r.insertId, l.product.id, l.qty, receive ? l.qty : 0, l.unitCost, l.lineTotal, l.buy?.unit || null, l.buy?.qty ?? null, l.buy?.cost ?? null, l.batchNo, l.expiryDate]);
+      `INSERT INTO purchase_items (business_id, purchase_id, product_id, qty, received_qty, unit_cost, line_total, buy_unit, buy_qty, buy_cost, batch_no, expiry_date, price_detail)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [businessId, r.insertId, l.product.id, l.qty, receive ? l.qty : 0, l.unitCost, l.lineTotal, l.buy?.unit || null, l.buy?.qty ?? null, l.buy?.cost ?? null, l.batchNo, l.expiryDate,
+        l.detail ? JSON.stringify(l.detail) : null]);
     if (receive) {
       const devices = isTracked(l.product) ? readNewDevices(l.product, l.devices, l.qty, `items.${i}.devices`) : null;
       await receiveLine(conn, { businessId, userId, purchaseId: r.insertId, number, supplierId, locationId }, { ...l, itemId: it.insertId, devices });

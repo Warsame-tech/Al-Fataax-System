@@ -11,6 +11,7 @@ import { startBatchTracking } from "../lib/batches.js";
 import { readPackaging, packagingOf } from "../lib/packaging.js";
 import { TRACKING } from "../lib/devices.js";
 import { conflict } from "../lib/http.js";
+import { currentRates, weightPrice, netWeight } from "../lib/jewelry.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -29,7 +30,7 @@ async function imageFrom(req) {
  * and totalStock keeps the total.
  * Variant fields (size, shade, fragrance, formula, packSize) are part of the shown name.
  */
-const shape = (p) => ({
+const shape = (p, rates = null) => withJewelry(p, rates, {
   id: p.id, name: productName(p), baseName: p.name, size: p.size || "", shade: p.shade || "", fragrance: p.fragrance || "", formula: p.formula || "",
   packSize: p.pack_size || "", variantOf: p.variant_of || null, variantCount: p.variant_count === undefined ? undefined : Number(p.variant_count),
   description: p.description || "", sku: p.sku, barcode: p.barcode, unit: p.unit, imagePath: p.image_path || null,
@@ -63,6 +64,24 @@ function readSpecs(raw) {
     if (key && val) out[key] = val;
   }
   return out;
+}
+
+/*
+ * Jewelry: weights, purity and pricing; a weight-priced item's selling price is today's price
+ * (net weight × current rate + making + extra — lib/jewelry.js), with the breakdown in priceDetail.
+ */
+function withJewelry(p, rates, out) {
+  if (!p.metal && p.pricing_mode !== "weight" && !p.unique_item) return out;
+  const live = weightPrice(p, rates);
+  return {
+    ...out,
+    metal: p.metal || "", purity: p.purity || "", grossWeight: p.gross_weight === null ? null : num(p.gross_weight),
+    stoneWeight: p.stone_weight === null ? null : num(p.stone_weight), netWeight: netWeight(p.gross_weight, p.stone_weight),
+    pricingMode: p.pricing_mode || "fixed", makingCharge: p.making_charge === null ? null : num(p.making_charge), makingType: p.making_type || "per_gram",
+    extraCharge: p.extra_charge === null ? null : num(p.extra_charge), uniqueItem: Boolean(p.unique_item), itemStatus: p.item_status || "active",
+    fixedPrice: num(p.selling_price),
+    ...(live ? { sellingPrice: live.price, priceDetail: live.detail } : p.pricing_mode === "weight" ? { priceDetail: null, noRate: true } : {})
+  };
 }
 
 /* nearest expiry of the stock on hand, and how many products are in the variant group */
@@ -153,7 +172,8 @@ router.get("/", requirePerm("products.view"), ah(async (req, res) => {
     total = Number(c.n);
     summary = { count: total, units: num(c.units), stockValue: Math.round(num(c.value) * 10000) / 10000 };
   }
-  res.json({ products: rows.map(shape), total, summary, page: paged ? page : 1, pageSize: paged ? pageSize : rows.length });
+  const rates = req.business.profile.jewelry ? await currentRates(pool, bid) : null;
+  res.json({ products: rows.map((p) => shape(p, rates)), total, summary, page: paged ? page : 1, pageSize: paged ? pageSize : rows.length });
 }));
 
 /* GET /api/products/filters — options for the filter dropdowns */
@@ -177,13 +197,14 @@ router.get("/barcode/:code", requirePerm("products.view"), ah(async (req, res) =
   const code = text(req.params.code, 80);
   const loc = await requestedLocation(req);
   const [[p]] = await pool.query(`${withLocation(loc)} WHERE p.business_id = ? AND p.is_active = 1 AND (p.barcode = ? OR p.sku = ?) LIMIT 1`, [req.business.id, code, code]);
-  if (p) return res.json({ product: shape(p), pack: null });
+  const rates = req.business.profile.jewelry ? await currentRates(pool, req.business.id) : null;
+  if (p) return res.json({ product: shape(p, rates), pack: null });
   const [[x]] = await pool.query(
     `${withLocation(loc)} JOIN product_barcodes xb ON xb.product_id = p.id AND xb.business_id = p.business_id
       WHERE p.business_id = ? AND p.is_active = 1 AND xb.barcode = ? LIMIT 1`, [req.business.id, code]);
   if (!x) return res.status(404).json({ code: "notFound" });
   const [[pack]] = await pool.query("SELECT pack_label, pack_qty FROM product_barcodes WHERE business_id = ? AND barcode = ? AND product_id = ? LIMIT 1", [req.business.id, code, x.id]);
-  res.json({ product: shape(x), pack: { label: pack.pack_label || null, qty: num(pack.pack_qty) || 1 } });
+  res.json({ product: shape(x, rates), pack: { label: pack.pack_label || null, qty: num(pack.pack_qty) || 1 } });
 }));
 
 /* GET /api/products/check-barcode/:code — for the product form: is this barcode already used (also by archived products, and as a packaging barcode)? */
@@ -192,7 +213,7 @@ router.get("/check-barcode/:code", requirePerm("products.view"), ah(async (req, 
   const [[p]] = await pool.query(
     `${SELECT} WHERE p.business_id = ? AND (p.barcode = ? OR EXISTS (SELECT 1 FROM product_barcodes xb WHERE xb.product_id = p.id AND xb.barcode = ?)) LIMIT 1`,
     [req.business.id, code, code]);
-  res.json({ product: p ? shape(p) : null, allowDuplicates: req.business.allowDuplicateCodes });
+  res.json({ product: p ? shape(p, null) : null, allowDuplicates: req.business.allowDuplicateCodes });
 }));
 
 /* GET /api/products/categories */
@@ -280,6 +301,16 @@ function readProduct(body, { creating }) {
     supplierId: id(body.supplierId), rxRequired: body.rxRequired === true || body.rxRequired === "true",
     storageInstructions: optText(body.storageInstructions, 255),
     collection: optText(body.collection, 80), season: optText(body.season, 40),
+    // jewelry
+    metal: optText(body.metal, 20), purity: optText(body.purity, 20),
+    grossWeight: body.grossWeight === "" || body.grossWeight == null ? null : Number(body.grossWeight),
+    stoneWeight: body.stoneWeight === "" || body.stoneWeight == null ? null : Number(body.stoneWeight),
+    pricingMode: body.pricingMode === "weight" ? "weight" : "fixed",
+    makingCharge: body.makingCharge === "" || body.makingCharge == null ? null : money(body.makingCharge),
+    makingType: body.makingType === "fixed" ? "fixed" : "per_gram",
+    extraCharge: body.extraCharge === "" || body.extraCharge == null ? null : money(body.extraCharge),
+    uniqueItem: body.uniqueItem === true || body.uniqueItem === "true",
+    itemStatus: ["active", "returned", "damaged"].includes(body.itemStatus) ? body.itemStatus : null,
     productType: optText(body.productType, 60), modelNumber: optText(body.modelNumber, 80), countryOfOrigin: optText(body.countryOfOrigin, 60),
     notes: optText(body.notes, 2000), specs: body.specs === undefined ? undefined : JSON.stringify(readSpecs(body.specs)),
     tracking: TRACKING.includes(body.tracking) ? body.tracking : "qty",
@@ -294,6 +325,11 @@ function readProduct(body, { creating }) {
   if (d.name.length < 1) e.name = "required";
   if (pack.error) e[pack.error] = "invalidAmount";
   if (d.minPrice !== null && Number.isNaN(d.minPrice)) e.minPrice = "invalidAmount";
+  for (const k of ["grossWeight", "stoneWeight"]) if (d[k] !== null && (!Number.isFinite(d[k]) || d[k] < 0 || d[k] > 1e6)) e[k] = "invalidAmount";
+  if (d.grossWeight !== null && d.stoneWeight !== null && d.stoneWeight > d.grossWeight) e.stoneWeight = "stoneAboveGross";
+  if (d.makingCharge !== null && Number.isNaN(d.makingCharge)) e.makingCharge = "invalidAmount";
+  if (d.extraCharge !== null && Number.isNaN(d.extraCharge)) e.extraCharge = "invalidAmount";
+  if (d.pricingMode === "weight" && (!d.metal || !d.purity || !(d.grossWeight > 0))) e.pricingMode = "weightNeedsMetal";
   if (d.minPrice !== null && !Number.isNaN(d.minPrice) && !Number.isNaN(d.sellingPrice) && d.minPrice > d.sellingPrice) e.minPrice = "minAboveSelling";
   if (d.warrantyMonths !== null && (!Number.isInteger(d.warrantyMonths) || d.warrantyMonths < 0 || d.warrantyMonths > 240)) e.warrantyMonths = "invalidAmount";
   if (pack.levels?.some((l) => l.name === d.unit)) e.packaging = "packSameAsUnit";
@@ -360,6 +396,12 @@ function changesOf(old, d) {
   if (Boolean(old.is_active) !== d.isActive) out.push({ field: "status", from: old.is_active ? "active" : "archived", to: d.isActive ? "active" : "archived" });
   if (Boolean(old.track_batches) !== d.trackBatches) out.push({ field: "trackBatches", from: Boolean(old.track_batches), to: d.trackBatches });
   if ((old.tracking || "qty") !== d.tracking) out.push({ field: "tracking", from: old.tracking || "qty", to: d.tracking });
+  if ((old.pricing_mode || "fixed") !== d.pricingMode) out.push({ field: "pricingMode", from: old.pricing_mode || "fixed", to: d.pricingMode });
+  for (const [field, col] of [["makingCharge", "making_charge"], ["extraCharge", "extra_charge"]]) {
+    const before = old[col] === null || old[col] === undefined ? null : num(old[col]);
+    if (before !== d[field]) out.push({ field, from: before, to: d[field] });
+  }
+  if (d.itemStatus && (old.item_status || "active") !== d.itemStatus) out.push({ field: "itemStatus", from: old.item_status || "active", to: d.itemStatus });
   const oldMin = old.min_price === null || old.min_price === undefined ? null : num(old.min_price);
   if (oldMin !== d.minPrice) out.push({ field: "minPrice", from: oldMin, to: d.minPrice });
   return out;
@@ -378,13 +420,15 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
       if (d.variantOf) { const parent = await ensureOwned(conn, "products", d.variantOf, bid); group = parent.variant_of || parent.id; }
       const [r] = await conn.query(
         `INSERT INTO products (business_id, category_id, brand_id, subcategory, name, generic_name, dosage_form, manufacturer, supplier_id, rx_required, storage_instructions,
-                               product_type, model_number, collection, season, country_of_origin, notes, specs, tracking, min_price, warranty_months, warranty_provider, warranty_terms,
+                               product_type, model_number, collection, season, metal, purity, gross_weight, stone_weight, pricing_mode, making_charge,
+                               making_type, extra_charge, unique_item, item_status, country_of_origin, notes, specs, tracking, min_price, warranty_months, warranty_provider, warranty_terms,
                                size, shade, fragrance, formula, pack_size, variant_of, description,
                                sku, barcode, image_path, unit, packaging, cost_price, selling_price, wholesale_price, min_stock, track_batches, is_active)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [bid, await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.genericName, d.dosageForm, d.manufacturer,
           await supplierOf(conn, bid, d.supplierId), d.rxRequired ? 1 : 0, d.storageInstructions,
-          d.productType, d.modelNumber, d.collection, d.season, d.countryOfOrigin, d.notes, d.specs ?? null, d.tracking, d.minPrice, d.warrantyMonths, d.warrantyProvider, d.warrantyTerms,
+          d.productType, d.modelNumber, d.collection, d.season, d.metal, d.purity, d.grossWeight, d.stoneWeight, d.pricingMode, d.makingCharge,
+          d.makingType, d.extraCharge, d.uniqueItem ? 1 : 0, d.itemStatus || "active", d.countryOfOrigin, d.notes, d.specs ?? null, d.tracking, d.minPrice, d.warrantyMonths, d.warrantyProvider, d.warrantyTerms,
           d.size, d.shade, d.fragrance, d.formula, d.packSize,
           group, d.description, d.sku, d.barcode, image, d.unit, d.packaging ?? null, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0]
       );
@@ -415,16 +459,19 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
       await checkCodes(conn, req.business, d, p);
       // the tracking method can change only while nothing is in stock (devices must match the stock)
       if ((p.tracking || "qty") !== d.tracking && num(p.stock_qty) !== 0) throw conflict("trackingNeedsZeroStock");
+      if (d.uniqueItem && num(p.stock_qty) > 1) throw conflict("uniqueOne");
       const next = image || (req.body?.removeImage === "true" ? null : p.image_path);
       await conn.query(
         `UPDATE products SET category_id = ?, brand_id = ?, subcategory = ?, name = ?, generic_name = ?, dosage_form = ?, manufacturer = ?, supplier_id = ?, rx_required = ?,
-                storage_instructions = ?, product_type = ?, model_number = ?, collection = ?, season = ?, country_of_origin = ?, notes = ?, specs = ?, tracking = ?, min_price = ?,
+                storage_instructions = ?, product_type = ?, model_number = ?, collection = ?, season = ?, metal = ?, purity = ?, gross_weight = ?, stone_weight = ?,
+                pricing_mode = ?, making_charge = ?, making_type = ?, extra_charge = ?, unique_item = ?, item_status = ?, country_of_origin = ?, notes = ?, specs = ?, tracking = ?, min_price = ?,
                 warranty_months = ?, warranty_provider = ?, warranty_terms = ?, size = ?, shade = ?, fragrance = ?, formula = ?, pack_size = ?, description = ?,
                 sku = ?, barcode = ?, image_path = ?, unit = ?, packaging = ?, cost_price = ?, selling_price = ?, wholesale_price = ?, min_stock = ?, track_batches = ?, is_active = ?
           WHERE id = ? AND business_id = ?`,
         [await categoryId(conn, bid, d.category), await brandId(conn, bid, d.brand), d.subcategory, d.name, d.genericName, d.dosageForm, d.manufacturer,
           await supplierOf(conn, bid, d.supplierId), d.rxRequired ? 1 : 0, d.storageInstructions,
-          d.productType, d.modelNumber, d.collection, d.season, d.countryOfOrigin, d.notes, d.specs === undefined ? p.specs : d.specs, d.tracking, d.minPrice,
+          d.productType, d.modelNumber, d.collection, d.season, d.metal, d.purity, d.grossWeight, d.stoneWeight, d.pricingMode, d.makingCharge,
+          d.makingType, d.extraCharge, d.uniqueItem ? 1 : 0, d.itemStatus || p.item_status || "active", d.countryOfOrigin, d.notes, d.specs === undefined ? p.specs : d.specs, d.tracking, d.minPrice,
           d.warrantyMonths, d.warrantyProvider, d.warrantyTerms, d.size, d.shade, d.fragrance, d.formula, d.packSize,
           d.description, d.sku, d.barcode, next, d.unit, d.packaging === undefined ? p.packaging : d.packaging, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0, p.id, bid]
       );
@@ -515,7 +562,7 @@ router.get("/:id/details", requirePerm("products.view"), ah(async (req, res) => 
   ]);
   res.json({
     barcodes: barcodes.map((x) => ({ barcode: x.barcode, label: x.pack_label || "", qty: num(x.pack_qty) })),
-    variants: variants.map(shape),
+    variants: variants.map((v) => shape(v, null)),
     batches: batches.map((b) => ({ id: b.id, batchNo: b.batch_no, expiryDate: b.expiry_date, qty: num(b.qty), location: b.location }))
   });
 }));
