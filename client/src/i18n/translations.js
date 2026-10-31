@@ -330,7 +330,9 @@ const translations = {
         devices: "Devices (serial / IMEI)",
         warranties: "Warranties",
         metalRates: "Gold & silver rates",
-        usedGold: "Used gold purchases"
+        usedGold: "Used gold purchases",
+        rolls: "Fabric rolls",
+        tailoring: "Tailoring orders"
       },
       coming: {
         title: "{name} is coming next",
@@ -751,7 +753,9 @@ const translations = {
         devices: "Qalabka (serial / IMEI)",
         warranties: "Dammaanadaha",
         metalRates: "Qiimaha dahabka & lacagta",
-        usedGold: "Iibsiga dahab duug ah"
+        usedGold: "Iibsiga dahab duug ah",
+        rolls: "Duubabka maryaha",
+        tailoring: "Dalabaadka harqaanka"
       },
       coming: {
         title: "{name} ayaa xiga",

@@ -30,6 +30,9 @@
  *   jewelry         metal, purity / karat, gross / stone / net weight, fixed or weight-based price (lib/jewelry.js),
  *                   unique pieces or quantities, item status, metal rates, used-gold purchases
  *   metals / purities  metals offered and their purity options (the business adds its own in Product lists)
+ *   fabric          quality / grade, composition, supplier; products sold from rolls (tracking "roll": each roll has an ID,
+ *                   declared / verified / remaining meters, lib/rolls.js); Rolls and Tailoring orders modules
+ *   defaultVariants variant attributes of a category not listed in categoryVariants
  *
  * Add a business type here when its special interface is built; types without one use DEFAULT.
  */
@@ -51,6 +54,7 @@ const DEFAULT = {
   variantGroups: false,
   fashion: false,
   jewelry: false,
+  fabric: false,
   categories: {}
 };
 
@@ -94,7 +98,8 @@ const CATEGORIES = {
   },
   fabric: {
     "Cotton": [], "Silk": [], "Chiffon": [], "Linen": [], "Polyester": [], "Wool": [], "Lace": [], "Velvet": [], "Satin": [], "Denim": [],
-    "Sewing Materials": ["Thread", "Buttons", "Zippers", "Needles", "Elastic"], "Other": []
+    "Sewing Materials": ["Thread", "Buttons", "Zippers", "Needles", "Elastic"],
+    "Ready-made Clothing": ["Dirac", "Garbasaar", "Abayas", "Kamis / Thobe", "Macawis", "Shirts", "Dresses", "Children's Wear"], "Other": []
   }
 };
 
@@ -149,7 +154,24 @@ const PROFILES = {
     metals: ["gold", "silver"],
     purities: { gold: ["24K", "22K", "21K", "18K", "14K"], silver: ["999", "925", "900"] }
   },
-  fabric: { key: "fabric", categories: CATEGORIES.fabric },
+  fabric: {
+    key: "fabric",
+    // colour / shade, pattern and width (fabrics); size + colour (ready-made clothing)
+    variants: ["size", "shade", "formula", "packSize"],
+    variantGroups: true,
+    labels: { category: "fabricCategory", subcategory: "fabricType", shade: "colorShade", formula: "pattern", packSize: "width", modelNumber: "qualityGrade",
+      genericName: "composition", costPrice: "purchaseCost", lowStockAlert: "minStockLevel", lowStockShort: "minStockLevel" },
+    units: ["meter", "yard", "roll", "pcs", "pair", "set", "spool", "pack"],
+    purchaseOrders: true,
+    fashion: true,
+    fabric: true,                             // fabric details, products sold from rolls (lib/rolls.js), tailoring orders
+    categories: CATEGORIES.fabric,
+    sizeSystems: SIZE_SYSTEMS,
+    categorySizes: { "Ready-made Clothing": "Letter (XXS–4XL)" },
+    colors: COLORS,
+    defaultVariants: ["shade", "formula", "packSize"],
+    categoryVariants: { "Ready-made Clothing": ["size", "shade"], "Sewing Materials": ["shade"] }
+  },
   cosmetics: {
     key: "cosmetics",
     variants: ["size"],

@@ -16,6 +16,8 @@ export const MODULES = [
   { id: "warranties",   icon: "shield-check", color: "#1f9d61", perm: "sales.view", profile: "warranties" },
   { id: "metalRates",   icon: "chart-line",  color: "#d4a017", perm: "products.view", profile: "jewelry" },
   { id: "usedGold",     icon: "gem",         color: "#b8860b", perm: "purchases.view", profile: "jewelry" },
+  { id: "rolls",        icon: "roll",        color: "#0f766e", perm: "stock.view", profile: "fabric" },
+  { id: "tailoring",    icon: "scissors",    color: "#be185d", perm: "sales.view", profile: "fabric" },
   { id: "expenses",     icon: "wallet",      color: "#dc2626", perm: "expenses.view" },
   { id: "cashbook",     icon: "book-open",   color: "#2373f4", perm: "cash.view" },
   { id: "reports",      icon: "file-chart",  color: "#0f9488", perm: "reports.view" },

@@ -4,7 +4,7 @@ import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { apiRequest } from "../services/api.js";
 import { Modal, Tabs, Field, FormError, Loading, useSubmit, useErrorText, useMoney } from "./ui.jsx";
 import { fill } from "./format.js";
-import { useProfile } from "./profile.js";
+import { useProfile, productLabel } from "./profile.js";
 import { useCatalog } from "./catalog.js";
 import { Swatch } from "./SearchSelect.jsx";
 
@@ -261,6 +261,8 @@ function SizeList({ cat }) {
  */
 export function VariantMatrix({ product, fields, onClose, onDone }) {
   const { t } = useLanguage();
+  const profile = useProfile();
+  const L = (k) => productLabel(t, profile, k);
   const m = useMoney();
   const cat = useCatalog();
   const [system, setSystem] = useState(cat.systemFor(product.category));
@@ -292,19 +294,19 @@ export function VariantMatrix({ product, fields, onClose, onDone }) {
         <p className="modal__help">{t("ui.lists.matrixHelp")}</p>
         {fields.includes("size") && (
           <div className="ff ff--full">
-            <span className="ff__label">{t("ui.products.size")}</span>
+            <span className="ff__label">{L("size")}</span>
             <select className="input input--auto" value={system} onChange={(e) => { setSystem(e.target.value); setSizes([]); }}>{Object.keys(cat.sizeSystems).map((s) => <option key={s} value={s}>{s}</option>)}</select>
             <div className="chip-pick">{(cat.sizeSystems[system] || []).map((s) => <button key={s} type="button" aria-pressed={sizes.includes(s)} onClick={() => toggle(sizes, setSizes, s)}>{s}</button>)}</div>
           </div>
         )}
         {fields.includes("shade") && (
           <div className="ff ff--full">
-            <span className="ff__label">{t("ui.products.color")}</span>
+            <span className="ff__label">{L("shade")}</span>
             <div className="chip-pick">{cat.colors.map((c) => <button key={c.name} type="button" aria-pressed={colors.includes(c.name)} onClick={() => toggle(colors, setColors, c.name)}><Swatch code={c.code} />{c.name}</button>)}</div>
           </div>
         )}
-        {fields.includes("formula") && <Field label={t("ui.products.fabricType")}><input className="input" value={fabric} onChange={(e) => setFabric(e.target.value)} placeholder={t("ui.products.fabricType")} /></Field>}
-        {fields.includes("packSize") && <Field label={t("ui.products.width")}><input className="input" value={width} onChange={(e) => setWidth(e.target.value)} placeholder={t("ui.products.width")} /></Field>}
+        {fields.includes("formula") && <Field label={L("formula")}><input className="input" value={fabric} onChange={(e) => setFabric(e.target.value)} placeholder={L("formula")} /></Field>}
+        {fields.includes("packSize") && <Field label={L("packSize")}><input className="input" value={width} onChange={(e) => setWidth(e.target.value)} placeholder={L("packSize")} /></Field>}
         <Field label={t("ui.products.sellingPrice")}><input className="input" type="number" min="0" step="any" value={price} onChange={(e) => setPrice(e.target.value)} /></Field>
         <div className="ff ff--full">
           <span className="ff__label">{fill(t("ui.lists.willCreate"), { n: combos.length })}</span>

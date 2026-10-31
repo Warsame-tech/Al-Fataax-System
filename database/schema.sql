@@ -7,7 +7,7 @@
 -- Conventions
 --   * Every business-owned table has `business_id` (tenant id) + an index on it.
 --     The API filters EVERY query by the signed-in user's business_id.
---   * Money is DECIMAL(14,4) (4 decimals so 5% VAT is exact); quantities DECIMAL(14,3).
+--   * Money is DECIMAL(14,4) (4 decimals so 5% VAT is exact); quantities DECIMAL(14,4).
 --   * Balances (cash, bank, receivables, payables, stock) are DERIVED from
 --     transactions — no duplicated running totals without reconciliation.
 --   * Timestamps are UTC (DATETIME).
@@ -133,7 +133,8 @@ CREATE TABLE IF NOT EXISTS business_settings (
   invoice_footer   VARCHAR(255) NULL,
   allow_duplicate_codes TINYINT(1) NOT NULL DEFAULT 0,  -- products may share a SKU / barcode
   spec_fields      TEXT NULL,
-  weight_decimals  TINYINT UNSIGNED NOT NULL DEFAULT 3,  -- jewelry: decimals shown / entered for weights                            -- extra technical specification fields per product type (JSON)
+  weight_decimals  TINYINT UNSIGNED NOT NULL DEFAULT 3,  -- jewelry: decimals shown / entered for weights
+  tailoring_stages TEXT NULL,                            -- fabric / tailoring: work stages (JSON list)                            -- extra technical specification fields per product type (JSON)
   timezone         VARCHAR(40) NOT NULL DEFAULT 'Africa/Mogadishu',
   updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_settings_business FOREIGN KEY (business_id) REFERENCES businesses(id)
@@ -212,8 +213,8 @@ CREATE TABLE IF NOT EXISTS products (
   cost_price      DECIMAL(14,4) NOT NULL DEFAULT 0,
   selling_price   DECIMAL(14,4) NOT NULL DEFAULT 0,
   wholesale_price DECIMAL(14,4) NULL,
-  stock_qty       DECIMAL(14,3) NOT NULL DEFAULT 0,  -- maintained only inside stock-movement transactions
-  min_stock       DECIMAL(14,3) NOT NULL DEFAULT 0,  -- Low Stock Alert Level (per location: product_stock.alert_level)
+  stock_qty       DECIMAL(14,4) NOT NULL DEFAULT 0,  -- maintained only inside stock-movement transactions
+  min_stock       DECIMAL(14,4) NOT NULL DEFAULT 0,  -- Low Stock Alert Level (per location: product_stock.alert_level)
   tracking        VARCHAR(12) NOT NULL DEFAULT 'qty', -- qty | serial | imei | serial_imei (devices table)
   warranty_months INT UNSIGNED NULL,                 -- warranty policy for sales (warranties table)
   warranty_provider VARCHAR(100) NULL,
@@ -255,8 +256,8 @@ CREATE TABLE IF NOT EXISTS product_stock (
   business_id INT UNSIGNED NOT NULL,
   product_id  INT UNSIGNED NOT NULL,
   location_id INT UNSIGNED NOT NULL,
-  qty         DECIMAL(14,3) NOT NULL DEFAULT 0,
-  alert_level DECIMAL(14,3) NULL,                 -- own low-stock level at this location (NULL = product level)
+  qty         DECIMAL(14,4) NOT NULL DEFAULT 0,
+  alert_level DECIMAL(14,4) NULL,                 -- own low-stock level at this location (NULL = product level)
   updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_product_location (product_id, location_id),
   INDEX idx_stock_business (business_id, location_id),
@@ -274,9 +275,9 @@ CREATE TABLE IF NOT EXISTS stock_movements (
   product_id     INT UNSIGNED NOT NULL,
   location_id    INT UNSIGNED NULL,
   type           VARCHAR(30) NOT NULL,
-  qty_change     DECIMAL(14,3) NOT NULL,          -- + into stock, − out of stock
-  balance_before DECIMAL(14,3) NULL,              -- location balance before / after
-  balance_after  DECIMAL(14,3) NULL,
+  qty_change     DECIMAL(14,4) NOT NULL,          -- + into stock, − out of stock
+  balance_before DECIMAL(14,4) NULL,              -- location balance before / after
+  balance_after  DECIMAL(14,4) NULL,
   unit           VARCHAR(20) NULL,
   unit_cost      DECIMAL(14,4) NULL,              -- cost price at the time (valuation of gains / losses)
   ref_type       VARCHAR(30) NULL,                -- sale, invoice, purchase, stock (manual), transfer
@@ -416,13 +417,13 @@ CREATE TABLE IF NOT EXISTS sale_items (
   business_id INT UNSIGNED NOT NULL,
   sale_id     BIGINT UNSIGNED NOT NULL,
   product_id  INT UNSIGNED NOT NULL,
-  qty         DECIMAL(14,3) NOT NULL,
+  qty         DECIMAL(14,4) NOT NULL,
   unit_price  DECIMAL(14,4) NOT NULL,
   unit_cost   DECIMAL(14,4) NOT NULL,   -- cost at time of sale (for COGS / gross profit)
   discount    DECIMAL(14,4) NOT NULL DEFAULT 0,
   line_total  DECIMAL(14,4) NOT NULL,
   sell_unit   VARCHAR(30) NULL,            -- sold in a pack (box, strip…): the pack, how many, price per pack; qty / unit_price stay in base units
-  sell_qty    DECIMAL(14,3) NULL,
+  sell_qty    DECIMAL(14,4) NULL,
   sell_price  DECIMAL(14,4) NULL,
   price_detail TEXT NULL,                  -- jewelry: rate, purity, weights and charges used (JSON)
   INDEX idx_sale_items_sale (sale_id),
@@ -469,13 +470,13 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   invoice_id  BIGINT UNSIGNED NOT NULL,
   product_id  INT UNSIGNED NOT NULL,
   description VARCHAR(190) NULL,
-  qty         DECIMAL(14,3) NOT NULL,
+  qty         DECIMAL(14,4) NOT NULL,
   unit_price  DECIMAL(14,4) NOT NULL,
   unit_cost   DECIMAL(14,4) NOT NULL,
   discount    DECIMAL(14,4) NOT NULL DEFAULT 0,
   line_total  DECIMAL(14,4) NOT NULL,
   sell_unit   VARCHAR(30) NULL,            -- sold in a pack (box, strip…): the pack, how many, price per pack; qty / unit_price stay in base units
-  sell_qty    DECIMAL(14,3) NULL,
+  sell_qty    DECIMAL(14,4) NULL,
   sell_price  DECIMAL(14,4) NULL,
   price_detail TEXT NULL,                  -- jewelry: rate, purity, weights and charges used (JSON)
   INDEX idx_inv_items_invoice (invoice_id),
@@ -541,14 +542,14 @@ CREATE TABLE IF NOT EXISTS purchase_items (
   business_id INT UNSIGNED NOT NULL,
   purchase_id BIGINT UNSIGNED NOT NULL,
   product_id  INT UNSIGNED NOT NULL,
-  qty         DECIMAL(14,3) NOT NULL,
+  qty         DECIMAL(14,4) NOT NULL,
   unit_cost   DECIMAL(14,4) NOT NULL,
   line_total  DECIMAL(14,4) NOT NULL,
-  received_qty DECIMAL(14,3) NOT NULL DEFAULT 0,  -- base units received so far (partial receipts)
-  damaged_qty DECIMAL(14,3) NOT NULL DEFAULT 0,   -- arrived damaged / defective (not added to stock)
-  returned_qty DECIMAL(14,3) NOT NULL DEFAULT 0,  -- returned to the supplier
+  received_qty DECIMAL(14,4) NOT NULL DEFAULT 0,  -- base units received so far (partial receipts)
+  damaged_qty DECIMAL(14,4) NOT NULL DEFAULT 0,   -- arrived damaged / defective (not added to stock)
+  returned_qty DECIMAL(14,4) NOT NULL DEFAULT 0,  -- returned to the supplier
   buy_unit    VARCHAR(30) NULL,            -- bought in a pack (carton, box…): the pack, how many, cost per pack; qty / unit_cost stay in base units
-  buy_qty     DECIMAL(14,3) NULL,
+  buy_qty     DECIMAL(14,4) NULL,
   buy_cost    DECIMAL(14,4) NULL,
   batch_no    VARCHAR(60) NULL,            -- batch / expiry of the goods (used when an ordered purchase is received)
   expiry_date DATE NULL,
@@ -640,7 +641,7 @@ CREATE TABLE IF NOT EXISTS return_items (
   business_id INT UNSIGNED NOT NULL,
   return_id   BIGINT UNSIGNED NOT NULL,
   product_id  INT UNSIGNED NOT NULL,
-  qty         DECIMAL(14,3) NOT NULL,
+  qty         DECIMAL(14,4) NOT NULL,
   unit_price  DECIMAL(14,4) NOT NULL,
   unit_cost   DECIMAL(14,4) NOT NULL,
   line_total  DECIMAL(14,4) NOT NULL,
@@ -673,7 +674,7 @@ CREATE TABLE IF NOT EXISTS product_barcodes (
   product_id  INT UNSIGNED NOT NULL,
   barcode     VARCHAR(80)  NOT NULL,
   pack_label  VARCHAR(60)  NULL,                 -- e.g. Box, Carton, Gift set
-  pack_qty    DECIMAL(14,3) NOT NULL DEFAULT 1,  -- units in this packaging (scanning it sells / adds this many)
+  pack_qty    DECIMAL(14,4) NOT NULL DEFAULT 1,  -- units in this packaging (scanning it sells / adds this many)
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_pb_barcode (business_id, barcode),
   INDEX idx_pb_product (product_id),
@@ -688,7 +689,7 @@ CREATE TABLE IF NOT EXISTS product_batches (
   location_id INT UNSIGNED NOT NULL,
   batch_no    VARCHAR(60)  NOT NULL DEFAULT '',  -- '' = stock without a batch number
   expiry_date DATE NULL,
-  qty         DECIMAL(14,3) NOT NULL DEFAULT 0,
+  qty         DECIMAL(14,4) NOT NULL DEFAULT 0,
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   INDEX idx_batch_lookup (product_id, location_id, batch_no, expiry_date),
@@ -702,7 +703,7 @@ CREATE TABLE IF NOT EXISTS stock_movement_batches (
   id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   movement_id BIGINT UNSIGNED NOT NULL,
   batch_id    INT UNSIGNED NOT NULL,
-  qty         DECIMAL(14,3) NOT NULL,            -- + into the batch, − out of it
+  qty         DECIMAL(14,4) NOT NULL,            -- + into the batch, − out of it
   INDEX idx_smb_movement (movement_id),
   INDEX idx_smb_batch (batch_id)
 ) ENGINE=InnoDB;
@@ -756,7 +757,7 @@ CREATE TABLE IF NOT EXISTS warranties (
   customer_id   INT UNSIGNED NULL,
   ref_type      VARCHAR(10) NOT NULL,                  -- sale | invoice
   ref_id        BIGINT UNSIGNED NOT NULL,
-  qty           DECIMAL(14,3) NOT NULL DEFAULT 1,
+  qty           DECIMAL(14,4) NOT NULL DEFAULT 1,
   provider      VARCHAR(100) NULL,                     -- shop, manufacturer, supplier…
   months        INT UNSIGNED NOT NULL,
   start_date    DATE NOT NULL,
@@ -848,6 +849,87 @@ CREATE TABLE IF NOT EXISTS gold_buy_events (
   user_id     INT UNSIGNED NULL,
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_gbe (gold_buy_id, id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS fabric_rolls (
+  id              INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id     INT UNSIGNED NOT NULL,
+  product_id      INT UNSIGNED NOT NULL,
+  roll_code       VARCHAR(40)  NOT NULL,          -- roll ID / barcode
+  supplier_id     INT UNSIGNED NULL,
+  purchase_id     BIGINT UNSIGNED NULL,
+  declared_length DECIMAL(14,4) NULL,             -- meters the supplier declared
+  verified_length DECIMAL(14,4) NOT NULL,         -- meters measured on receipt (what came into stock)
+  remaining       DECIMAL(14,4) NOT NULL,         -- meters left on the roll
+  cost_per_meter  DECIMAL(14,4) NULL,
+  location_id     INT UNSIGNED NULL,
+  status          VARCHAR(20)  NOT NULL DEFAULT 'available',  -- available, finished, pending_inspection, damaged, returned_supplier, removed
+  source          VARCHAR(20)  NOT NULL DEFAULT 'purchase',   -- purchase, stock_in, opening, return (returned cut)
+  received_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_roll_code (business_id, roll_code),
+  INDEX idx_rolls_product (business_id, product_id, status, location_id),
+  CONSTRAINT fk_rolls_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+  CONSTRAINT fk_rolls_product  FOREIGN KEY (product_id)  REFERENCES products(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS roll_events (
+  id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  roll_id        INT UNSIGNED NOT NULL,
+  event          VARCHAR(30)  NOT NULL,           -- received, sold, returned, inspected, damaged, waste, measured, transferred, returned_supplier
+  length_change  DECIMAL(14,4) NOT NULL DEFAULT 0,
+  remaining_after DECIMAL(14,4) NOT NULL,
+  ref_type       VARCHAR(20)  NULL,
+  ref_id         BIGINT UNSIGNED NULL,
+  item_id        BIGINT UNSIGNED NULL,            -- sale / invoice line
+  location_id    INT UNSIGNED NULL,
+  note           VARCHAR(255) NULL,
+  user_id        INT UNSIGNED NULL,
+  created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_rollev (roll_id, id),
+  INDEX idx_rollev_ref (ref_type, ref_id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS tailoring_orders (
+  id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id      INT UNSIGNED NOT NULL,
+  order_no         VARCHAR(30)  NOT NULL,
+  customer_id      INT UNSIGNED NULL,
+  customer_name    VARCHAR(150) NULL,
+  customer_phone   VARCHAR(30)  NULL,
+  garment_type     VARCHAR(80)  NOT NULL,
+  measurements     TEXT NULL,                   -- JSON { "Chest": "102 cm", … }
+  design_notes     VARCHAR(1000) NULL,
+  fabric_source    VARCHAR(10)  NOT NULL DEFAULT 'store',  -- store (bought here) | customer (customer's own: never in stock)
+  customer_fabric  VARCHAR(255) NULL,           -- description of the customer's material
+  linked_sale_id   BIGINT UNSIGNED NULL,        -- fabric sold on a POS receipt (stock already taken there)
+  quoted_price     DECIMAL(14,4) NOT NULL DEFAULT 0,
+  paid_amount      DECIMAL(14,4) NOT NULL DEFAULT 0,
+  labor_cost       DECIMAL(14,4) NOT NULL DEFAULT 0,
+  material_cost    DECIMAL(14,4) NOT NULL DEFAULT 0,  -- store-owned materials only
+  extra_cost       DECIMAL(14,4) NOT NULL DEFAULT 0,
+  promised_date    DATE NULL,
+  assigned_worker  VARCHAR(120) NULL,
+  stage            VARCHAR(60)  NOT NULL,
+  status           VARCHAR(20)  NOT NULL DEFAULT 'open',  -- open, delivered, cancelled
+  user_id          INT UNSIGNED NULL,
+  created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_tailoring (business_id, order_no),
+  CONSTRAINT fk_to_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS tailoring_events (
+  id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  order_id    INT UNSIGNED NOT NULL,
+  event       VARCHAR(30)  NOT NULL,           -- created, stage, payment, updated, delivered, cancelled
+  stage       VARCHAR(60)  NULL,
+  amount      DECIMAL(14,4) NULL,
+  method      VARCHAR(20)  NULL,
+  note        VARCHAR(500) NULL,
+  user_id     INT UNSIGNED NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_toev (order_id, id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS audit_logs (

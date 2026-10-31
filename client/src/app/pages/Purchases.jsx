@@ -12,6 +12,9 @@ import { useDraft, DraftBar } from "../Drafts.jsx";
 import { useProfile } from "../profile.js";
 import { BatchFields } from "./Stock.jsx";
 import { DeviceEntry, DevicePicker, deviceText } from "../Devices.jsx";
+import { isRoll, RollEntry, RollPicker, rollsPayload, rollsDeclared } from "../Fabric.jsx";
+
+const tracked = (i) => ["serial", "imei", "serial_imei"].includes(i?.tracking);
 
 export default function Purchases() {
   const { t } = useLanguage();
@@ -115,6 +118,7 @@ function PurchaseDetail({ id, onClose }) {
                 <td>{i.name}
                   {(i.batchNo || i.expiryDate) && <small className="cell-sub">{[i.batchNo, i.expiryDate].filter(Boolean).join(" · ")}</small>}
                   {i.devices.length > 0 && <ul className="pos2__devices">{i.devices.map((x) => <li key={x.id}>{x.label} · {t(`ui.devices.status.${x.status}`)}</li>)}</ul>}
+                  {i.rolls?.length > 0 && <ul className="pos2__devices">{i.rolls.map((x) => <li key={x.id}>{x.code} · {fill(t("ui.fabric.rollLine"), { declared: qty(x.declared), verified: qty(x.verified), remaining: qty(x.remaining) })} · {t(`ui.fabric.status.${x.status}`)}</li>)}</ul>}
                 </td>
                 <td className="num">{qty(i.qty)} {i.unit || unitLabel(i.baseUnit)}{i.unit && <small className="cell-sub">= {qty(i.baseQty)} {unitLabel(i.baseUnit)}</small>}</td>
                 {showQty && <><td className="num">{qty(i.received)}</td><td className={"num" + (i.outstanding > 0 ? " is-neg" : "")}>{qty(i.outstanding)}</td><td className="num">{i.damaged ? qty(i.damaged) : "—"}</td><td className="num">{i.returned ? qty(i.returned) : "—"}</td></>}
@@ -151,14 +155,15 @@ function ReceiveModal({ purchase, items, onClose, onDone }) {
   const { t } = useLanguage();
   const locations = useApi("/api/stock/locations");
   const open = items.filter((i) => i.outstanding > 0);
-  const [lines, setLines] = useState(() => open.map((i) => ({ id: i.id, qty: String(i.outstanding), damaged: "", unitCost: String(i.unitCost), batchNo: i.batchNo || "", expiryDate: i.expiryDate || "", devices: [] })));
+  const [lines, setLines] = useState(() => open.map((i) => ({ id: i.id, qty: String(i.outstanding), damaged: "", unitCost: String(i.unitCost), batchNo: i.batchNo || "", expiryDate: i.expiryDate || "", devices: [],
+    ...(isRoll(i) ? { rolls: { unit: i.unit === "yard" ? "yard" : "meter", rolls: [] } } : {}) })));
   const [locationId, setLocationId] = useState(purchase.locationId ? String(purchase.locationId) : "");
   const [note, setNote] = useState("");
   const sub = useSubmit();
   const unitLabel = (u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
   const set = (k, patch) => setLines((ls) => ls.map((x, j) => (j === k ? { ...x, ...patch } : x)));
   const save = async () => {
-    const body = { locationId: locationId || undefined, note, items: lines.map((l) => ({ ...l, devices: l.devices.length ? l.devices : undefined })) };
+    const body = { locationId: locationId || undefined, note, items: lines.map((l) => ({ ...l, devices: l.devices.length ? l.devices : undefined, rolls: l.rolls ? rollsPayload(l.rolls) : undefined })) };
     if (await sub.run(() => apiRequest(`/api/purchases/${purchase.id}/receive`, { method: "POST", body }))) onDone();
   };
   // server errors name a line by its position in the whole purchase; the form shows only open lines
@@ -178,18 +183,26 @@ function ReceiveModal({ purchase, items, onClose, onDone }) {
         </Field>
         <ul className="receive-list">
           {open.map((i, k) => {
-            const isTracked = i.tracking && i.tracking !== "qty";
+            const isTracked = tracked(i);
             const e = errFor(i, k);
-            const left = i.outstanding - (Number(lines[k].qty) || 0) - (Number(lines[k].damaged) || 0);
+            const roll = isRoll(i);
+            // rolls: what they declare is received (and billed); the verified length goes into stock
+            const got = roll ? rollsDeclared(lines[k].rolls) : Number(lines[k].qty) || 0;
+            const left = i.outstanding - got - (Number(lines[k].damaged) || 0);
             return (
               <li key={i.id}>
                 <strong>{i.name}</strong>
                 <span>{fill(t("ui.purchases.outstandingOf"), { n: qty(i.outstanding), ordered: qty(i.qty), unit: i.unit || unitLabel(i.baseUnit) })}</span>
-                <div className="receive-grid">
+                {roll ? (
+                  <div className="receive-grid">
+                    <label><span>{t("ui.purchases.actualCost")}</span><input className={"input input--sm" + (e[`items.${k}.unitCost`] ? " has-error" : "")} type="number" min="0" step="any" value={lines[k].unitCost} onChange={(ev) => set(k, { unitCost: ev.target.value })} /></label>
+                  </div>
+                ) : <div className="receive-grid">
                   <label><span>{t("ui.purchases.receivedNow")}</span><input className={"input input--sm" + (e[`items.${k}.qty`] ? " has-error" : "")} type="number" min="0" step={isTracked ? "1" : "any"} max={i.outstanding} value={lines[k].qty} onChange={(ev) => set(k, { qty: ev.target.value })} /></label>
                   <label><span>{t("ui.purchases.damaged")}</span><input className="input input--sm" type="number" min="0" step="any" value={lines[k].damaged} onChange={(ev) => set(k, { damaged: ev.target.value })} placeholder="0" /></label>
                   <label><span>{t("ui.purchases.actualCost")}</span><input className={"input input--sm" + (e[`items.${k}.unitCost`] ? " has-error" : "")} type="number" min="0" step="any" value={lines[k].unitCost} onChange={(ev) => set(k, { unitCost: ev.target.value })} /></label>
-                </div>
+                </div>}
+                {roll && <RollEntry value={lines[k].rolls} unitFixed={i.unit === "yard" ? "yard" : "meter"} onChange={(rolls) => set(k, { rolls })} errors={e} field={`items.${k}.rolls`} />}
                 {left > 0 && <small className="muted">{fill(t("ui.purchases.leftOutstanding"), { n: qty(left) })}</small>}
                 {e[`items.${k}.qty`] && <span className="ff__error">{t(`ui.errors.${e[`items.${k}.qty`]}`)}</span>}
                 {i.trackBatches && <BatchFields compact value={lines[k]} onChange={(patch) => set(k, patch)} />}
@@ -213,13 +226,13 @@ function ReceiveModal({ purchase, items, onClose, onDone }) {
 function ReturnModal({ purchase, items, onClose, onDone }) {
   const { t } = useLanguage();
   const back = items.filter((i) => i.received - i.returned > 0);
-  const [lines, setLines] = useState(() => back.map((i) => ({ id: i.id, qty: "", deviceIds: [], devices: [] })));
+  const [lines, setLines] = useState(() => back.map((i) => ({ id: i.id, qty: "", deviceIds: [], devices: [], rollIds: [], rolls: [] })));
   const [reason, setReason] = useState("");
   const [picking, setPicking] = useState(null);
   const sub = useSubmit();
   const set = (k, patch) => setLines((ls) => ls.map((x, j) => (j === k ? { ...x, ...patch } : x)));
   const save = async () => {
-    const body = { reason, items: lines.filter((l) => Number(l.qty) > 0).map((l) => ({ id: l.id, qty: Number(l.qty), deviceIds: l.deviceIds })) };
+    const body = { reason, items: lines.filter((l) => Number(l.qty) > 0 || l.rollIds.length).map((l) => ({ id: l.id, qty: Number(l.qty) || 0, deviceIds: l.deviceIds, ...(l.rollIds.length ? { rollIds: l.rollIds } : {}) })) };
     if (await sub.run(() => apiRequest(`/api/purchases/${purchase.id}/return`, { method: "POST", body }))) onDone();
   };
   return (
@@ -228,12 +241,17 @@ function ReturnModal({ purchase, items, onClose, onDone }) {
         <p className="modal__help">{t("ui.purchases.returnHelp")}</p>
         <ul className="receive-list">
           {back.map((i, k) => {
-            const isTracked = i.tracking && i.tracking !== "qty";
+            const isTracked = tracked(i);
             return (
               <li key={i.id}>
                 <strong>{i.name}</strong>
                 <span>{fill(t("ui.purchases.canReturn"), { n: qty(i.received - i.returned) })}</span>
-                {isTracked ? (
+                {isRoll(i) ? (
+                  <div>
+                    <button type="button" className="btn btn--outline btn--sm" onClick={() => setPicking(k)}><Icon name="roll" /><span>{fill(t("ui.fabric.rollsChosen"), { n: lines[k].rollIds.length })}</span></button>
+                    {lines[k].rolls.length > 0 && <ul className="pos2__devices">{lines[k].rolls.map((x) => <li key={x.id}>{x.code} · {qty(x.remaining)} m</li>)}</ul>}
+                  </div>
+                ) : isTracked ? (
                   <div>
                     <button type="button" className="btn btn--outline btn--sm" onClick={() => setPicking(k)}><Icon name="smartphone" /><span>{fill(t("ui.devices.count"), { n: lines[k].deviceIds.length })}</span></button>
                     {lines[k].devices.length > 0 && <ul className="pos2__devices">{lines[k].devices.map((x) => <li key={x.id}>{deviceText(x)}</li>)}</ul>}
@@ -241,7 +259,11 @@ function ReturnModal({ purchase, items, onClose, onDone }) {
                 ) : (
                   <input className="input input--sm" type="number" min="0" step="any" max={i.received - i.returned} value={lines[k].qty} onChange={(e) => set(k, { qty: e.target.value })} placeholder="0" aria-label={t("ui.common.qty")} />
                 )}
-                {picking === k && (
+                {picking === k && isRoll(i) && (
+                  <RollPicker product={{ id: i.productId, name: i.name }} multi value={lines[k].rollIds} list={i.rolls.filter((x) => ["available", "pending_inspection"].includes(x.status))}
+                    onClose={() => setPicking(null)} onDone={(ids, rolls) => { set(k, { rollIds: ids, rolls }); setPicking(null); }} />
+                )}
+                {picking === k && !isRoll(i) && (
                   <DevicePicker product={{ id: i.productId, name: i.name }} max={i.received - i.returned} value={lines[k].deviceIds}
                     filter={(x) => x.purchaseId === purchase.id} onClose={() => setPicking(null)}
                     onDone={(ids, devices) => { set(k, { deviceIds: ids, devices, qty: String(ids.length) }); setPicking(null); }} />
@@ -254,7 +276,7 @@ function ReturnModal({ purchase, items, onClose, onDone }) {
         <FormError error={sub.formError} />
         <div className="form-actions sheet-actions">
           <button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button>
-          <button type="button" className="btn btn--primary" disabled={sub.busy || !reason.trim() || !lines.some((l) => Number(l.qty) > 0)} onClick={save}>{t(sub.busy ? "ui.common.saving" : "ui.purchases.confirmReturn")}</button>
+          <button type="button" className="btn btn--primary" disabled={sub.busy || !reason.trim() || !lines.some((l) => Number(l.qty) > 0 || l.rollIds.length)} onClick={save}>{t(sub.busy ? "ui.common.saving" : "ui.purchases.confirmReturn")}</button>
         </div>
       </div>
     </Modal>
@@ -283,7 +305,7 @@ function PurchaseForm({ onDone }) {
     e.preventDefault();
     const body = { ...f, mode, ...(ordering ? { amountPaid: "" } : {}), locationId: f.locationId || undefined,
       items: lines.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), unitCost: l.price, batchNo: l.batchNo || "", expiryDate: l.expiryDate || "",
-        ...(!ordering && l.devices?.length ? { devices: l.devices } : {}) })) };
+        ...(!ordering && l.devices?.length ? { devices: l.devices } : {}), ...(!ordering && isRoll(l.product) ? { rolls: rollsPayload(l.rolls) } : {}) })) };
     if (await sub.run(() => apiRequest("/api/purchases", { method: "POST", body }))) { await draft.finish(); onDone(); }
   };
   return (

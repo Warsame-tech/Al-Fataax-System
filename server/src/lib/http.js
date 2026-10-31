@@ -31,11 +31,11 @@ export function money(v, { allowZero = true } = {}) {
   if (!Number.isFinite(n) || n < 0 || n > 1e11 || (!allowZero && n === 0)) return NaN;
   return Math.round(n * 10000) / 10000;
 }
-/** Quantity: finite, > 0, up to 3 decimals. */
+/** Quantity: finite, > 0, up to 4 decimals (fabric lengths: 3.5 yd = 3.2004 m exactly). */
 export function quantity(v) {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0 || n > 1e9) return NaN;
-  return Math.round(n * 1000) / 1000;
+  return Math.round(n * 10000) / 10000;
 }
 export const isDate = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s) && !Number.isNaN(Date.parse(s + "T00:00:00Z"));
 export const today = () => new Date().toISOString().slice(0, 10);

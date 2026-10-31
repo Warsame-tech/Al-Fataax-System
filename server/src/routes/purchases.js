@@ -10,6 +10,7 @@ import { unitsPer } from "../lib/packaging.js";
 import { defaultLocationId } from "../lib/stock.js";
 import { isTracked, readNewDevices, addDevices, pickDevices, updateDevices, deviceLabel } from "../lib/devices.js";
 import { currentRates } from "../lib/jewelry.js";
+import { isRoll, readNewRolls, addRolls, sumMeters, lockRoll, rollEvent, toMeters, YARD } from "../lib/rolls.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -26,9 +27,9 @@ router.use(requireAuth);
  */
 const PAYABLE = ["received", "partial"];
 const owed = (p) => (PAYABLE.includes(p.status) ? round2(num(p.total) - num(p.amount_paid)) : 0);
-const q3 = (v) => Math.round(Number(v) * 1000) / 1000;
+const q4 = (v) => Math.round(Number(v) * 10000) / 10000;   // quantities: 4 decimals (lengths in meters: 0.1 mm)
 /* base units in one unit of the line (a pack, e.g. carton = 6,000 tablets, or 1) */
-const perOfItem = (i) => (i.buy_unit && num(i.buy_qty) > 0 ? q3(num(i.qty) / num(i.buy_qty)) : 1);
+const perOfItem = (i) => (i.buy_unit && num(i.buy_qty) > 0 ? q4(num(i.qty) / num(i.buy_qty)) : 1);
 /* cost of base units of a line, in the line's own pricing (exact for packs) */
 const valueOf = (i, baseQty) => (i.buy_unit ? round2((baseQty / perOfItem(i)) * num(i.buy_cost)) : round2(baseQty * num(i.unit_cost)));
 
@@ -39,6 +40,8 @@ const valueOf = (i, baseQty) => (i.buy_unit ? round2((baseQty / perOfItem(i)) * 
  *   unit: a pack of the product (e.g. "Carton", lib/packaging.js) — qty and unitCost are then per pack; stock and the
  *         product cost are kept per base unit (2 cartons of 6,000 tablets = 12,000 tablets).
  *   devices: serial numbers / IMEIs of tracked products (one per unit) when receiving now.
+ *   Fabric sold from rolls: unit meter (base) or yard; receiving needs rolls: [{ code?, declared?, verified }] in the line's
+ *   unit. The supplier bills the declared length; the verified length goes into stock (cost per meter = billed / verified).
  */
 export async function createPurchase(conn, ctx, body) {
   const { businessId, userId, role } = ctx;
@@ -60,13 +63,18 @@ export async function createPurchase(conn, ctx, body) {
     if (Number.isNaN(qty)) errors[`items.${i}.qty`] = "invalidAmount";
     if (Number.isNaN(cost)) errors[`items.${i}.unitCost`] = "invalidAmount";
     const unit = typeof it?.unit === "string" && it.unit && it.unit !== p.unit ? it.unit : null;
-    const per = unit ? unitsPer(p, unit) : 1;
+    const yard = isRoll(p) && unit === "yard";
+    const per = yard ? Number(YARD) : unit ? unitsPer(p, unit) : 1;
     if (!per) errors[`items.${i}.unit`] = "required";
-    const baseQty = q3(qty * (per || 1));
+    let baseQty = yard && !Number.isNaN(qty) ? toMeters(qty, "yard") : q4(qty * (per || 1));
+    let lineQty = qty;
+    // receiving rolls now: the line is what the rolls declare
+    const rolls = receive && isRoll(p) ? readNewRolls(p, it?.rolls, yard ? "yard" : "meter", `items.${i}.rolls`) : null;
+    if (rolls) { lineQty = rolls.typed; baseQty = sumMeters(rolls, "declared"); }
     if (isTracked(p) && !Number.isInteger(baseQty)) errors[`items.${i}.qty`] = "wholeUnits";
     const batch = readBatch(it, baseQty)[0] || null;
-    return { product: p, qty: baseQty, unitCost: unit ? round2(cost / per) : cost, lineTotal: round2(qty * cost),
-      buy: unit ? { unit, qty, cost } : null, batchNo: batch?.batchNo || null, expiryDate: batch?.expiryDate || null, devices: it?.devices };
+    return { product: p, qty: baseQty, unitCost: yard ? q4(cost / per) : unit ? round2(cost / per) : cost, lineTotal: round2(lineQty * cost),
+      buy: unit ? { unit, qty: lineQty, cost } : null, batchNo: batch?.batchNo || null, expiryDate: batch?.expiryDate || null, devices: it?.devices, rolls };
   });
   if (Object.keys(errors).length) throw badRequest(errors);
   // jewelry: keep the metal rate of the day on the purchase line
@@ -120,8 +128,18 @@ export async function createPurchase(conn, ctx, body) {
 /* Goods received for one line: stock in (base units, with batch / expiry and devices), the product cost updated. */
 async function receiveLine(conn, { businessId, userId, purchaseId, number, supplierId, locationId }, l) {
   const batches = l.batchNo || l.expiryDate ? [{ batchNo: l.batchNo || "", expiryDate: l.expiryDate || null, qty: l.qty }] : [];
+  // rolls: l.qty is the declared (billed) length; the verified length is stocked at the billed value
+  if (l.rolls) {
+    const verified = sumMeters(l.rolls, "verified");
+    l.unitCost = q4((l.qty * l.unitCost) / verified);
+    l.qty = verified;
+  }
   const m = await moveStock(conn, { businessId, userId, product: l.product, qtyChange: l.qty, type: "purchase", refType: "purchase", refId: purchaseId,
     locationId, supplierId, batches, devices: true });
+  if (l.rolls) {
+    await addRolls(conn, { businessId, product: l.product, locationId, rolls: l.rolls, purchaseId, supplierId, costPerMeter: l.unitCost, userId,
+      source: "purchase", refType: "purchase", refId: purchaseId });
+  }
   if (l.devices) {
     await addDevices(conn, { businessId, product: l.product, locationId, devices: l.devices, purchaseId, supplierId, cost: l.unitCost, userId,
       event: "received", refType: "purchase", refId: purchaseId });
@@ -141,8 +159,8 @@ async function settle(conn, p) {
   const [items] = await conn.query("SELECT * FROM purchase_items WHERE purchase_id = ? AND business_id = ?", [p.id, p.business_id]);
   const received = round2(items.reduce((s, i) => s + valueOf(i, num(i.received_qty) - num(i.returned_qty)), 0));
   const anyIn = items.some((i) => num(i.received_qty) > 0);
-  const outstanding = items.some((i) => q3(num(i.qty) - num(i.received_qty) - num(i.damaged_qty)) > 0);
-  const allBack = anyIn && items.every((i) => q3(num(i.received_qty) - num(i.returned_qty)) <= 0);
+  const outstanding = items.some((i) => q4(num(i.qty) - num(i.received_qty) - num(i.damaged_qty)) > 0);
+  const allBack = anyIn && items.every((i) => q4(num(i.received_qty) - num(i.returned_qty)) <= 0);
   const status = p.closed ? "received" : allBack && !outstanding ? "returned" : !anyIn ? p.status : outstanding ? "partial" : "received";
   const total = anyIn ? Math.max(0, round2(received - num(p.discount) + num(p.extra_costs))) : num(p.total);
   if (num(p.amount_paid) > total + 0.001) throw conflict("paidMoreThanTotal", { paid: num(p.amount_paid), total });
@@ -176,10 +194,11 @@ router.get("/:id", requirePerm("purchases.view"), ah(async (req, res) => {
        FROM purchase_items pi JOIN products pr ON pr.id = pi.product_id AND pr.business_id = pi.business_id
       WHERE pi.purchase_id = ? AND pi.business_id = ? ORDER BY pi.id`, [p.id, bid]);
   const [devices] = await pool.query("SELECT id, product_id, serial_no, imei1, imei2, status FROM devices WHERE business_id = ? AND purchase_id = ? ORDER BY id", [bid, p.id]);
+  const [rolls] = await pool.query("SELECT id, product_id, roll_code, declared_length, verified_length, remaining, status FROM fabric_rolls WHERE business_id = ? AND purchase_id = ? ORDER BY id", [bid, p.id]);
   const [[s]] = await pool.query("SELECT name, phone FROM suppliers WHERE id = ? AND business_id = ?", [p.supplier_id, bid]);
   const [[loc]] = p.location_id ? await pool.query("SELECT name FROM stock_locations WHERE id = ?", [p.location_id]) : [[null]];
   const [payments] = await pool.query("SELECT amount, method, paid_at, reference FROM supplier_payments WHERE purchase_id = ? AND business_id = ? ORDER BY id", [p.id, bid]);
-  const inUnit = (i, base) => q3(num(base) / perOfItem(i));
+  const inUnit = (i, base) => q4(num(base) / perOfItem(i));
   res.json({
     purchase: { id: p.id, number: p.purchase_no, at: p.purchased_at, receivedAt: p.received_at || null, status: p.status, total: num(p.total),
       orderedTotal: num(p.ordered_total ?? p.total), discount: num(p.discount), extraCosts: num(p.extra_costs), paid: num(p.amount_paid), balance: owed(p),
@@ -191,7 +210,9 @@ router.get("/:id", requirePerm("purchases.view"), ah(async (req, res) => {
       received: inUnit(i, i.received_qty), damaged: inUnit(i, i.damaged_qty), returned: inUnit(i, i.returned_qty),
       outstanding: inUnit(i, Math.max(0, num(i.qty) - num(i.received_qty) - num(i.damaged_qty))),
       batchNo: i.batch_no || "", expiryDate: i.expiry_date || null, trackBatches: Boolean(i.track_batches), tracking: i.tracking || "qty",
-      devices: devices.filter((d) => d.product_id === i.product_id).map((d) => ({ id: d.id, label: deviceLabel(d), status: d.status })) })),
+      devices: devices.filter((d) => d.product_id === i.product_id).map((d) => ({ id: d.id, label: deviceLabel(d), status: d.status })),
+      rolls: rolls.filter((r) => r.product_id === i.product_id).map((r) => ({ id: r.id, code: r.roll_code, declared: num(r.declared_length), verified: num(r.verified_length),
+        remaining: num(r.remaining), status: r.status })) })),
     payments: payments.map((x) => ({ amount: num(x.amount), method: x.method, at: x.paid_at, reference: x.reference }))
   });
 }));
@@ -243,14 +264,16 @@ router.post("/:id/receive", requirePerm("purchases.create"), ah(async (req, res)
       const g = given.get(i.id) || (given.size ? null : {});
       if (!g) continue;
       const per = perOfItem(i);
-      const outstanding = q3(num(i.qty) - num(i.received_qty) - num(i.damaged_qty));
+      const outstanding = q4(num(i.qty) - num(i.received_qty) - num(i.damaged_qty));
       if (outstanding <= 0) continue;
-      const qty = g.qty === undefined || g.qty === null || g.qty === "" ? outstanding : q3(Number(g.qty) * per);
-      const damaged = g.damaged ? q3(Number(g.damaged) * per) : 0;
-      if (!Number.isFinite(qty) || qty < 0 || !Number.isFinite(damaged) || damaged < 0 || qty + damaged > outstanding + 0.0005) {
-        throw new HttpError(400, "validation", { [`items.${k}.qty`]: "moreThanOutstanding" }, { outstanding: q3(outstanding / per) });
-      }
       const product = products.get(i.product_id);
+      // rolls: what they declare is received (billed); the verified length goes into stock
+      const rolls = isRoll(product) ? readNewRolls(product, g.rolls, i.buy_unit === "yard" ? "yard" : "meter", `items.${k}.rolls`) : null;
+      const qty = rolls ? sumMeters(rolls, "declared") : g.qty === undefined || g.qty === null || g.qty === "" ? outstanding : q4(Number(g.qty) * per);
+      const damaged = g.damaged && !rolls ? q4(Number(g.damaged) * per) : 0;
+      if (!Number.isFinite(qty) || qty < 0 || !Number.isFinite(damaged) || damaged < 0 || qty + damaged > outstanding + 0.0005) {
+        throw new HttpError(400, "validation", { [`items.${k}.qty`]: "moreThanOutstanding" }, { outstanding: q4(outstanding / per) });
+      }
       if (isTracked(product) && !Number.isInteger(qty)) throw badRequest({ [`items.${k}.qty`]: "wholeUnits" });
       // actual cost (per the line's unit) when it differs from the order
       if (g.unitCost !== undefined && g.unitCost !== null && g.unitCost !== "") {
@@ -266,7 +289,7 @@ router.post("/:id/receive", requirePerm("purchases.create"), ah(async (req, res)
       if (qty > 0) {
         const devices = isTracked(product) ? readNewDevices(product, g.devices, qty, `items.${k}.devices`) : null;
         await receiveLine(conn, { businessId: bid, userId: req.user.id, purchaseId: p.id, number: p.purchase_no, supplierId: p.supplier_id, locationId },
-          { product, qty, unitCost: num(i.unit_cost), batchNo, expiryDate, devices });
+          { product, qty, unitCost: num(i.unit_cost), batchNo, expiryDate, devices, rolls });
       }
       await conn.query("UPDATE purchase_items SET received_qty = received_qty + ?, damaged_qty = damaged_qty + ?, batch_no = ?, expiry_date = ? WHERE id = ?",
         [qty, damaged, batchNo, expiryDate, i.id]);
@@ -316,15 +339,32 @@ router.post("/:id/return", requirePerm("purchases.cancel"), ah(async (req, res) 
       const i = items.find((x) => x.id === id(g?.id));
       if (!i) throw badRequest({ [`items.${k}.id`]: "required" });
       const per = perOfItem(i);
-      const qty = q3(Number(g.qty) * per);
-      const left = q3(num(i.received_qty) - num(i.returned_qty));
-      if (!Number.isFinite(qty) || qty <= 0) continue;
-      if (qty > left + 0.0005) throw new HttpError(400, "validation", { [`items.${k}.qty`]: "moreThanReceived" }, { left: q3(left / per) });
       const product = products.get(i.product_id);
+      const qty = isRoll(product) ? 1 : q4(Number(g.qty) * per);
+      const left = q4(num(i.received_qty) - num(i.returned_qty));
+      if (!Number.isFinite(qty) || qty <= 0) continue;
+      if (!isRoll(product) && qty > left + 0.0005) throw new HttpError(400, "validation", { [`items.${k}.qty`]: "moreThanReceived" }, { left: q4(left / per) });
       let devices = null;
       if (isTracked(product)) {
         devices = await pickDevices(conn, { businessId: bid, product, locationId: null, deviceIds: g.deviceIds, qty, field: `items.${k}.deviceIds` });
         if (devices.some((d) => d.purchase_id !== p.id)) throw badRequest({ [`items.${k}.deviceIds`]: "deviceNotFound" });
+      }
+      // fabric: whole rolls of this purchase go back (what is left on them)
+      if (isRoll(product)) {
+        const ids = [...new Set((Array.isArray(g.rollIds) ? g.rollIds : []).map(Number).filter(Boolean))];
+        if (!ids.length) throw badRequest({ [`items.${k}.rollIds`]: "rollsRequired" });
+        let meters = 0;
+        for (const rid of ids) {
+          const r = await lockRoll(conn, { businessId: bid, product, rollId: rid, statuses: ["available", "pending_inspection"], field: `items.${k}.rollIds` });
+          if (r.purchase_id !== p.id) throw badRequest({ [`items.${k}.rollIds`]: "rollNotFound" });
+          await moveStock(conn, { businessId: bid, userId: req.user.id, product, qtyChange: -num(r.remaining), type: "purchase_return", refType: "purchase", refId: p.id, locationId: r.location_id, note: reason, devices: true });
+          await conn.query("UPDATE fabric_rolls SET status = 'returned_supplier', remaining = 0 WHERE id = ?", [r.id]);
+          await rollEvent(conn, r.id, { event: "returned_supplier", change: -num(r.remaining), remaining: 0, refType: "purchase", refId: p.id, locationId: r.location_id, note: reason, userId: req.user.id });
+          meters = q4(meters + num(r.remaining));
+        }
+        await conn.query("UPDATE purchase_items SET returned_qty = LEAST(received_qty, returned_qty + ?) WHERE id = ?", [meters, i.id]);
+        units += meters;
+        continue;
       }
       // devices go back from wherever they are; plain stock from the purchase's location
       const from = devices ? devices[0].location_id : locationId;
@@ -354,10 +394,19 @@ router.post("/:id/cancel", requirePerm("purchases.cancel"), ah(async (req, res) 
     const products = await lockProducts(conn, bid, items.map((i) => i.product_id));
     const locationId = p.location_id || (await defaultLocationId(conn, bid));
     for (const i of items) {
-      const qty = q3(num(i.received_qty) - num(i.returned_qty));
+      const qty = q4(num(i.received_qty) - num(i.returned_qty));
       if (qty <= 0) continue;
       const product = products.get(i.product_id);
-      if (isTracked(product)) {
+      if (isRoll(product)) {
+        // only rolls nobody has cut from yet can go back
+        const [rs] = await conn.query("SELECT * FROM fabric_rolls WHERE business_id = ? AND purchase_id = ? AND product_id = ? AND status <> 'returned_supplier' FOR UPDATE", [bid, p.id, product.id]);
+        if (rs.some((r) => r.status !== "available" || num(r.remaining) !== num(r.verified_length))) throw conflict("rollsUsed");
+        for (const r of rs) {
+          await moveStock(conn, { businessId: bid, userId: req.user.id, product, qtyChange: -num(r.remaining), type: "purchase_return", refType: "purchase", refId: p.id, locationId: r.location_id, note: reason, devices: true });
+          await conn.query("UPDATE fabric_rolls SET status = 'returned_supplier', remaining = 0 WHERE id = ?", [r.id]);
+          await rollEvent(conn, r.id, { event: "returned_supplier", change: -num(r.remaining), remaining: 0, refType: "purchase", refId: p.id, locationId: r.location_id, note: reason, userId: req.user.id });
+        }
+      } else if (isTracked(product)) {
         const [devs] = await conn.query("SELECT * FROM devices WHERE business_id = ? AND purchase_id = ? AND product_id = ? AND status = 'available' FOR UPDATE", [bid, p.id, product.id]);
         if (devs.length < qty) throw conflict("devicesSold");
         for (const d of devs) {

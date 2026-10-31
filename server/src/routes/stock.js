@@ -9,6 +9,7 @@ import { defaultLocationId, activeLocation } from "../lib/stock.js";
 import { productName } from "../lib/productName.js";
 import { readBatch } from "../lib/batches.js";
 import { isTracked, readNewDevices, addDevices, pickDevices, updateDevices } from "../lib/devices.js";
+import { isRoll, readNewRolls, addRolls, sumMeters, lockRoll, rollEvent } from "../lib/rolls.js";
 
 /*
  * Stock Management (module "stock").
@@ -17,6 +18,8 @@ import { isTracked, readNewDevices, addDevices, pickDevices, updateDevices } fro
  * Every change goes through moveStock (lib/ledger.js) inside one transaction, and is audited.
  * Manual movements carry ref_type 'stock'; only those (and transfers) can be reversed here —
  * sales, invoices and purchases are corrected from their own modules.
+ * Fabric sold from rolls: stock comes in as rolls (rolls: [{ code?, declared?, verified }], lengthUnit meter | yard),
+ * a transfer moves whole rolls (rollIds), and a roll's own length is corrected on the Rolls page (routes/rolls.js).
  */
 const router = Router();
 router.use(requireAuth);
@@ -25,7 +28,7 @@ const LOCATION_KINDS = ["shop", "warehouse", "other"];
 const ADD_TYPES = ["purchase", "return_in", "stock_in"];               // Purchase received, Customer return, Other stock in
 const ADJUST_REASONS = ["damaged", "expired", "lost", "found", "correction", "other"];
 const REVERSIBLE = ["opening", "purchase", "return_in", "stock_in", "adjustment", "damaged", "count"];
-const q3 = (v) => Math.round(Number(v) * 1000) / 1000;
+const q4 = (v) => Math.round(Number(v) * 10000) / 10000;   // quantities: 4 decimals (lengths in meters: 0.1 mm)
 const pageOf = (q) => {
   const page = Math.max(1, parseInt(q.page, 10) || 1);
   const pageSize = Math.min(200, Math.max(1, parseInt(q.pageSize, 10) || 50));
@@ -177,16 +180,18 @@ router.get("/product/:id", canSee, ah(async (req, res) => {
 router.post("/opening", requirePerm("stock.add"), ah(async (req, res) => {
   const b = req.body || {};
   const bid = req.business.id;
-  const qty = quantity(b.qty);
+  let qty = quantity(b.qty);
   const e = {};
   if (!id(b.productId)) e.productId = "required";
-  if (Number.isNaN(qty)) e.qty = "invalidAmount";
+  if (Number.isNaN(qty) && !Array.isArray(b.rolls)) e.qty = "invalidAmount";
   if (Object.keys(e).length) throw badRequest(e);
   const result = await withTx(async (conn) => {
     const loc = await activeLocation(conn, bid, id(b.locationId));
     if (!loc) throw badRequest({ locationId: "required" });
     const products = await lockProducts(conn, bid, [id(b.productId)]);
     const product = products.get(id(b.productId));
+    const rolls = isRoll(product) ? readNewRolls(product, b.rolls, b.lengthUnit, "rolls") : null;
+    if (rolls) qty = sumMeters(rolls, "verified");
     const [[dup]] = await conn.query(
       `SELECT m.id FROM stock_movements m WHERE m.business_id = ? AND m.product_id = ? AND m.location_id = ? AND m.type = 'opening'
           AND NOT EXISTS (SELECT 1 FROM stock_movements r WHERE r.reversal_of = m.id) LIMIT 1`, [bid, product.id, loc.id]);
@@ -195,6 +200,7 @@ router.post("/opening", requirePerm("stock.add"), ah(async (req, res) => {
     const m = await moveStock(conn, { businessId: bid, userId: req.user.id, product, qtyChange: qty, type: "opening", refType: "stock",
       locationId: loc.id, reason: "opening", reference: optText(b.reference, 80), note: optText(b.notes, 255), batches: readBatch(b, qty), devices: true });
     if (devices) await addDevices(conn, { businessId: bid, product, locationId: loc.id, devices, cost: num(product.cost_price), userId: req.user.id, event: "opening", refType: "stock", refId: m.id });
+    if (rolls) await addRolls(conn, { businessId: bid, product, locationId: loc.id, rolls, costPerMeter: num(product.cost_price), userId: req.user.id, source: "opening", refType: "stock", refId: m.id });
     await audit(conn, { businessId: bid, userId: req.user.id, action: "stock.opening", entity: "product", entityId: product.id, meta: { location: loc.name, qty }, ip: req.ip });
     return m;
   });
@@ -207,13 +213,13 @@ router.post("/add", requirePerm("stock.add"), ah(async (req, res) => {
   const b = req.body || {};
   const bid = req.business.id;
   const type = ADD_TYPES.includes(b.type) ? b.type : null;
-  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: quantity(x?.qty), batches: readBatch(x, quantity(x?.qty)), devices: x?.devices })) : [];
+  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: quantity(x?.qty), batches: readBatch(x, quantity(x?.qty)), devices: x?.devices, rolls: x?.rolls, lengthUnit: x?.lengthUnit })) : [];
   const e = {};
   if (!type) e.type = "required";
   if (!items.length) e.items = "required";
   items.forEach((x, i) => {
     if (!x.productId) e[`items.${i}.productId`] = "required";
-    if (Number.isNaN(x.qty)) e[`items.${i}.qty`] = "invalidAmount";
+    if (Number.isNaN(x.qty) && !Array.isArray(x.rolls)) e[`items.${i}.qty`] = "invalidAmount";
   });
   if (Object.keys(e).length) throw badRequest(e);
   const result = await withTx(async (conn) => {
@@ -227,13 +233,16 @@ router.post("/add", requirePerm("stock.add"), ah(async (req, res) => {
       const product = products.get(x.productId);
       if (!product.is_active) throw badRequest({ items: "inactiveProduct" });
       const devices = isTracked(product) ? readNewDevices(product, x.devices, x.qty, `items.${i}.devices`) : null;
+      const rolls = isRoll(product) ? readNewRolls(product, x.rolls, x.lengthUnit, `items.${i}.rolls`) : null;
+      if (rolls) x.qty = sumMeters(rolls, "verified");
       const m = await moveStock(conn, { businessId: bid, userId: req.user.id, product, qtyChange: x.qty, type, refType: "stock",
         locationId: loc.id, reason: type, reference: optText(b.reference, 80), supplierId, note: optText(b.notes, 255), batches: x.batches, devices: true });
       if (devices) await addDevices(conn, { businessId: bid, product, locationId: loc.id, devices, supplierId, cost: num(product.cost_price), userId: req.user.id, event: "received", refType: "stock", refId: m.id });
+      if (rolls) await addRolls(conn, { businessId: bid, product, locationId: loc.id, rolls, supplierId, costPerMeter: num(product.cost_price), userId: req.user.id, source: type, refType: "stock", refId: m.id });
       moves.push(m);
     }
     await audit(conn, { businessId: bid, userId: req.user.id, action: "stock.added", entity: "location", entityId: loc.id,
-      meta: { type, items: items.length, units: q3(items.reduce((s, x) => s + x.qty, 0)), reference: optText(b.reference, 80) }, ip: req.ip });
+      meta: { type, items: items.length, units: q4(items.reduce((s, x) => s + x.qty, 0)), reference: optText(b.reference, 80) }, ip: req.ip });
     return { count: moves.length };
   });
   res.status(201).json(result);
@@ -263,7 +272,7 @@ router.post("/adjust", requirePerm("stock.adjust"), ah(async (req, res) => {
   } else {
     counted = Number(b.counted);
     if (b.counted === "" || b.counted === null || b.counted === undefined || !Number.isFinite(counted) || counted < 0) e.counted = "invalidAmount";
-    else counted = q3(counted);
+    else counted = q4(counted);
   }
   if (Object.keys(e).length) throw badRequest(e);
   const result = await withTx(async (conn) => {
@@ -271,13 +280,14 @@ router.post("/adjust", requirePerm("stock.adjust"), ah(async (req, res) => {
     if (!loc) throw badRequest({ locationId: "required" });
     const products = await lockProducts(conn, bid, [id(b.productId)]);
     const product = products.get(id(b.productId));
+    if (isRoll(product)) throw conflict("rollsAdjustOnRolls", { product: productName(product) });   // per roll: damage, waste, measured length…
     await conn.query("INSERT IGNORE INTO product_stock (business_id, product_id, location_id, qty) VALUES (?, ?, ?, 0)", [bid, product.id, loc.id]);
     const [[row]] = await conn.query("SELECT qty FROM product_stock WHERE product_id = ? AND location_id = ? FOR UPDATE", [product.id, loc.id]);
     const before = num(row.qty);
-    if (b.expectedBefore !== undefined && b.expectedBefore !== null && b.expectedBefore !== "" && q3(b.expectedBefore) !== q3(before)) {
+    if (b.expectedBefore !== undefined && b.expectedBefore !== null && b.expectedBefore !== "" && q4(b.expectedBefore) !== q4(before)) {
       throw conflict("stockChanged", { current: before });
     }
-    const change = mode === "count" ? q3(counted - before) : (b.direction === "subtract" ? -qty : qty);
+    const change = mode === "count" ? q4(counted - before) : (b.direction === "subtract" ? -qty : qty);
     if (change === 0) throw badRequest({ counted: "noChange" });
     const type = mode === "count" ? "count" : (["damaged", "expired"].includes(reason) ? "damaged" : "adjustment");
     // serial / IMEI products: the exact devices leaving (damaged → defective, lost → lost, other → removed) or the new ones found
@@ -307,10 +317,10 @@ router.post("/adjust", requirePerm("stock.adjust"), ah(async (req, res) => {
 router.post("/transfer", requirePerm("stock.transfer"), ah(async (req, res) => {
   const b = req.body || {};
   const bid = req.business.id;
-  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: quantity(x?.qty), deviceIds: x?.deviceIds })) : [];
+  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: quantity(x?.qty), deviceIds: x?.deviceIds, rollIds: x?.rollIds })) : [];
   const e = {};
   if (!items.length) e.items = "required";
-  items.forEach((x, i) => { if (!x.productId) e[`items.${i}.productId`] = "required"; if (Number.isNaN(x.qty)) e[`items.${i}.qty`] = "invalidAmount"; });
+  items.forEach((x, i) => { if (!x.productId) e[`items.${i}.productId`] = "required"; if (Number.isNaN(x.qty) && !Array.isArray(x.rollIds)) e[`items.${i}.qty`] = "invalidAmount"; });
   if (id(b.fromLocationId) && id(b.fromLocationId) === id(b.toLocationId)) e.toLocationId = "sameLocation";
   if (Object.keys(e).length) throw badRequest(e);
   const result = await withTx(async (conn) => {
@@ -323,10 +333,22 @@ router.post("/transfer", requirePerm("stock.transfer"), ah(async (req, res) => {
     for (const [i, x] of items.entries()) {
       const product = products.get(x.productId);
       const devices = isTracked(product) ? await pickDevices(conn, { businessId: bid, product, locationId: from.id, deviceIds: x.deviceIds, qty: x.qty, field: `items.${i}.deviceIds` }) : null;
+      // fabric: whole rolls move (their remaining meters)
+      const rolls = [];
+      if (isRoll(product)) {
+        const ids = [...new Set((Array.isArray(x.rollIds) ? x.rollIds : []).map(Number).filter(Boolean))];
+        if (!ids.length) throw badRequest({ [`items.${i}.rollIds`]: "rollsRequired" });
+        for (const rid of ids) rolls.push(await lockRoll(conn, { businessId: bid, product, rollId: rid, locationId: from.id, statuses: ["available", "pending_inspection"], field: `items.${i}.rollIds` }));
+        x.qty = sumMeters(rolls, "remaining");
+      }
       const common = { businessId: bid, userId: req.user.id, product, refType: "transfer", reason: "transfer", reference: optText(b.reference, 80) || ref, transferRef: ref, note: optText(b.notes, 255), devices: true };
       await moveStock(conn, { ...common, qtyChange: -x.qty, type: "transfer_out", locationId: from.id });
       const m = await moveStock(conn, { ...common, qtyChange: x.qty, type: "transfer_in", locationId: to.id });
       if (devices) await updateDevices(conn, devices, { status: "available", locationId: to.id, event: "transferred", refType: "transfer", refId: m.id, note: ref, userId: req.user.id });
+      for (const r of rolls) {
+        await conn.query("UPDATE fabric_rolls SET location_id = ? WHERE id = ?", [to.id, r.id]);
+        await rollEvent(conn, r.id, { event: "transferred", remaining: num(r.remaining), refType: "transfer", refId: m.id, locationId: to.id, note: `${from.name} → ${to.name} (${ref})`, userId: req.user.id });
+      }
     }
     await audit(conn, { businessId: bid, userId: req.user.id, action: "stock.transferred", entity: "location", entityId: from.id,
       meta: { from: from.name, to: to.name, items: items.length, ref }, ip: req.ip });
@@ -386,7 +408,7 @@ router.post("/movements/:id/reverse", requirePerm("stock.adjust"), ah(async (req
     const [[done]] = await conn.query("SELECT COUNT(*) n FROM stock_movements WHERE reversal_of IN (?)", [lines.map((l) => l.id)]);
     if (done.n) throw conflict("alreadyReversed");
     const products = await lockProducts(conn, bid, lines.map((l) => l.product_id));
-    if ([...products.values()].some(isTracked)) throw conflict("trackedNoReverse");
+    if ([...products.values()].some((p) => isTracked(p) || isRoll(p))) throw conflict("trackedNoReverse");
     // reverse the incoming side of a transfer first, so the stock is still there to move back
     const ordered = [...lines].sort((a, b) => num(b.qty_change) - num(a.qty_change));
     for (const l of ordered) {
@@ -433,9 +455,9 @@ router.get("/valuation", requirePerm("stock.view"), ah(async (req, res) => {
   const byLocation = {};
   for (const i of items) {
     const b = (byLocation[i.locationId] ||= { locationId: i.locationId, location: i.location, units: 0, costValue: 0, retailValue: 0 });
-    b.units = q3(b.units + i.qty); b.costValue = round2(b.costValue + i.costValue); b.retailValue = round2(b.retailValue + i.retailValue);
+    b.units = q4(b.units + i.qty); b.costValue = round2(b.costValue + i.costValue); b.retailValue = round2(b.retailValue + i.retailValue);
   }
-  const totals = Object.values(byLocation).reduce((t, b) => ({ units: q3(t.units + b.units), costValue: round2(t.costValue + b.costValue), retailValue: round2(t.retailValue + b.retailValue) }), { units: 0, costValue: 0, retailValue: 0 });
+  const totals = Object.values(byLocation).reduce((t, b) => ({ units: q4(t.units + b.units), costValue: round2(t.costValue + b.costValue), retailValue: round2(t.retailValue + b.retailValue) }), { units: 0, costValue: 0, retailValue: 0 });
   res.json({ items, byLocation: Object.values(byLocation), totals });
 }));
 

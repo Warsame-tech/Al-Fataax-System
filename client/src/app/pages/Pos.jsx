@@ -10,14 +10,19 @@ import { VAT_RATE, vatOf } from "../vat.js";
 import { useDraft, DraftBar } from "../Drafts.jsx";
 import { unitsOf, unitsPer, packPrice } from "../packaging.js";
 import { DevicePicker, deviceText } from "../Devices.jsx";
+import { isRoll, YARD, RollPicker, lengthText } from "../Fabric.jsx";
 
 /* serial / IMEI products (electronics): a line is the exact devices chosen or scanned */
-const tracked = (p) => Boolean(p?.tracking) && p.tracking !== "qty";
+const tracked = (p) => ["serial", "imei", "serial_imei"].includes(p?.tracking);
 
-/* A cart line may be sold in a pack of the product (pharmacy: box, strip…); stock is counted in base units. */
-const perOf = (l) => (l.unit ? unitsPer(l.product, l.unit) || 1 : 1);
-const priceOf = (l) => (l.unit ? packPrice(l.product, l.unit) : l.product.sellingPrice);
-const maxOf = (l) => Math.floor((l.product.stock / perOf(l)) * 1000 + 1e-6) / 1000;
+/* A cart line may be sold in a pack of the product (pharmacy: box, strip…); stock is counted in base units.
+ * Fabric sold from rolls: a line per roll, sold by the meter, the yard or the whole roll (never more than the roll has). */
+const rollPer = (l) => (l.unit === "yard" ? YARD : l.unit === "roll" ? l.roll?.remaining || 1 : 1);
+const perOf = (l) => (isRoll(l.product) ? rollPer(l) : l.unit ? unitsPer(l.product, l.unit) || 1 : 1);
+const priceOf = (l) => (isRoll(l.product) ? Math.round(l.product.sellingPrice * rollPer(l) * 10000) / 10000 : l.unit ? packPrice(l.product, l.unit) : l.product.sellingPrice);
+const maxOf = (l) => Math.floor(((isRoll(l.product) ? l.roll?.remaining ?? 0 : l.product.stock) / perOf(l)) * 10000 + 1e-6) / 10000;
+const keyOf = (l) => (l.rollId ? `${l.product.id}:${l.rollId}` : String(l.product.id));
+const ROLL_UNITS = ["meter", "yard", "roll"];
 
 export default function Pos() {
   const { t } = useLanguage();
@@ -77,6 +82,7 @@ function Register() {
   const add = (p, n = 1) => {
     if (p.stock <= 0) { setNotice(fill(t("ui.errors.insufficientStock"), { product: p.name, available: qty(p.stock) })); return false; }
     if (tracked(p)) { setPicking(p); return true; }       // choose the exact device(s)
+    if (isRoll(p)) { setRollFor(p); return true; }         // choose the roll the fabric is cut from
     const line = cart.find((l) => l.product.id === p.id);
     const inCart = line ? line.qty * perOf(line) : 0;
     setNotice(inCart + n > p.stock ? fill(t("ui.pos.packCapped"), { qty: qty(p.stock), unit: p.unit }) : null);
@@ -85,18 +91,25 @@ function Register() {
       if (found) return c.map((l) => (l.product.id === p.id ? { ...l, qty: Math.min(l.qty + (l.unit ? 1 : n), maxOf(l)) } : l));
       return [...c, { product: p, qty: Math.min(n, p.stock), unit: null }];
     });
-    setActive(p.id);
+    setActive(String(p.id));
     setPulse((n) => n + 1);
     return true;
   };
-  const setQty = (pid, v) => setCart((c) => c.map((l) => (l.product.id === pid ? { ...l, qty: Math.max(0, Math.min(Number(v) || 0, maxOf(l))) } : l)).filter((l) => l.qty > 0));
+  /* fabric: a roll chosen (picker or scanned roll ID) becomes its own line, starting at 1 m */
+  const [rollFor, setRollFor] = useState(null);
+  const addRoll = (p, roll) => {
+    const key = `${p.id}:${roll.id}`;
+    setCart((c) => (c.some((l) => keyOf(l) === key) ? c : [...c, { product: p, rollId: roll.id, roll, qty: Math.min(1, roll.remaining), unit: null }]));
+    setActive(key); setPulse((x) => x + 1); setNotice(null);
+  };
+  const setQty = (key, v) => setCart((c) => c.map((l) => (keyOf(l) === key ? { ...l, qty: Math.max(0, Math.min(Number(v) || 0, maxOf(l))) } : l)).filter((l) => l.qty > 0));
   /* switching a line to another pack starts it at 1 of that pack (if the stock allows it) */
-  const setUnit = (pid, unit) => setCart((c) => c.map((l) => {
-    if (l.product.id !== pid) return l;
+  const setUnit = (key, unit) => setCart((c) => c.map((l) => {
+    if (keyOf(l) !== key) return l;
     const next = { ...l, unit: unit === l.product.unit ? null : unit };
     return { ...next, qty: Math.min(1, maxOf(next)) };
   }).filter((l) => l.qty > 0));
-  const removeLine = (pid) => setCart((c) => c.filter((l) => l.product.id !== pid));
+  const removeLine = (key) => setCart((c) => c.filter((l) => keyOf(l) !== key));
   /* the devices of a tracked line (from the picker or a scanned serial / IMEI) */
   const [picking, setPicking] = useState(null);
   const setDevices = (p, devices) => {
@@ -106,7 +119,7 @@ function Register() {
       const line = { product: p, qty: devices.length, unit: null, deviceIds: devices.map((d) => d.id), devices };
       return c.some((l) => l.product.id === p.id) ? c.map((l) => (l.product.id === p.id ? line : l)) : [...rest, line];
     });
-    setActive(p.id); setPulse((x) => x + 1); setNotice(null);
+    setActive(String(p.id)); setPulse((x) => x + 1); setNotice(null);
   };
   const addDevice = async (device) => {
     if (device.status !== "available") { setNotice(fill(t("ui.devices.notAvailable"), { device: deviceText(device), status: t(`ui.devices.status.${device.status}`) })); return true; }
@@ -127,6 +140,13 @@ function Register() {
       add(product, pack?.qty || 1); showScanned(product);
       return true;
     } catch {
+      // a fabric roll ID scanned: cut from that roll
+      try {
+        const { roll } = await apiRequest(`/api/rolls/code/${encodeURIComponent(value)}`);
+        if (roll.status !== "available") { setNotice(fill(t("ui.fabric.notSellable"), { roll: roll.code, status: t(`ui.fabric.status.${roll.status}`) })); return true; }
+        const { products: found } = await apiRequest(`/api/products?location=default&id=${roll.productId}`);
+        if (found[0]) { addRoll(found[0], roll); showScanned(found[0]); return true; }
+      } catch { /* not a roll */ }
       // a serial number / IMEI scanned: add that exact device
       try { const { device } = await apiRequest(`/api/devices/lookup/${encodeURIComponent(value)}`); if (device) return addDevice(device); } catch { /* not a device */ }
       try {
@@ -178,16 +198,24 @@ function Register() {
         <ul className="pos2__lines" aria-label={t("ui.pos.cart")}>
           {cart.length === 0 && <li className="pos2__empty"><Icon name="cart" /><span>{t("ui.pos.emptyCart")}</span></li>}
           {cart.map((l) => (
-            <li key={active === l.product.id ? `${l.product.id}-${pulse}` : l.product.id} className={"pos2__line" + (active === l.product.id ? " is-active" : "")}
-              onClick={() => setActive(l.product.id)} aria-current={active === l.product.id ? "true" : undefined}>
+            <li key={active === keyOf(l) ? `${keyOf(l)}-${pulse}` : keyOf(l)} className={"pos2__line" + (active === keyOf(l) ? " is-active" : "")}
+              onClick={() => setActive(keyOf(l))} aria-current={active === keyOf(l) ? "true" : undefined}>
               <div className="pos2__line-top">
                 <span className="pos2__line-name">{l.product.name}{l.product.rxRequired && <span className="rx-tag" title={t("ui.products.rxRequired")}>Rx</span>}</span>
                 <span className="pos2__line-total">{m(l.qty * priceOf(l))}</span>
               </div>
+              {l.roll && <small className="pos2__roll"><Icon name="roll" /> {l.roll.code} · {fill(t("ui.fabric.left"), { len: lengthText(l.roll.remaining) })}</small>}
               <div className="pos2__line-bottom">
-                {unitsOf(l.product, "sell").length > 1 ? (
+                {isRoll(l.product) ? (
                   <span className="pos2__unit" onClick={(e) => e.stopPropagation()}>
-                    <select value={l.unit || l.product.unit} onChange={(e) => setUnit(l.product.id, e.target.value)} aria-label={t("ui.pos.sellUnit")}>
+                    <select value={l.unit || l.product.unit} onChange={(e) => setUnit(keyOf(l), e.target.value)} aria-label={t("ui.pos.sellUnit")}>
+                      {ROLL_UNITS.map((u) => <option key={u} value={u}>{u === "roll" ? t("ui.fabric.wholeRoll") : unitLabel(u)}</option>)}
+                    </select>
+                    <small>{fill(t("ui.pos.atPrice"), { price: m(priceOf(l)) })}</small>
+                  </span>
+                ) : unitsOf(l.product, "sell").length > 1 ? (
+                  <span className="pos2__unit" onClick={(e) => e.stopPropagation()}>
+                    <select value={l.unit || l.product.unit} onChange={(e) => setUnit(keyOf(l), e.target.value)} aria-label={t("ui.pos.sellUnit")}>
                       {unitsOf(l.product, "sell").map((u) => <option key={u.name} value={u.name}>{u.name === l.product.unit ? unitLabel(u.name) : `${u.name} (${qty(u.per)})`}</option>)}
                     </select>
                     <small>{fill(t("ui.pos.atPrice"), { price: m(priceOf(l)) })}</small>
@@ -196,13 +224,13 @@ function Register() {
                 {tracked(l.product) ? (
                   <div className="qty-ctl">
                     <button type="button" className="pos2__devbtn" onClick={(e) => { e.stopPropagation(); setPicking(l.product); }}><Icon name="smartphone" /> {fill(t("ui.devices.count"), { n: l.qty })}</button>
-                    <button type="button" className="qty-ctl__x" onClick={() => removeLine(l.product.id)} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
+                    <button type="button" className="qty-ctl__x" onClick={() => removeLine(keyOf(l))} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
                   </div>
                 ) : <div className="qty-ctl">
-                  <button type="button" onClick={() => setQty(l.product.id, l.qty - 1)} aria-label="−"><Icon name="minus" /></button>
-                  <input type="number" min="0" step="any" value={l.qty} onChange={(e) => setQty(l.product.id, e.target.value)} aria-label={t("ui.common.qty")} />
-                  <button type="button" onClick={() => setQty(l.product.id, l.qty + 1)} aria-label="+"><Icon name="plus" /></button>
-                  <button type="button" className="qty-ctl__x" onClick={() => removeLine(l.product.id)} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
+                  <button type="button" onClick={() => setQty(keyOf(l), l.qty - 1)} aria-label="−" disabled={l.unit === "roll"}><Icon name="minus" /></button>
+                  <input type="number" min="0" step="any" value={l.qty} onChange={(e) => setQty(keyOf(l), e.target.value)} aria-label={t("ui.common.qty")} disabled={l.unit === "roll"} />
+                  <button type="button" onClick={() => setQty(keyOf(l), l.qty + 1)} aria-label="+" disabled={l.unit === "roll"}><Icon name="plus" /></button>
+                  <button type="button" className="qty-ctl__x" onClick={() => removeLine(keyOf(l))} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
                 </div>}
               </div>
               {l.devices?.length > 0 && <ul className="pos2__devices">{l.devices.map((d) => <li key={d.id}>{deviceText(d)}</li>)}</ul>}
@@ -221,7 +249,7 @@ function Register() {
 
         <DraftBar draft={draft} compact canSave={cart.length > 0}
           title={`${customer?.name || t("ui.pos.walkInDefault")} · ${fill(t("ui.pos.itemsCount"), { n: qty(itemCount) })} · ${m(subtotal)}`}
-          getData={() => ({ customerId, addVat, cart: cart.map((l) => ({ product: l.product, qty: l.qty, unit: l.unit || null, deviceIds: l.deviceIds, devices: l.devices })) })}
+          getData={() => ({ customerId, addVat, cart: cart.map((l) => ({ product: l.product, qty: l.qty, unit: l.unit || null, deviceIds: l.deviceIds, devices: l.devices, rollId: l.rollId, roll: l.roll })) })}
           onLoad={(d) => { setCustomerId(d.customerId || ""); setAddVat(Boolean(d.addVat)); setCart(d.cart || []); setActive(null); }} />
 
         <button type="button" className="pos2__pay" disabled={!cart.length} onClick={() => setPaying(true)}>
@@ -267,6 +295,10 @@ function Register() {
       {picking && (
         <DevicePicker product={picking} locationId="default" value={cart.find((l) => l.product.id === picking.id)?.deviceIds || []}
           onDone={(ids, devices) => { setDevices(picking, devices); setPicking(null); codeRef.current?.focus(); }} onClose={() => setPicking(null)} />
+      )}
+      {rollFor && (
+        <RollPicker product={rollFor} filter={(r) => !cart.some((l) => l.rollId === r.id)} onClose={() => setRollFor(null)}
+          onDone={(ids, rolls) => { addRoll(rollFor, rolls[0]); setRollFor(null); codeRef.current?.focus(); }} />
       )}
       {camera && <CameraScanner onCode={onCameraCode} onClose={() => { setCamera(false); codeRef.current?.focus(); }} />}
 
@@ -336,7 +368,7 @@ function PaymentModal({ cart, subtotal, customer, addVat, setAddVat, onClose, on
 
   const confirm = async () => {
     const body = {
-      items: cart.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}) })),
+      items: cart.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}), ...(l.rollId ? { rollId: l.rollId } : {}) })),
       customerId: customer?.id || null,
       discount: disc || 0,
       vat: addVat,

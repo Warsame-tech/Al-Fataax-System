@@ -11,6 +11,7 @@ import { isTracked, sellDevices, returnSoldDevices, deviceLabel } from "../lib/d
 import { createWarranties, voidWarranties } from "../lib/warranties.js";
 import { defaultLocationId } from "../lib/stock.js";
 import { currentRates, weightPrice, unsellable } from "../lib/jewelry.js";
+import { isRoll, toMeters, YARD, attachRolls, cutFromRoll, returnCuts, cutsByItem } from "../lib/rolls.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -20,6 +21,8 @@ router.use(requireAuth);
  * A line may be sold in a pack of the product (unit: "Box", "Strip"… — lib/packaging.js): qty and unitPrice are then
  * per pack, stock is taken in base units (qty × units per pack) and the pack is kept on the line (sell).
  * A pack's price is its own price, or the base price × units per pack.
+ * Fabric sold from rolls (price per meter): each line names its roll (rollId, it.roll from attachRolls) and is sold by the
+ * meter, by the yard (exact: 1 yd = 0.9144 m) or as the whole roll (unit "roll": what is left on it).
  */
 export function priceLines(items, products, { allowCustomPrice, priceList = "retail", rates = null }) {
   const lines = [];
@@ -33,8 +36,24 @@ export function priceLines(items, products, { allowCustomPrice, priceList = "ret
     // jewelry sold by weight: today's price (net weight × rate + making + extra), recorded with its breakdown
     const live = weightPrice(p, rates);
     const unit = typeof it.unit === "string" && it.unit && it.unit !== p.unit ? it.unit : null;
-    const per = unit ? unitsPer(p, unit) : 1;
-    if (!per || (unit && !packOf(p, unit)?.sell)) { errors[`items.${i}.unit`] = "required"; return; }
+    const roll = isRoll(p);
+    let per = 1;
+    let baseQty;
+    if (roll) {
+      if (!it.rollId) { errors[`items.${i}.rollId`] = "rollRequired"; return; }
+      if (it.roll && it.roll.product_id !== p.id) { errors[`items.${i}.rollId`] = "rollNotFound"; return; }
+      if (unit && !["yard", "roll"].includes(unit)) { errors[`items.${i}.unit`] = "required"; return; }
+      if (unit === "roll") {
+        per = it.roll ? num(it.roll.remaining) : 0;
+        if (!(per > 0)) { errors[`items.${i}.rollId`] = "rollNotFound"; return; }
+        if (qty !== 1) { errors[`items.${i}.qty`] = "wholeRoll"; return; }
+        baseQty = per;
+      } else if (unit === "yard") { per = Number(YARD); baseQty = toMeters(qty, "yard"); }
+      else baseQty = Math.round(qty * 10000) / 10000;
+    } else {
+      per = unit ? unitsPer(p, unit) : 1;
+      if (!per || (unit && !packOf(p, unit)?.sell)) { errors[`items.${i}.unit`] = "required"; return; }
+    }
     const basePrice = live ? live.price : priceList === "wholesale" && p.wholesale_price !== null ? num(p.wholesale_price) : num(p.selling_price);
     const pack = unit ? packOf(p, unit) : null;
     const listPrice = pack && pack.price !== null && priceList !== "wholesale" ? num(pack.price) : round2(basePrice * per);
@@ -44,7 +63,7 @@ export function priceLines(items, products, { allowCustomPrice, priceList = "ret
       unitPrice = money(it.unitPrice);
       if (Number.isNaN(unitPrice)) { errors[`items.${i}.unitPrice`] = "invalidAmount"; return; }
     }
-    const baseQty = Math.round(qty * per * 1000) / 1000;
+    if (!roll) baseQty = Math.round(qty * per * 10000) / 10000;
     // serial / IMEI products are sold as whole units, each one a chosen device
     if (isTracked(p) && (unit || !Number.isInteger(baseQty))) { errors[`items.${i}.qty`] = "wholeUnits"; return; }
     // minimum selling price (per base unit), when the product has one
@@ -54,8 +73,8 @@ export function priceLines(items, products, { allowCustomPrice, priceList = "ret
     const warrantyMonths = it.warrantyMonths === undefined || it.warrantyMonths === null || it.warrantyMonths === "" ? null : Number(it.warrantyMonths);
     if (warrantyMonths !== null && (!Number.isInteger(warrantyMonths) || warrantyMonths < 0 || warrantyMonths > 240)) { errors[`items.${i}.warrantyMonths`] = "invalidAmount"; return; }
     lines.push({
-      deviceIds: it.deviceIds, warrantyMonths, priceDetail: live ? { ...live.detail, unitPrice: unitPrice } : null,
-      product: p, qty: baseQty, unitPrice: unit ? round2(unitPrice / per) : unitPrice, unitCost: num(p.cost_price), lineTotal: round2(qty * unitPrice),
+      deviceIds: it.deviceIds, rollId: roll ? it.rollId : null, warrantyMonths, priceDetail: live ? { ...live.detail, unitPrice: unitPrice } : null,
+      product: p, qty: baseQty, unitPrice: unit ? (roll ? Math.round((unitPrice / per) * 10000) / 10000 : round2(unitPrice / per)) : unitPrice, unitCost: num(p.cost_price), lineTotal: round2(qty * unitPrice),
       sell: unit ? { unit, qty, price: unitPrice } : null
     });
   });
@@ -65,7 +84,7 @@ export function priceLines(items, products, { allowCustomPrice, priceList = "ret
 
 function readItems(body) {
   const items = Array.isArray(body.items) ? body.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: x?.qty, unitPrice: x?.unitPrice, unit: x?.unit,
-    deviceIds: x?.deviceIds, warrantyMonths: x?.warrantyMonths })) : [];
+    deviceIds: x?.deviceIds, rollId: x?.rollId, warrantyMonths: x?.warrantyMonths })) : [];
   if (!items.length) throw badRequest({ items: "required" });
   return items;
 }
@@ -138,6 +157,7 @@ export async function createSale(conn, ctx, body) {
 
   const products = await lockProducts(conn, businessId, items.map((i) => i.productId).filter(Boolean));
   const rates = [...products.values()].some((p) => p.pricing_mode === "weight") ? await currentRates(conn, businessId) : null;
+  await attachRolls(conn, businessId, items);
   const lines = priceLines(items, products, { allowCustomPrice: can(role, "sales.discount"), rates });
   const subtotal = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
   if (discount > subtotal) throw badRequest({ discount: "tooLarge" });
@@ -178,6 +198,7 @@ export async function createSale(conn, ctx, body) {
       [businessId, saleId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null, l.priceDetail ? JSON.stringify(l.priceDetail) : null]
     );
     const devices = await sellDevices(conn, { businessId, userId, product: l.product, line: l, index: i, locationId: loc, refType: "sale", refId: saleId, itemId: it.insertId, customerId });
+    if (isRoll(l.product)) await cutFromRoll(conn, { businessId, product: l.product, rollId: l.rollId, meters: l.qty, locationId: loc, refType: "sale", refId: saleId, itemId: it.insertId, userId, field: `items.${i}.rollId` });
     await moveStock(conn, { businessId, userId, product: l.product, qtyChange: -l.qty, type: "sale", refType: "sale", refId: saleId, locationId: loc, devices: true });
     await createWarranties(conn, { businessId, product: l.product, devices, qty: l.qty, months: l.warrantyMonths, customerId, refType: "sale", refId: saleId, userId, date: ctx.at || null });
     if (Number(l.product.unique_item) && Number(l.product.stock_qty) <= 0) await conn.query("UPDATE products SET item_status = 'sold' WHERE id = ?", [l.product.id]);
@@ -222,6 +243,7 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
       WHERE si.sale_id = ? AND si.business_id = ? ORDER BY si.id`, [s.id, bid]);
   const [[cust]] = s.customer_id ? await pool.query("SELECT name, phone FROM customers WHERE id = ? AND business_id = ?", [s.customer_id, bid]) : [[null]];
   const [devs] = await pool.query("SELECT id, serial_no, imei1, imei2, sold_item_id FROM devices WHERE business_id = ? AND sold_ref_type = 'sale' AND sold_ref_id = ?", [bid, s.id]);
+  const cuts = await cutsByItem(pool, bid, "sale", s.id);
   const [wars] = await pool.query("SELECT id, product_id, device_id, months, end_date, status FROM warranties WHERE business_id = ? AND ref_type = 'sale' AND ref_id = ?", [bid, s.id]);
   const [[cashier]] = await pool.query("SELECT full_name FROM users WHERE id = ? AND business_id = ?", [s.user_id, bid]);
   const [payments] = await pool.query(
@@ -234,7 +256,7 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
     // sold in a pack: shown as e.g. 2 Strip × 1.50 (qty / unitPrice); baseQty is the stock that left
     items: items.map((i) => ({ name: i.name, sku: i.sku, qty: i.sell_unit ? num(i.sell_qty) : num(i.qty), unitPrice: i.sell_unit ? num(i.sell_price) : num(i.unit_price),
       unit: i.sell_unit || null, baseQty: num(i.qty), baseUnit: i.base_unit, total: num(i.line_total),
-      devices: devs.filter((d) => d.sold_item_id === i.id).map((d) => ({ id: d.id, label: deviceLabel(d) })),
+      devices: devs.filter((d) => d.sold_item_id === i.id).map((d) => ({ id: d.id, label: deviceLabel(d) })), rolls: cuts.get(i.id) || [],
       priceDetail: i.price_detail ? JSON.parse(i.price_detail) : null,
       warranty: (() => { const w = wars.find((x) => x.product_id === i.product_id); return w ? { months: w.months, endDate: w.end_date, status: w.status } : null; })() })),
     payments: payments.map((p) => ({ amount: num(p.amount), method: p.method, label: p.pm_name ? (p.pm_number ? `${p.pm_name} (${p.pm_number})` : p.pm_name) : null, at: p.paid_at }))
@@ -264,6 +286,8 @@ router.post("/:id/cancel", requirePerm("sales.cancel"), ah(async (req, res) => {
     }
     // sold devices come back to stock; the sale's warranties become void
     await returnSoldDevices(conn, { businessId: bid, userId: uid, refType: "sale", refId: s.id, locationId: await defaultLocationId(conn, bid), note: reason });
+    // cut fabric comes back as a piece waiting for inspection before it can be sold again
+    await returnCuts(conn, { businessId: bid, refType: "sale", refId: s.id, locationId: await defaultLocationId(conn, bid), userId: uid, note: reason });
     await voidWarranties(conn, { businessId: bid, refType: "sale", refId: s.id, userId: uid, reason });
     // Refund each payment through the same method and account (negative payment keeps "money received" accurate).
     const [payments] = await conn.query("SELECT id, method, payment_method_id, amount FROM customer_payments WHERE sale_id = ? AND business_id = ? AND amount > 0 ORDER BY id", [s.id, bid]);

@@ -11,7 +11,7 @@
  * Stock is always kept in the base unit; purchases, stock entry, POS and invoices may use a pack and are
  * converted here. A pack's price is optional (empty = base price × units in the pack).
  */
-const q3 = (v) => Math.round(Number(v) * 1000) / 1000;
+const q4 = (v) => Math.round(Number(v) * 10000) / 10000;   // quantities: 4 decimals (lengths in meters: 0.1 mm)
 
 /** Packaging from a request (array or JSON string) → validated levels, or { error } with the field key. */
 export function readPackaging(raw) {
@@ -26,7 +26,7 @@ export function readPackaging(raw) {
     if (!name) return { error: `packaging.${i}.name` };
     if (!Number.isFinite(per) || per <= 0 || per > 1e6) return { error: `packaging.${i}.per` };
     if (price !== null && (!Number.isFinite(price) || price < 0)) return { error: `packaging.${i}.price` };
-    levels.push({ name, per: q3(per), buy: x?.buy !== false, sell: Boolean(x?.sell), price: price === null ? null : Math.round(price * 10000) / 10000 });
+    levels.push({ name, per: q4(per), buy: x?.buy !== false, sell: Boolean(x?.sell), price: price === null ? null : Math.round(price * 10000) / 10000 });
   }
   const names = levels.map((l) => l.name.toLowerCase());
   const dup = names.findIndex((n, i) => names.indexOf(n) !== i);
@@ -45,7 +45,7 @@ export function unitsPer(product, name) {
   const levels = packagingOf(product);
   const at = levels.findIndex((l) => l.name === name);
   if (at < 0) return null;
-  return q3(levels.slice(at).reduce((m, l) => m * l.per, 1));
+  return q4(levels.slice(at).reduce((m, l) => m * l.per, 1));
 }
 
 /** The pack itself (name, per, buy, sell, price) or null for the base unit. */

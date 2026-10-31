@@ -212,7 +212,7 @@ export default function Products() {
                         {p.genericName && <small className="cell-sub">{p.genericName}</small>}
                         {p.barcode && <small className="cell-sub"><Icon name="barcode" /> {p.barcode}</small>}
                         {!p.isActive && <small className="cell-sub archived-tag">{t("ui.products.statusValues.archived")}</small>}
-                        {p.tracking && p.tracking !== "qty" && <small className="cell-sub"><span className="track-tag">{trackingShort(p.tracking)}</span></small>}
+                        {p.tracking && p.tracking !== "qty" && <small className="cell-sub"><span className="track-tag">{p.tracking === "roll" ? t("ui.fabric.rollsTag") : trackingShort(p.tracking)}</span></small>}
                         {profile.jewelry && (p.uniqueItem || (p.itemStatus && p.itemStatus !== "active")) && <small className="cell-sub">{p.uniqueItem && <span className="track-tag">{t("ui.jewelry.uniqueShort")}</span>} {p.itemStatus !== "active" && <span className={`gb-status is-${p.itemStatus}`}>{t(`ui.jewelry.itemStatus.${p.itemStatus}`)}</span>}</small>}
                         {groups && p.variantCount > 1 && !f.variantOf && (
                           <button type="button" className="link-btn cell-sub" onClick={() => set("variantOf", String(p.variantOf || p.id))}>
@@ -334,8 +334,8 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
   /* dropdown lists: ready-made for the business type + the business's own (Product lists) */
   const cat = useCatalog();
   const [matrix, setMatrix] = useState(false);
-  /* clothing: the variant attributes the category uses (size + colour, colour + fabric type…) */
-  const variantFields = profile.fashion ? (profile.categoryVariants?.[f.category] || ["size", "shade"]) : profile.variants;
+  /* clothing / fabric: the variant attributes the category uses (size + colour, colour + pattern + width…) */
+  const variantFields = profile.categoryVariants ? (profile.categoryVariants[f.category] || profile.defaultVariants || ["size", "shade"]) : profile.variants;
   const sizeOptions = asOptions(uniqList([...(cat.sizeSystems[cat.systemFor(f.category)] || []), ...Object.entries(cat.sizeSystems).filter(([k]) => k !== cat.systemFor(f.category)).flatMap(([, v]) => v)]));
   const colorOptions = cat.colors.map((c) => ({ value: c.name, label: c.name, swatch: c.code }));
   /* electronics: technical specifications by product type (template + the owner's extra fields) */
@@ -353,7 +353,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
   };
   /* packaging structure (pharmacy): packs above the base unit, largest first */
   const [pack, setPack] = useState(() => (product.packaging || []).map((l) => ({ ...l, per: l.per, price: l.price ?? "" })));
-  const suppliers = useApi(profile.medicine || profile.electronics ? "/api/suppliers" : null);
+  const suppliers = useApi(profile.medicine || profile.electronics || profile.fabric ? "/api/suppliers" : null);
   /* choosing a dosage form fills its usual packaging, unless counts were already entered */
   const chooseForm = (form) => {
     setF((x) => ({ ...x, dosageForm: form }));
@@ -481,9 +481,9 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
         </div>
         {!profile.hiddenFields?.includes("subcategory") && (
           <div className="ff">
-            <span className="ff__label">{`${t("ui.products.subcategory")} ${t("ui.common.optional")}`}</span>
+            <span className="ff__label">{`${L("subcategory")} ${t("ui.common.optional")}`}</span>
             <SearchSelect freeText value={f.subcategory} onChange={(x) => setF((y) => ({ ...y, subcategory: x }))} onCreate={(x) => setF((y) => ({ ...y, subcategory: x }))} createLabel={t("ui.common.add")}
-              options={asOptions(cat.subcategoriesOf(f.category))} placeholder={t("ui.products.subcategory")} searchPlaceholder={t("ui.common.searchPh")} />
+              options={asOptions(cat.subcategoriesOf(f.category))} placeholder={L("subcategory")} searchPlaceholder={t("ui.common.searchPh")} />
           </div>
         )}
         <div className="ff">
@@ -531,7 +531,27 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
             </Field>
           </>
         )}
-        {profile.fashion && (
+        {profile.fabric && (
+          <>
+            <p className="form-sub ff--full"><Icon name="roll" /> {t("ui.products.fabricSection")}</p>
+            <Field label={`${L("modelNumber")} ${t("ui.common.optional")}`}><input className="input" value={f.modelNumber} onChange={set("modelNumber")} placeholder={L("modelNumber")} /></Field>
+            <Field label={`${L("genericName")} ${t("ui.common.optional")}`}><input className="input" value={f.genericName} onChange={set("genericName")} placeholder={t("ui.products.compositionPh")} /></Field>
+            <Field label={`${t("ui.common.supplier")} ${t("ui.common.optional")}`} error={err.supplierId}>
+              <select className="input" value={f.supplierId} onChange={set("supplierId")}>
+                <option value="">—</option>
+                {(suppliers.data?.suppliers || []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}
+              </select>
+            </Field>
+            {/* sold from rolls: stock in meters, each roll with its own ID and length (Fabric rolls) */}
+            <div className="ff">
+              <label className="checkbox"><input type="checkbox" checked={f.tracking === "roll"} disabled={!isNew && Number(product.stock) !== 0}
+                onChange={(e) => setF((x) => ({ ...x, tracking: e.target.checked ? "roll" : "qty", unit: e.target.checked ? "meter" : x.unit }))} /><span>{t("ui.fabric.soldFromRolls")}</span></label>
+              <small className="ff__hint">{t(!isNew && Number(product.stock) !== 0 ? "ui.fabric.soldFromRollsLocked" : "ui.fabric.soldFromRollsHint")}</small>
+              {err.tracking && <span className="ff__error">{t(`ui.errors.${err.tracking}`)}</span>}
+            </div>
+          </>
+        )}
+        {profile.fashion && !profile.fabric && (
           <>
             <Field label={`${t("ui.products.modelStyle")} ${t("ui.common.optional")}`}><input className="input" value={f.modelNumber} onChange={set("modelNumber")} placeholder={t("ui.products.modelStyle")} /></Field>
             <Field label={`${t("ui.products.collection")} ${t("ui.common.optional")}`}>
@@ -605,8 +625,8 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
             </Field>
           </>
         )}
-        <Field label={L("unit")} hint={profile.packaging ? t("ui.products.baseUnitHint") : undefined}>
-          <select className="input" value={f.unit} onChange={set("unit")}>{units.map((u) => <option key={u} value={u}>{unitFull(t, u)}</option>)}</select>
+        <Field label={L("unit")} error={err.unit} hint={f.tracking === "roll" ? t("ui.fabric.unitIsMeter") : profile.packaging ? t("ui.products.baseUnitHint") : undefined}>
+          <select className="input" value={f.unit} onChange={set("unit")} disabled={f.tracking === "roll"}>{units.map((u) => <option key={u} value={u}>{unitFull(t, u)}</option>)}</select>
         </Field>
         {profile.serials && (
           <Field label={t("ui.products.tracking")} error={err.tracking} hint={t(`ui.products.trackingHint.${f.tracking}`)}>
@@ -730,7 +750,7 @@ function PackagingEditor({ pack, setPack, unit, sellingPrice, errors }) {
   const childOf = (i) => (i + 1 < pack.length ? pack[i + 1].name || "…" : base);
   const top = pack[0];
   const total = top ? unitsPer(product, top.name) : null;
-  const calcTotal = total && Number(calc) > 0 ? Math.round(Number(calc) * total * 1000) / 1000 : null;
+  const calcTotal = total && Number(calc) > 0 ? Math.round(Number(calc) * total * 10000) / 10000 : null;
   return (
     <div className="ff ff--full packaging">
       <span className="ff__label">{t("ui.products.packagingTitle")}</span>

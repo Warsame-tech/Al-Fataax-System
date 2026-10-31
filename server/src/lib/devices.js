@@ -11,8 +11,8 @@
 import { HttpError, badRequest, conflict } from "./http.js";
 import { productName } from "./productName.js";
 
-export const TRACKING = ["qty", "serial", "imei", "serial_imei"];
-export const isTracked = (product) => Boolean(product?.tracking) && product.tracking !== "qty";
+export const TRACKING = ["qty", "serial", "imei", "serial_imei", "roll"];   // roll: fabric rolls (lib/rolls.js)
+export const isTracked = (product) => ["serial", "imei", "serial_imei"].includes(product?.tracking);   // serial / IMEI devices (rolls: lib/rolls.js)
 const needsSerial = (p) => p.tracking === "serial" || p.tracking === "serial_imei";
 const needsImei = (p) => p.tracking === "imei" || p.tracking === "serial_imei";
 const clean = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : v === undefined || v === null ? "" : String(v).trim().slice(0, max));

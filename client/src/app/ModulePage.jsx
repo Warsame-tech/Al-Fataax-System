@@ -16,6 +16,7 @@ import { Expenses, Cashbook } from "./pages/MoneyPages.jsx";
 import { Staff, BusinessInfo, Settings, Profile, Subscription, Audit } from "./pages/AccountPages.jsx";
 import { DevicesPage, WarrantiesPage } from "./Devices.jsx";
 import { MetalRatesPage, UsedGoldPage } from "./Jewelry.jsx";
+import { RollsPage, TailoringPage } from "./Fabric.jsx";
 import { useProfile } from "./profile.js";
 
 const SCREENS = {
@@ -31,6 +32,8 @@ const SCREENS = {
   warranties: WarrantiesPage,
   metalRates: MetalRatesPage,
   usedGold: UsedGoldPage,
+  rolls: RollsPage,
+  tailoring: TailoringPage,
   expenses: Expenses,
   cashbook: Cashbook,
   reports: Reports,

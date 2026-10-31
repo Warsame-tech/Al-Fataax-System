@@ -6,7 +6,7 @@
  */
 import { qty as fmtQty } from "./format.js";
 
-const q3 = (v) => Math.round(Number(v) * 1000) / 1000;
+const q4 = (v) => Math.round(Number(v) * 10000) / 10000;   // quantities: 4 decimals (lengths in meters: 0.1 mm)
 
 /* Dosage forms and the packaging they usually come in (the counts are filled in per product). */
 export const DOSAGE_FORMS = {
@@ -36,7 +36,7 @@ export function unitsPer(product, name) {
   if (at < 0) return null;
   let m = 1;
   for (const l of levels.slice(at)) { const n = Number(l.per); if (!(n > 0)) return null; m *= n; }
-  return q3(m);
+  return q4(m);
 }
 
 /** Units a product can be bought / sold in: [{ name, per, price }], base unit last. kind: "buy" | "sell" | "all" */
@@ -68,7 +68,7 @@ export function breakdown(product, name, amount, unitName = (u) => u) {
   for (let i = at; i < levels.length; i++) {
     const per = Number(levels[i].per);
     if (!(per > 0)) return parts.join(" = ");
-    count = q3(count * per);
+    count = q4(count * per);
     parts.push(`${fmtQty(count)} ${i + 1 < levels.length ? levels[i + 1].name : unitName(product.unit)}`);
   }
   return parts.join(" = ");
@@ -82,7 +82,7 @@ export function inPacks(product, amount, unitName = (u) => u) {
     const per = unitsPer(product, l.name);
     if (!per) return "";
     const n = Math.floor(left / per + 1e-9);
-    if (n > 0) { parts.push(`${fmtQty(n)} ${l.name}`); left = q3(left - n * per); }
+    if (n > 0) { parts.push(`${fmtQty(n)} ${l.name}`); left = q4(left - n * per); }
   }
   if (left > 0 || !parts.length) parts.push(`${fmtQty(left)} ${unitName(product.unit)}`);
   return parts.join(" · ");

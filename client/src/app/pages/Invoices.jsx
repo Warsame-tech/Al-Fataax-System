@@ -4,7 +4,7 @@ import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest } from "../../services/api.js";
 import { PageHeader, useApi, usePerm, useSubmit, useMoney, Modal, Field, FormError, Money, EmptyState, Loading, SearchBox, PaymentFields, StatusBadge, DateRange, daysAgo, isoDate } from "../ui.jsx";
-import LineItems from "./LineItems.jsx";
+import LineItems, { sellItems } from "./LineItems.jsx";
 import { date, fill } from "../format.js";
 import SearchSelect from "../SearchSelect.jsx";
 import { VAT_RATE, vatOf } from "../vat.js";
@@ -105,7 +105,7 @@ export function InvoiceForm() {
 
   const save = async (e) => {
     e.preventDefault();
-    const body = { ...f, items: lines.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}), ...(allowPrice ? { unitPrice: l.price } : {}) })) };
+    const body = { ...f, items: sellItems(lines, allowPrice) };
     const r = await sub.run(() => apiRequest("/api/invoices", { method: "POST", body }));
     if (r) { await draft.finish(); navigate(`/app/invoices/${r.id}`, { replace: true }); }
   };

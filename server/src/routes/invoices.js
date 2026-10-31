@@ -6,6 +6,7 @@ import { ah, id, money, withTx, ensureOwned, badRequest, conflict, num, round2, 
 import { nextNumber, lockProducts, moveStock } from "../lib/ledger.js";
 import { priceLines } from "./sales.js";
 import { sellDevices, returnSoldDevices, deviceLabel } from "../lib/devices.js";
+import { isRoll, attachRolls, cutFromRoll, returnCuts, cutsByItem } from "../lib/rolls.js";
 import { createWarranties, voidWarranties } from "../lib/warranties.js";
 import { defaultLocationId } from "../lib/stock.js";
 import { currentRates } from "../lib/jewelry.js";
@@ -45,7 +46,7 @@ export async function createInvoice(conn, ctx, body) {
   const customerId = id(body.customerId);
   if (!customerId) throw badRequest({ customerId: "required" });
   await ensureOwned(conn, "customers", customerId, businessId);
-  const items = Array.isArray(body.items) ? body.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: x?.qty, unitPrice: x?.unitPrice, unit: x?.unit, deviceIds: x?.deviceIds, warrantyMonths: x?.warrantyMonths })) : [];
+  const items = Array.isArray(body.items) ? body.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: x?.qty, unitPrice: x?.unitPrice, unit: x?.unit, deviceIds: x?.deviceIds, rollId: x?.rollId, warrantyMonths: x?.warrantyMonths })) : [];
   if (!items.length) throw badRequest({ items: "required" });
 
   const issueDate = isDate(body.issueDate) ? body.issueDate : today();
@@ -54,6 +55,7 @@ export async function createInvoice(conn, ctx, body) {
 
   const products = await lockProducts(conn, businessId, items.map((i) => i.productId).filter(Boolean));
   const rates = [...products.values()].some((p) => p.pricing_mode === "weight") ? await currentRates(conn, businessId) : null;
+  await attachRolls(conn, businessId, items);
   const lines = priceLines(items, products, { allowCustomPrice: can(role, "sales.discount"), priceList: body.priceList === "wholesale" ? "wholesale" : "retail", rates });
   const subtotal = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
   const disc = readDiscount(body.discount, subtotal);
@@ -82,6 +84,7 @@ export async function createInvoice(conn, ctx, body) {
       [businessId, r.insertId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null, l.priceDetail ? JSON.stringify(l.priceDetail) : null]
     );
     const devices = await sellDevices(conn, { businessId, userId, product: l.product, line: l, index: i, locationId: loc, refType: "invoice", refId: r.insertId, itemId: it.insertId, customerId });
+    if (isRoll(l.product)) await cutFromRoll(conn, { businessId, product: l.product, rollId: l.rollId, meters: l.qty, locationId: loc, refType: "invoice", refId: r.insertId, itemId: it.insertId, userId, field: `items.${i}.rollId` });
     await moveStock(conn, { businessId, userId, product: l.product, qtyChange: -l.qty, type: "invoice", refType: "invoice", refId: r.insertId, locationId: loc, devices: true });
     await createWarranties(conn, { businessId, product: l.product, devices, qty: l.qty, months: l.warrantyMonths, customerId, refType: "invoice", refId: r.insertId, userId, date: ctx.at || null });
     if (Number(l.product.unique_item) && Number(l.product.stock_qty) <= 0) await conn.query("UPDATE products SET item_status = 'sold' WHERE id = ?", [l.product.id]);
@@ -131,6 +134,7 @@ router.get("/:id", requirePerm("invoices.view"), ah(async (req, res) => {
       WHERE ii.invoice_id = ? AND ii.business_id = ? ORDER BY ii.id`, [invId, bid]);
   const [payments] = await pool.query("SELECT amount, method, paid_at, reference FROM customer_payments WHERE invoice_id = ? AND business_id = ? ORDER BY paid_at, id", [invId, bid]);
   const [devs] = await pool.query("SELECT id, serial_no, imei1, imei2, sold_item_id FROM devices WHERE business_id = ? AND sold_ref_type = 'invoice' AND sold_ref_id = ?", [bid, invId]);
+  const cuts = await cutsByItem(pool, bid, "invoice", invId);
   const [wars] = await pool.query("SELECT product_id, months, end_date, status FROM warranties WHERE business_id = ? AND ref_type = 'invoice' AND ref_id = ?", [bid, invId]);
   res.json({
     business: req.business,
@@ -143,7 +147,7 @@ router.get("/:id", requirePerm("invoices.view"), ah(async (req, res) => {
     items: items.map((i) => ({ name: i.name, sku: i.sku, barcode: i.barcode || null, qty: i.sell_unit ? num(i.sell_qty) : num(i.qty),
       unitPrice: i.sell_unit ? num(i.sell_price) : num(i.unit_price), unit: i.sell_unit || null, baseQty: num(i.qty), baseUnit: i.base_unit,
       discount: num(i.discount), total: num(i.line_total),
-      devices: devs.filter((d) => d.sold_item_id === i.id).map((d) => ({ id: d.id, label: deviceLabel(d) })),
+      devices: devs.filter((d) => d.sold_item_id === i.id).map((d) => ({ id: d.id, label: deviceLabel(d) })), rolls: cuts.get(i.id) || [],
       priceDetail: i.price_detail ? JSON.parse(i.price_detail) : null,
       warranty: (() => { const w = wars.find((x) => x.product_id === i.product_id); return w ? { months: w.months, endDate: w.end_date, status: w.status } : null; })() })),
     payments: payments.map((p) => ({ amount: num(p.amount), method: p.method, at: p.paid_at, reference: p.reference }))
@@ -179,6 +183,7 @@ router.post("/:id/cancel", requirePerm("invoices.cancel"), ah(async (req, res) =
       if (Number(products.get(i.product_id).unique_item)) await conn.query("UPDATE products SET item_status = 'returned' WHERE id = ?", [i.product_id]);
     }
     await returnSoldDevices(conn, { businessId: bid, userId: req.user.id, refType: "invoice", refId: inv.id, locationId: await defaultLocationId(conn, bid), note: reason });
+    await returnCuts(conn, { businessId: bid, refType: "invoice", refId: inv.id, locationId: await defaultLocationId(conn, bid), userId: req.user.id, note: reason });
     await voidWarranties(conn, { businessId: bid, refType: "invoice", refId: inv.id, userId: req.user.id, reason });
     await conn.query("UPDATE invoices SET status = 'cancelled', notes = CONCAT(COALESCE(notes,''), ?) WHERE id = ? AND business_id = ?", [` [Cancelled: ${reason}]`, inv.id, bid]);
     await audit(conn, { businessId: bid, userId: req.user.id, action: "invoice.cancelled", entity: "invoice", entityId: inv.id, meta: { reason }, ip: req.ip });

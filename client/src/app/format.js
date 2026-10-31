@@ -14,7 +14,7 @@ export function money(value, currency = "USD", lang = "en") {
 }
 
 export function qty(value) {
-  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 3 }).format(value || 0);
+  return new Intl.NumberFormat("en-US", { maximumFractionDigits: 4 }).format(value || 0);
 }
 
 /** Dates from the API are "YYYY-MM-DD" or "YYYY-MM-DD HH:MM:SS" (UTC). */

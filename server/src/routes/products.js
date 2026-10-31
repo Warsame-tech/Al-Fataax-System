@@ -380,8 +380,14 @@ async function saveBarcodes(conn, bid, productId, list) {
   await conn.query("DELETE FROM product_barcodes WHERE business_id = ? AND product_id = ?", [bid, productId]);
   for (const x of list) {
     await conn.query("INSERT INTO product_barcodes (business_id, product_id, barcode, pack_label, pack_qty) VALUES (?, ?, ?, ?, ?)",
-      [bid, productId, x.barcode, x.label, Math.round(x.qty * 1000) / 1000]);
+      [bid, productId, x.barcode, x.label, Math.round(x.qty * 10000) / 10000]);
   }
+}
+
+/* Fabric: a product sold from rolls keeps its stock in meters (sold by meter, yard or whole roll); other businesses have no rolls. */
+function rollRules(d, profile) {
+  if (d.tracking === "roll" && !profile.fabric) d.tracking = "qty";
+  if (d.tracking === "roll" && d.unit !== "meter") throw badRequest({ unit: "rollNeedsMeter" });
 }
 
 /* Changes to costs, prices, reorder level and status are kept in the product's change history (audit log). */
@@ -411,6 +417,7 @@ function changesOf(old, d) {
 router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(async (req, res) => {
   const d = readProduct(req.body || {}, { creating: true });
   if (req.business.profile.batches) d.trackBatches = true;     // e.g. cosmetics: every product tracks batches & expiry
+  rollRules(d, req.business.profile);
   const image = await imageFrom(req);
   const bid = req.business.id;
   try {
@@ -451,6 +458,7 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
 router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah(async (req, res) => {
   const d = readProduct(req.body || {}, { creating: false });
   if (req.business.profile.batches) d.trackBatches = true;
+  rollRules(d, req.business.profile);
   const image = await imageFrom(req);
   const bid = req.business.id;
   try {
@@ -590,7 +598,7 @@ router.post("/:id/adjust", requirePerm("stock.adjust"), ah(async (req, res) => {
   const bid = req.business.id;
   await withTx(async (conn) => {
     const p = await ensureOwned(conn, "products", id(req.params.id), bid, true);
-    await moveStock(conn, { businessId: bid, userId: req.user.id, product: p, qtyChange: Math.round(change * 1000) / 1000, type: "adjustment", refType: "stock", reason: "other", note: reason });
+    await moveStock(conn, { businessId: bid, userId: req.user.id, product: p, qtyChange: Math.round(change * 10000) / 10000, type: "adjustment", refType: "stock", reason: "other", note: reason });
     await audit(conn, { businessId: bid, userId: req.user.id, action: "stock.adjusted", entity: "product", entityId: p.id, meta: { change, reason }, ip: req.ip });
   });
   res.json({ code: "saved" });

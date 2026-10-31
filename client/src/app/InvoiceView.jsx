@@ -130,6 +130,7 @@ export default function InvoiceView({ preview = false }) {
                 <td className="invoice__barcode">{it.barcode || "—"}</td>
                 <td>{it.name}{it.sku && <small>{it.sku}</small>}
                   {it.devices?.map((d) => <small key={d.id} className="invoice__device">{d.label}</small>)}
+                  {it.rolls?.map((r) => <small key={r.code} className="invoice__device">{fill(t("ui.fabric.cutFrom"), { code: r.code, m: qty(r.meters) })}</small>)}
                   <PriceDetailLine detail={it.priceDetail} className="invoice__device" />
                   {it.warranty && it.warranty.status !== "void" && <small className="invoice__device">{fill(t("ui.warranty.receiptLine"), { n: it.warranty.months, date: date(it.warranty.endDate, lang) })}</small>}
                 </td>

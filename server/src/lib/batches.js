@@ -9,7 +9,7 @@
  * Each movement's share of each batch is kept in stock_movement_batches, which is what lets a
  * cancel / reversal / transfer put the stock back into the same batches.
  */
-const q3 = (v) => Math.round(Number(v) * 1000) / 1000;
+const q4 = (v) => Math.round(Number(v) * 10000) / 10000;   // quantities: 4 decimals (lengths in meters: 0.1 mm)
 
 async function record(conn, movementId, batchId, qty) {
   if (movementId && qty) await conn.query("INSERT INTO stock_movement_batches (movement_id, batch_id, qty) VALUES (?, ?, ?)", [movementId, batchId, qty]);
@@ -38,10 +38,10 @@ async function takeFefo(conn, { productId, locationId, qty, movementId }) {
   let left = qty;
   for (const b of rows) {
     if (left <= 0) break;
-    const take = q3(Math.min(left, Number(b.qty)));
+    const take = q4(Math.min(left, Number(b.qty)));
     await conn.query("UPDATE product_batches SET qty = qty - ? WHERE id = ?", [take, b.id]);
     await record(conn, movementId, b.id, -take);
-    left = q3(left - take);
+    left = q4(left - take);
   }
   return left;
 }
@@ -67,15 +67,15 @@ async function sourceMovement(conn, m) {
 /** Keeps the product's batches in step with a stock movement (see top of file). */
 export async function moveBatches(conn, m) {
   const { businessId, productId, locationId, qtyChange, movementId } = m;
-  let left = q3(Math.abs(qtyChange));
+  let left = q4(Math.abs(qtyChange));
 
   // 1. stock in with batch numbers / expiry dates given (add stock, opening stock, purchases)
   if (qtyChange > 0) {
     for (const b of m.batches || []) {
-      const qty = q3(Math.min(left, Number(b.qty) || left));
+      const qty = q4(Math.min(left, Number(b.qty) || left));
       if (qty <= 0) continue;
       await addTo(conn, { businessId, productId, locationId, batchNo: b.batchNo, expiryDate: b.expiryDate, qty, movementId });
-      left = q3(left - qty);
+      left = q4(left - qty);
     }
   }
 
@@ -88,7 +88,7 @@ export async function moveBatches(conn, m) {
            JOIN product_batches b ON b.id = a.batch_id WHERE a.movement_id = ? ORDER BY a.id FOR UPDATE`, [src.id]);
       for (const s of shares) {
         if (left <= 0) break;
-        const want = q3(Math.min(left, Math.abs(Number(s.qty))));
+        const want = q4(Math.min(left, Math.abs(Number(s.qty))));
         if (qtyChange > 0) {
           if (src.sameLocation) {
             await conn.query("UPDATE product_batches SET qty = qty + ? WHERE id = ?", [want, s.batch_id]);
@@ -96,13 +96,13 @@ export async function moveBatches(conn, m) {
           } else {
             await addTo(conn, { businessId, productId, locationId, batchNo: s.batch_no, expiryDate: s.expiry_date, qty: want, movementId });
           }
-          left = q3(left - want);
+          left = q4(left - want);
         } else if (src.sameLocation) {
-          const take = q3(Math.min(want, Number(s.batch_qty)));
+          const take = q4(Math.min(want, Number(s.batch_qty)));
           if (take <= 0) continue;
           await conn.query("UPDATE product_batches SET qty = qty - ? WHERE id = ?", [take, s.batch_id]);
           await record(conn, movementId, s.batch_id, -take);
-          left = q3(left - take);
+          left = q4(left - take);
         }
       }
     }
@@ -124,7 +124,7 @@ export async function startBatchTracking(conn, businessId, productId) {
     `SELECT ps.location_id, ps.qty, COALESCE((SELECT SUM(b.qty) FROM product_batches b WHERE b.product_id = ps.product_id AND b.location_id = ps.location_id), 0) batched
        FROM product_stock ps WHERE ps.business_id = ? AND ps.product_id = ? FOR UPDATE`, [businessId, productId]);
   for (const r of rows) {
-    const diff = q3(Number(r.qty) - Number(r.batched));
+    const diff = q4(Number(r.qty) - Number(r.batched));
     if (diff > 0) await addTo(conn, { businessId, productId, locationId: r.location_id, batchNo: "", expiryDate: null, qty: diff, movementId: null });
     else if (diff < 0) await takeFefo(conn, { productId, locationId: r.location_id, qty: -diff, movementId: null });
   }

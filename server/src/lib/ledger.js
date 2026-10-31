@@ -74,21 +74,21 @@ export async function lockProducts(conn, businessId, ids) {
  * and writes one ledger row with the balances before / after.
  * Products that track batches also keep their batches in step (lib/batches.js); batches: [{ batchNo, expiryDate, qty }]
  * gives the batch numbers / expiry dates of stock coming in.
- * devices: true when the caller also moves the serial / IMEI devices (required for tracked products).
+ * devices: true when the caller also moves the serial / IMEI devices or the fabric rolls (required for tracked products).
  * Returns { id, before, after } (the location balances).
  */
 export async function moveStock(conn, {
   businessId, userId, product, qtyChange, type, refType = null, refId = null, note = null,
   locationId = null, reason = null, reference = null, supplierId = null, transferRef = null, reversalOf = null, batches = null, devices = false
 }) {
-  // serial / IMEI tracked products: the caller must move the exact devices too (lib/devices.js)
+  // serial / IMEI and roll products: the caller must move the exact devices / rolls too (lib/devices.js, lib/rolls.js)
   if (product.tracking && product.tracking !== "qty" && !devices) throw new HttpError(400, "devicesRequired", null, { product: productName(product) });
   const loc = locationId || (await defaultLocationId(conn, businessId));
   const row = await lockStockRow(conn, businessId, product.id, loc);
   const before = Number(row.qty);
-  const after = Math.round((before + qtyChange) * 1000) / 1000;
+  const after = Math.round((before + qtyChange) * 10000) / 10000;
   if (after < 0) throw new HttpError(409, "insufficientStock", null, { product: productName(product), available: before });
-  const total = Math.round((Number(product.stock_qty) + qtyChange) * 1000) / 1000;
+  const total = Math.round((Number(product.stock_qty) + qtyChange) * 10000) / 10000;
   // jewelry: a unique piece is one item (stock 0 or 1)
   if (Number(product.unique_item) && total > 1) throw new HttpError(409, "uniqueOne", null, { product: productName(product) });
   await conn.query("UPDATE product_stock SET qty = ? WHERE id = ?", [after, row.id]);
