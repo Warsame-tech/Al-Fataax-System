@@ -42,6 +42,11 @@ const DEFAULT = {
 };
 
 const PROFILES = {
+  // the standard interface, with its own units (e.g. 2.5 kg of rice, a carton of drinks)
+  supermarket: {
+    key: "supermarket",
+    units: ["pcs", "kg", "g", "liter", "pack", "carton"]
+  },
   cosmetics: {
     key: "cosmetics",
     variants: ["size"],
