@@ -428,7 +428,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
 
         <Field label={t("ui.common.name")} error={err.name}><input className="input" value={f.name} onChange={set("name")} placeholder={t("ui.products.namePh")} /></Field>
         <Field label={t("ui.products.sku")} error={err.sku} hint={err.sku === "duplicate" && usedBy ? fill(t("ui.products.skuUsedBy"), { name: usedBy }) : undefined}>
-          <input className="input" value={f.sku} onChange={set("sku")} />
+          <input className="input" value={f.sku} onChange={set("sku")} placeholder={t("ui.products.sku")} />
         </Field>
 
         {profile.electronics && (
@@ -466,14 +466,14 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
         )}
         <p className="ff__hint ff--full">{f.name && fullName !== f.name ? fill(t("ui.products.showsAs"), { name: fullName }) : t(profile.electronics ? "ui.products.variantHintElec" : profile.variants.length > 1 ? "ui.products.variantHint" : "ui.products.sizeHint")}</p>
 
-        {!profile.hiddenFields?.includes("description") && <Field label={`${t("ui.common.description")} ${t("ui.common.optional")}`} full><textarea className="input" rows={2} value={f.description} onChange={set("description")} /></Field>}
-        <Field label={L("brand")}><input className="input" value={f.brand} onChange={set("brand")} list="brand-options" /></Field>
-        <Field label={L("category")}><input className="input" value={f.category} onChange={set("category")} list="category-options" /></Field>
-        {!profile.hiddenFields?.includes("subcategory") && <Field label={`${t("ui.products.subcategory")} ${t("ui.common.optional")}`}><input className="input" value={f.subcategory} onChange={set("subcategory")} /></Field>}
-        {profile.electronics && <Field label={`${t("ui.products.countryOfOrigin")} ${t("ui.common.optional")}`}><input className="input" value={f.countryOfOrigin} onChange={set("countryOfOrigin")} /></Field>}
+        {!profile.hiddenFields?.includes("description") && <Field label={`${t("ui.common.description")} ${t("ui.common.optional")}`} full><textarea className="input" rows={2} value={f.description} onChange={set("description")} placeholder={t("ui.common.description")} /></Field>}
+        <Field label={L("brand")}><input className="input" value={f.brand} onChange={set("brand")} list="brand-options" placeholder={L("brand")} /></Field>
+        <Field label={L("category")}><input className="input" value={f.category} onChange={set("category")} list="category-options" placeholder={L("category")} /></Field>
+        {!profile.hiddenFields?.includes("subcategory") && <Field label={`${t("ui.products.subcategory")} ${t("ui.common.optional")}`}><input className="input" value={f.subcategory} onChange={set("subcategory")} placeholder={t("ui.products.subcategory")} /></Field>}
+        {profile.electronics && <Field label={`${t("ui.products.countryOfOrigin")} ${t("ui.common.optional")}`}><input className="input" value={f.countryOfOrigin} onChange={set("countryOfOrigin")} placeholder={t("ui.products.countryOfOrigin")} /></Field>}
         {(profile.medicine || profile.electronics) && (
           <>
-            <Field label={`${t("ui.products.manufacturer")} ${t("ui.common.optional")}`}><input className="input" value={f.manufacturer} onChange={set("manufacturer")} /></Field>
+            <Field label={`${t("ui.products.manufacturer")} ${t("ui.common.optional")}`}><input className="input" value={f.manufacturer} onChange={set("manufacturer")} placeholder={t("ui.products.manufacturer")} /></Field>
             <Field label={`${t("ui.common.supplier")} ${t("ui.common.optional")}`} error={err.supplierId}>
               <select className="input" value={f.supplierId} onChange={set("supplierId")}>
                 <option value="">—</option>
@@ -491,17 +491,17 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
           </Field>
         )}
         {profile.packaging && <PackagingEditor pack={pack} setPack={setPack} unit={f.unit} sellingPrice={f.sellingPrice} errors={err} />}
-        <Field label={L("costPrice")} error={err.costPrice}><input className="input" type="number" min="0" step="any" value={f.costPrice} onChange={set("costPrice")} /></Field>
-        <Field label={L("sellingPrice")} error={err.sellingPrice}><input className="input" type="number" min="0" step="any" value={f.sellingPrice} onChange={set("sellingPrice")} /></Field>
-        {!profile.hiddenFields?.includes("wholesalePrice") && <Field label={`${t("ui.products.wholesalePrice")} ${t("ui.common.optional")}`} error={err.wholesalePrice}><input className="input" type="number" min="0" step="any" value={f.wholesalePrice} onChange={set("wholesalePrice")} /></Field>}
-        {profile.electronics && <Field label={`${t("ui.products.minPrice")} ${t("ui.common.optional")}`} error={err.minPrice} hint={t("ui.products.minPriceHint")}><input className="input" type="number" min="0" step="any" value={f.minPrice} onChange={set("minPrice")} /></Field>}
-        <Field label={L("lowStockAlert")} error={err.minStock} hint={t("ui.products.lowStockAlertHint")}><input className="input" type="number" min="0" step="any" value={f.minStock} onChange={set("minStock")} /></Field>
+        <Field label={L("costPrice")} error={err.costPrice}><input className="input" type="number" min="0" step="any" value={f.costPrice} onChange={set("costPrice")} placeholder={L("costPrice")} /></Field>
+        <Field label={L("sellingPrice")} error={err.sellingPrice}><input className="input" type="number" min="0" step="any" value={f.sellingPrice} onChange={set("sellingPrice")} placeholder={L("sellingPrice")} /></Field>
+        {!profile.hiddenFields?.includes("wholesalePrice") && <Field label={`${t("ui.products.wholesalePrice")} ${t("ui.common.optional")}`} error={err.wholesalePrice}><input className="input" type="number" min="0" step="any" value={f.wholesalePrice} onChange={set("wholesalePrice")} placeholder={t("ui.products.wholesalePrice")} /></Field>}
+        {profile.electronics && <Field label={`${t("ui.products.minPrice")} ${t("ui.common.optional")}`} error={err.minPrice} hint={t("ui.products.minPriceHint")}><input className="input" type="number" min="0" step="any" value={f.minPrice} onChange={set("minPrice")} placeholder={t("ui.products.minPrice")} /></Field>}
+        <Field label={L("lowStockAlert")} error={err.minStock} hint={t("ui.products.lowStockAlertHint")}><input className="input" type="number" min="0" step="any" value={f.minStock} onChange={set("minStock")} placeholder={L("lowStockAlert")} /></Field>
         {profile.warranties && (
           <>
             <p className="form-sub ff--full"><Icon name="shield-check" /> {t("ui.products.warrantySection")}</p>
-            <Field label={`${t("ui.warranty.duration")} ${t("ui.common.optional")}`} error={err.warrantyMonths} hint={t("ui.products.warrantyHint")}><input className="input" type="number" min="0" max="240" step="1" value={f.warrantyMonths} onChange={set("warrantyMonths")} /></Field>
+            <Field label={`${t("ui.warranty.duration")} ${t("ui.common.optional")}`} error={err.warrantyMonths} hint={t("ui.products.warrantyHint")}><input className="input" type="number" min="0" max="240" step="1" value={f.warrantyMonths} onChange={set("warrantyMonths")} placeholder={t("ui.warranty.duration")} /></Field>
             <Field label={`${t("ui.warranty.provider")} ${t("ui.common.optional")}`}><input className="input" value={f.warrantyProvider} onChange={set("warrantyProvider")} placeholder={t("ui.warranty.providerPh")} /></Field>
-            <Field label={`${t("ui.warranty.terms")} ${t("ui.common.optional")}`} full><input className="input" value={f.warrantyTerms} onChange={set("warrantyTerms")} maxLength={255} /></Field>
+            <Field label={`${t("ui.warranty.terms")} ${t("ui.common.optional")}`} full><input className="input" value={f.warrantyTerms} onChange={set("warrantyTerms")} maxLength={255} placeholder={t("ui.warranty.terms")} /></Field>
           </>
         )}
         {profile.electronics && specFields.length > 0 && (
@@ -511,13 +511,13 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
               {specFields.map((k) => (
                 <label key={k} className="specs__field">
                   <span>{k}</span>
-                  <input className="input" value={specs[k] || ""} onChange={(e) => setSpecs((x) => ({ ...x, [k]: e.target.value }))} />
+                  <input className="input" value={specs[k] || ""} onChange={(e) => setSpecs((x) => ({ ...x, [k]: e.target.value }))} placeholder={k} />
                 </label>
               ))}
             </div>
           </div>
         )}
-        {profile.electronics && <Field label={`${t("ui.products.notes")} ${t("ui.common.optional")}`} full><textarea className="input" rows={2} value={f.notes} onChange={set("notes")} /></Field>}
+        {profile.electronics && <Field label={`${t("ui.products.notes")} ${t("ui.common.optional")}`} full><textarea className="input" rows={2} value={f.notes} onChange={set("notes")} placeholder={t("ui.products.notes")} /></Field>}
         {profile.medicine && (
           <>
             <div className="ff">
@@ -548,7 +548,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
                       {packUnits(b.label).map((u) => <option key={u} value={u}>{unitName(t, u)}</option>)}
                     </select>
                   : <input className="input" value={b.label} onChange={(e) => setBarcode(i, "label", e.target.value)} placeholder={t("ui.products.packLabelPh")} aria-label={t("ui.products.packLabel")} />}
-                <input className={"input" + (err[`barcodes.${i}.qty`] ? " has-error" : "")} type="number" min="0" step="any" value={b.qty} onChange={(e) => setBarcode(i, "qty", e.target.value)}
+                <input className={"input" + (err[`barcodes.${i}.qty`] ? " has-error" : "")} type="number" min="0" step="any" value={b.qty} onChange={(e) => setBarcode(i, "qty", e.target.value)} placeholder={t("ui.products.packQty")}
                   aria-label={t("ui.products.packQty")} title={t("ui.products.packQty")} />
                 <button type="button" className="icon-btn" onClick={() => setBarcodes((list) => list.filter((_, j) => j !== i))} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
                 {b.label && Number(b.qty) > 0 && <small className="ff__hint pack-codes__means">{fill(t("ui.products.packMeans"), { pack: unitName(t, b.label), qty: qty(b.qty), unit: unitName(t, f.unit) })}</small>}
