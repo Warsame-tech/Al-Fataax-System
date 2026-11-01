@@ -138,7 +138,8 @@ CREATE TABLE IF NOT EXISTS business_settings (
   kitchen_stations TEXT NULL,                            -- food: kitchen stations (JSON list; default by food type)
   food_settings    TEXT NULL,
   require_shift    TINYINT(1) NOT NULL DEFAULT 0,          -- sales need an open cashier shift
-  discount_rules   TEXT NULL,                              -- { maxPct, approvalPct } manual discount limits (lib/promotions.js)                            -- food: { delayMinutes } (JSON)                            -- fabric / tailoring: work stages (JSON list)                            -- extra technical specification fields per product type (JSON)
+  discount_rules   TEXT NULL,                              -- { maxPct, approvalPct } manual discount limits (lib/promotions.js)
+  online_settings  TEXT NULL,                              -- food: online menu { enabled, code, services, deliveryFee, minOrder, payments, message }                            -- food: { delayMinutes } (JSON)                            -- fabric / tailoring: work stages (JSON list)                            -- extra technical specification fields per product type (JSON)
   timezone         VARCHAR(40) NOT NULL DEFAULT 'Africa/Mogadishu',
   updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_settings_business FOREIGN KEY (business_id) REFERENCES businesses(id)
@@ -990,6 +991,9 @@ CREATE TABLE IF NOT EXISTS food_orders (
   business_id     INT UNSIGNED NOT NULL,
   order_no        VARCHAR(30) NOT NULL,
   service_type    VARCHAR(12) NOT NULL,          -- dine_in, takeaway, counter, delivery
+  source          VARCHAR(12) NOT NULL DEFAULT 'pos', -- pos, online, phone, whatsapp
+  payment_pref    VARCHAR(30) NULL,              -- online orders: how the customer will pay
+  tracking_code   VARCHAR(16) NULL,              -- online orders: the customer's status link
   table_id        INT UNSIGNED NULL,
   guests          INT UNSIGNED NULL,
   customer_id     INT UNSIGNED NULL,
@@ -998,6 +1002,7 @@ CREATE TABLE IF NOT EXISTS food_orders (
   delivery_address VARCHAR(255) NULL,
   delivery_fee    DECIMAL(14,4) NOT NULL DEFAULT 0,
   driver          VARCHAR(100) NULL,
+  delivery_note   VARCHAR(255) NULL,             -- delivery confirmation note
   notes           VARCHAR(500) NULL,
   status          VARCHAR(20) NOT NULL DEFAULT 'received', -- received, sent, preparing, ready, served, delivered, completed, cancelled
   sale_id         BIGINT UNSIGNED NULL,          -- the POS sale (receipt, payments) once billed
@@ -1007,6 +1012,8 @@ CREATE TABLE IF NOT EXISTS food_orders (
   created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   sent_at         DATETIME NULL,
   ready_at        DATETIME NULL,
+  dispatched_at   DATETIME NULL,                 -- delivery: left with the driver
+  delivered_at    DATETIME NULL,
   closed_at       DATETIME NULL,
   updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_food_order (business_id, order_no),

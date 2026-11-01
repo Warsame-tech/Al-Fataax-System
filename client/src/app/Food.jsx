@@ -63,7 +63,7 @@ export function FoodPos() {
   const tables = useApi(profile.food?.tables ? "/api/food/tables" : null);
   const customers = useApi("/api/customers");
   const openOrders = useApi("/api/food/orders?status=open");
-  const [head, setHead] = useState(() => ({ service: params.get("table") ? "dine_in" : services[0], tableId: params.get("table") || "", guests: "", customerId: "", customerName: "", customerPhone: "", deliveryAddress: "", deliveryFee: "", driver: "", notes: "" }));
+  const [head, setHead] = useState(() => ({ source: "pos", service: params.get("table") ? "dine_in" : services[0], tableId: params.get("table") || "", guests: "", customerId: "", customerName: "", customerPhone: "", deliveryAddress: "", deliveryFee: "", driver: "", notes: "" }));
   const [cart, setCart] = useState([]);
   const [orderId, setOrderId] = useState(params.get("order") || null);
   const order = useApi(orderId ? `/api/food/orders/${orderId}` : null);
@@ -116,7 +116,7 @@ export function FoodPos() {
     if (!cart.length) return o;
     const r = await sub.run(() => (o
       ? apiRequest(`/api/food/orders/${o.id}/items`, { method: "POST", body: { items: payload() } }).then(() => ({ id: o.id }))
-      : apiRequest("/api/food/orders", { method: "POST", body: { serviceType: head.service, tableId: head.tableId || undefined, guests: head.guests || undefined, customerId: head.customerId || undefined,
+      : apiRequest("/api/food/orders", { method: "POST", body: { source: head.source, serviceType: head.service, tableId: head.tableId || undefined, guests: head.guests || undefined, customerId: head.customerId || undefined,
           customerName: head.customerName, customerPhone: head.customerPhone, deliveryAddress: head.deliveryAddress, deliveryFee: head.deliveryFee, driver: head.driver, notes: head.notes, items: payload() } })));
     if (!r) return null;
     setCart([]);
@@ -156,6 +156,9 @@ export function FoodPos() {
           {!o ? (
             <div className="fpos__head">
               <div className="seg seg--sm">{services.map((s) => <button key={s} type="button" aria-pressed={head.service === s} onClick={() => setHead({ ...head, service: s })}>{t(`ui.food.services.${s}`)}</button>)}</div>
+              <select className="input input--sm" value={head.source} onChange={(e) => setHead({ ...head, source: e.target.value })} aria-label={t("ui.online.source")}>
+                {["pos", "phone", "whatsapp"].map((x) => <option key={x} value={x}>{t(`ui.online.sources.${x}`)}</option>)}
+              </select>
               {head.service === "dine_in" && profile.food?.tables && (
                 <div className="fpos__row">
                   <select className={"input input--sm" + (sub.fieldErrors.tableId ? " has-error" : "")} value={head.tableId} onChange={(e) => setHead({ ...head, tableId: e.target.value })} aria-label={t("ui.food.table")}>
@@ -192,6 +195,7 @@ export function FoodPos() {
                 <strong>{o.number}</strong>
                 <span className={`food-status is-${o.status}`}>{t(`ui.food.status.${o.status}`)}</span>
               </div>
+              {o.source !== "pos" && <span className={`source-tag is-${o.source}`}>{t(`ui.online.sources.${o.source}`)}{o.paymentPref ? ` · ${t(`ui.online.payments.${o.paymentPref}`)}` : ""}</span>}
               <small>{t(`ui.food.services.${o.service}`)}{o.table ? ` · ${t("ui.food.table")} ${o.table}` : ""}{o.guests ? ` · ${fill(t("ui.food.guestsN"), { n: o.guests })}` : ""}{o.customer ? ` · ${o.customer}` : ""}</small>
               {o.service === "delivery" && <small>{o.deliveryAddress}{o.driver ? ` · ${o.driver}` : ""}</small>}
               {o.notes && <small className="fpos__note">{o.notes}</small>}
@@ -207,11 +211,15 @@ export function FoodPos() {
               <div className="fpos__sum"><span>{t("ui.common.total")}</span><strong>{m(o.total)}</strong></div>
               {o.saleId && <p className="fpos__paid"><Icon name="check" /> {fill(t("ui.food.paidOn"), { receipt: o.receiptNo })}{o.balance > 0 ? ` · ${t("ui.common.balance")} ${m(o.balance)}` : ""} <Link to={`/app/sales/${o.saleId}`}>{t("ui.pos.receipt")}</Link></p>}
               <div className="fpos__actions">
+                {o.status === "received" && o.source === "online" && <>
+                  <button type="button" className="btn btn--primary btn--sm" onClick={() => act("accept")}><Icon name="check" /><span>{t("ui.online.accept")}</span></button>
+                  <button type="button" className="btn btn--danger btn--sm" onClick={() => setModal("reject")}>{t("ui.online.reject")}</button></>}
+                {o.service === "delivery" && ["sent", "preparing", "ready", "served"].includes(o.status) && <button type="button" className="btn btn--outline btn--sm" onClick={() => setModal("dispatch")}><Icon name="truck" /><span>{t("ui.online.dispatch")}</span></button>}
                 <button type="button" className="btn btn--outline btn--sm" onClick={() => printKitchenTicket(t, o)}><Icon name="printer" /><span>{t("ui.food.kitchenTicket")}</span></button>
                 {o.unsent > 0 && <button type="button" className="btn btn--outline btn--sm" onClick={() => act("send")}><Icon name="send" /><span>{t("ui.food.sendRest")}</span></button>}
                 {o.service === "dine_in" && profile.food?.tables && !o.saleId && <button type="button" className="btn btn--outline btn--sm" onClick={() => setModal("move")}><Icon name="swap" /><span>{t("ui.food.moveTable")}</span></button>}
                 {["ready", "preparing", "sent"].includes(o.status) && o.service !== "delivery" && <button type="button" className="btn btn--outline btn--sm" onClick={() => act("status", { status: "served" })}><Icon name="check" /><span>{t("ui.food.markServed")}</span></button>}
-                {o.service === "delivery" && o.status !== "delivered" && <button type="button" className="btn btn--outline btn--sm" onClick={() => act("status", { status: "delivered" })}><Icon name="truck" /><span>{t("ui.food.markDelivered")}</span></button>}
+                {o.service === "delivery" && o.status === "on_the_way" && <button type="button" className="btn btn--outline btn--sm" onClick={() => setModal("delivered")}><Icon name="check" /><span>{t("ui.food.markDelivered")}</span></button>}
                 {o.saleId && <button type="button" className="btn btn--primary btn--sm" onClick={async () => { await act("status", { status: "completed" }); newOrder(); }}><Icon name="check" /><span>{t("ui.food.complete")}</span></button>}
                 {can("sales.cancel") && !o.saleId && <button type="button" className="btn btn--danger btn--sm" onClick={() => setModal("cancel")}>{t("ui.food.cancelOrder")}</button>}
               </div>
@@ -294,6 +302,10 @@ export function FoodPos() {
       )}
       {modal === "cancel" && o && <ReasonModal title={t("ui.food.cancelOrder")} help={t("ui.food.cancelHelp")} confirmLabel={t("ui.food.cancelOrder")}
         onConfirm={(reason) => apiRequest(`/api/food/orders/${o.id}/cancel`, { method: "POST", body: { reason } }).then(() => { newOrder(); openOrders.reload(); tables.reload?.(); })} onClose={() => setModal(null)} />}
+      {modal === "reject" && o && <ReasonModal title={t("ui.online.reject")} help={t("ui.online.rejectHelp")} confirmLabel={t("ui.online.reject")}
+        onConfirm={(reason) => apiRequest(`/api/food/orders/${o.id}/reject`, { method: "POST", body: { reason } }).then(() => { newOrder(); openOrders.reload(); })} onClose={() => setModal(null)} />}
+      {modal === "dispatch" && o && <Dispatch order={o} onClose={() => setModal(null)} onDone={() => { setModal(null); reloadAll(); }} />}
+      {modal === "delivered" && o && <Delivered order={o} onClose={() => setModal(null)} onDone={() => { setModal(null); reloadAll(); }} />}
       {modal === "move" && o && <MoveTable order={o} tables={freeTables} openOrders={openOrders.data?.orders || []} onClose={() => setModal(null)} onDone={() => { setModal(null); reloadAll(); }} />}
     </div>
   );
@@ -526,9 +538,12 @@ export function TablesPage() {
       <PageHeader icon="grid" title={t("app.modules.tables")} actions={<Link className="btn btn--primary" to="/app/m/pos"><Icon name="plus" /><span>{t("ui.food.newOrder")}</span></Link>} />
       <Tabs value={tab} onChange={setTab} tabs={[
         ...(profile.food?.tables ? [{ id: "tables", label: t("ui.food.tables"), icon: "grid" }] : []),
-        { id: "orders", label: t("ui.food.openOrders"), icon: "receipt" }, { id: "reservations", label: t("ui.resv.title"), icon: "calendar" }, { id: "history", label: t("ui.food.orderHistory"), icon: "history" },
-        ...(profile.food?.tables && can("tables.manage") ? [{ id: "setup", label: t("ui.food.tableSetup"), icon: "settings" }] : [])]} />
-      {tab === "tables" ? <TableMap /> : tab === "setup" ? <TableSetup /> : tab === "reservations" ? <Reservations /> : <OrderBoard closed={tab === "history"} />}
+        { id: "orders", label: t("ui.food.openOrders"), icon: "receipt" },
+        ...(profile.food?.services?.includes("delivery") ? [{ id: "deliveries", label: t("ui.online.deliveries"), icon: "truck" }] : []),
+        { id: "reservations", label: t("ui.resv.title"), icon: "calendar" }, { id: "history", label: t("ui.food.orderHistory"), icon: "history" },
+        ...(profile.food?.tables && can("tables.manage") ? [{ id: "setup", label: t("ui.food.tableSetup"), icon: "settings" }] : []),
+        ...(can("settings.edit") ? [{ id: "online", label: t("ui.online.title"), icon: "globe" }] : [])]} />
+      {tab === "tables" ? <TableMap /> : tab === "setup" ? <TableSetup /> : tab === "reservations" ? <Reservations /> : tab === "deliveries" ? <Deliveries /> : tab === "online" ? <OnlineSettings /> : <OrderBoard closed={tab === "history"} />}
     </div>
   );
 }
@@ -575,13 +590,14 @@ function TableMap() {
   );
 }
 
-function OrderBoard({ closed }) {
+function OrderBoard({ closed, service: fixedService = "" }) {
   const { t, lang } = useLanguage();
   const m = useMoney();
   const profile = useProfile();
   const errText = useErrorText();
-  const [service, setService] = useState("");
+  const [service, setService] = useState(fixedService);
   const [q, setQ] = useState("");
+  const [modal, setModal] = useState(null);   // { kind: dispatch | delivered | reject, order }
   const [range, setRange] = useState({ from: daysAgo(6), to: isoDate(new Date()) });
   const list = useApi(`/api/food/orders?${new URLSearchParams({ status: closed ? "closed" : "open", service, q, ...(closed ? range : {}) })}`);
   const [split, setSplit] = useState(null);
@@ -605,7 +621,7 @@ function OrderBoard({ closed }) {
           <tbody>{rows.map((o) => (
             <tr key={o.id}>
               <td><strong>{o.number}</strong><small className="cell-sub">{date(o.createdAt, lang, true)}{o.user ? ` · ${o.user}` : ""}</small></td>
-              <td>{t(`ui.food.services.${o.service}`)}{o.table && <small className="cell-sub">{t("ui.food.table")} {o.table}</small>}{o.customer && <small className="cell-sub">{o.customer}{o.phone ? ` · ${o.phone}` : ""}</small>}
+              <td>{t(`ui.food.services.${o.service}`)}{o.source !== "pos" && <> <span className={`source-tag is-${o.source}`}>{t(`ui.online.sources.${o.source}`)}</span></>}{o.table && <small className="cell-sub">{t("ui.food.table")} {o.table}</small>}{o.customer && <small className="cell-sub">{o.customer}{o.phone ? ` · ${o.phone}` : ""}</small>}
                 {o.service === "delivery" && <small className="cell-sub">{o.deliveryAddress}{o.driver ? ` · ${o.driver}` : ""}</small>}</td>
               <td><ul className="mini-lines">{o.items.filter((i) => i.status !== "cancelled").map((i) => <li key={i.id}>{qty(i.qty)} × {i.name}</li>)}</ul></td>
               <td><span className={`food-status is-${o.status}`}>{t(`ui.food.status.${o.status}`)}</span>{o.cancelReason && <small className="cell-sub">{o.cancelReason}</small>}</td>
@@ -614,7 +630,10 @@ function OrderBoard({ closed }) {
               <td className="row-actions">
                 {!closed && <Link className="btn btn--outline btn--sm" to={`/app/m/pos?order=${o.id}`}>{t("ui.common.view")}</Link>}
                 {!closed && !o.saleId && o.items.filter((i) => i.status !== "cancelled").length > 1 && <button type="button" className="btn btn--outline btn--sm" onClick={() => setSplit(o)}>{t("ui.food.splitBill")}</button>}
-                {!closed && o.service === "delivery" && o.status !== "delivered" && <button type="button" className="btn btn--outline btn--sm" onClick={() => act(o, "status", { status: "delivered" })}>{t("ui.food.markDelivered")}</button>}
+                {!closed && o.status === "received" && o.source === "online" && <><button type="button" className="btn btn--primary btn--sm" onClick={() => act(o, "accept", {})}>{t("ui.online.accept")}</button>
+                  <button type="button" className="btn btn--outline btn--sm" onClick={() => setModal({ kind: "reject", order: o })}>{t("ui.online.reject")}</button></>}
+                {!closed && o.service === "delivery" && ["sent", "preparing", "ready", "served"].includes(o.status) && <button type="button" className="btn btn--outline btn--sm" onClick={() => setModal({ kind: "dispatch", order: o })}>{t("ui.online.dispatch")}</button>}
+                {!closed && o.service === "delivery" && o.status === "on_the_way" && <button type="button" className="btn btn--outline btn--sm" onClick={() => setModal({ kind: "delivered", order: o })}>{t("ui.food.markDelivered")}</button>}
                 {!closed && o.saleId && <button type="button" className="btn btn--primary btn--sm" onClick={() => act(o, "status", { status: "completed" })}>{t("ui.food.complete")}</button>}
               </td>
             </tr>
@@ -622,6 +641,10 @@ function OrderBoard({ closed }) {
         </table></div>
       )}
       {split && <SplitBill order={split} onClose={() => setSplit(null)} onDone={() => { setSplit(null); list.reload(); }} />}
+      {modal?.kind === "dispatch" && <Dispatch order={modal.order} onClose={() => setModal(null)} onDone={() => { setModal(null); list.reload(); }} />}
+      {modal?.kind === "delivered" && <Delivered order={modal.order} onClose={() => setModal(null)} onDone={() => { setModal(null); list.reload(); }} />}
+      {modal?.kind === "reject" && <ReasonModal title={t("ui.online.reject")} help={t("ui.online.rejectHelp")} confirmLabel={t("ui.online.reject")} onClose={() => setModal(null)}
+        onConfirm={(reason) => apiRequest(`/api/food/orders/${modal.order.id}/reject`, { method: "POST", body: { reason } }).then(() => list.reload())} />}
     </>
   );
 }
@@ -1056,5 +1079,110 @@ function CancelReservation({ resv, onClose, onDone }) {
         <div className="form-actions"><button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.close")}</button><button type="submit" className="btn btn--danger" disabled={sub.busy}>{t("ui.resv.cancel")}</button></div>
       </form>
     </Modal>
+  );
+}
+
+/* ===================== Deliveries and online ordering ===================== */
+function Dispatch({ order, onClose, onDone }) {
+  const { t } = useLanguage();
+  const [driver, setDriver] = useState(order.driver || "");
+  const sub = useSubmit();
+  const save = async (e) => { e.preventDefault(); if (await sub.run(() => apiRequest(`/api/food/orders/${order.id}/dispatch`, { method: "POST", body: { driver } }))) onDone(); };
+  return (
+    <Modal title={fill(t("ui.online.dispatchTitle"), { n: order.number })} onClose={onClose}>
+      <form onSubmit={save} className="form-grid">
+        <p className="muted">{order.customer} · {order.phone}<br />{order.deliveryAddress}</p>
+        <Field label={t("ui.food.driver")} error={sub.fieldErrors.driver}><input className="input" value={driver} onChange={(e) => setDriver(e.target.value)} /></Field>
+        <FormError error={sub.formError} />
+        <div className="form-actions"><button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button><button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.online.dispatch")}</button></div>
+      </form>
+    </Modal>
+  );
+}
+function Delivered({ order, onClose, onDone }) {
+  const { t } = useLanguage();
+  const [note, setNote] = useState("");
+  const sub = useSubmit();
+  const save = async (e) => { e.preventDefault(); if (await sub.run(() => apiRequest(`/api/food/orders/${order.id}/status`, { method: "POST", body: { status: "delivered", note } }))) onDone(); };
+  return (
+    <Modal title={fill(t("ui.online.deliveredTitle"), { n: order.number })} onClose={onClose}>
+      <form onSubmit={save} className="form-grid">
+        <Field label={`${t("ui.online.confirmNote")} ${t("ui.common.optional")}`}><input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder={t("ui.online.confirmNotePh")} /></Field>
+        <FormError error={sub.formError} />
+        <div className="form-actions"><button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button><button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.food.markDelivered")}</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+function Deliveries() {
+  const { t } = useLanguage();
+  const m = useMoney();
+  const [range, setRange] = useState({ from: daysAgo(6), to: isoDate(new Date()) });
+  const perf = useApi(`/api/food/deliveries?${new URLSearchParams(range)}`);
+  const d = perf.data;
+  return (
+    <>
+      <div className="toolbar"><DateRange value={range} onChange={setRange} /></div>
+      {d && (
+        <div className="split-view split-view--even">
+          <dl className="adj-preview">
+            <div><dt>{t("ui.online.deliveredN")}</dt><dd>{d.delivered}</dd></div>
+            <div><dt>{t("ui.online.openN")}</dt><dd>{d.open}</dd></div>
+            <div><dt>{t("ui.online.avgTotal")}</dt><dd>{fill(t("ui.food.minutes"), { n: d.avgMinutes })}</dd></div>
+            <div><dt>{t("ui.online.avgRoad")}</dt><dd>{fill(t("ui.food.minutes"), { n: d.avgRoadMinutes })}</dd></div>
+            <div><dt>{t("ui.online.fees")}</dt><dd>{m(d.fees)}</dd></div>
+          </dl>
+          <table className="table table--compact"><thead><tr><th>{t("ui.food.driver")}</th><th className="num">{t("ui.online.deliveredN")}</th><th className="num">{t("ui.online.avgTotal")}</th><th className="num">{t("ui.online.avgRoad")}</th></tr></thead>
+            <tbody>{d.drivers.map((x) => <tr key={x.driver}><td>{x.driver}</td><td className="num">{x.count}</td><td className="num">{x.avgMinutes}</td><td className="num">{x.avgRoadMinutes}</td></tr>)}</tbody></table>
+        </div>
+      )}
+      <h2 className="list-title">{t("ui.online.openDeliveries")}</h2>
+      <OrderBoard closed={false} service="delivery" />
+    </>
+  );
+}
+
+function OnlineSettings() {
+  const { t } = useLanguage();
+  const d = useApi("/api/food/online");
+  const [f, setF] = useState(null);
+  const [saved, setSaved] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const sub = useSubmit();
+  useEffect(() => { if (d.data && !f) setF({ ...d.data, deliveryFee: String(d.data.deliveryFee || ""), minOrder: String(d.data.minOrder || "") }); }, [d.data, f]);
+  if (!f) return <Loading />;
+  const link = f.code ? `${window.location.origin}/order/${f.code}` : "";
+  const toggle = (k, v) => setF({ ...f, [k]: f[k].includes(v) ? f[k].filter((x) => x !== v) : [...f[k], v] });
+  const save = async (newLink = false) => {
+    const r = await sub.run(() => apiRequest("/api/food/online", { method: "PUT", body: { ...f, newLink } }));
+    if (r) { setF({ ...r, deliveryFee: String(r.deliveryFee || ""), minOrder: String(r.minOrder || "") }); setSaved(true); setTimeout(() => setSaved(false), 2500); }
+  };
+  const copy = async () => { try { await navigator.clipboard.writeText(link); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* not allowed */ } };
+  return (
+    <section className="panel-card form-grid form-grid--2 stock-form">
+      <p className="modal__help ff--full">{t("ui.online.help")}</p>
+      <div className="ff ff--full"><label className="checkbox"><input type="checkbox" checked={f.enabled} onChange={(e) => setF({ ...f, enabled: e.target.checked })} /><span>{t("ui.online.enable")}</span></label></div>
+      {f.enabled && link && (
+        <div className="ff ff--full online-link">
+          <span className="ff__label">{t("ui.online.link")}</span>
+          <div className="barcode-row"><input className="input" readOnly value={link} onFocus={(e) => e.target.select()} />
+            <button type="button" className="btn btn--outline" onClick={copy}><Icon name="copy" /><span>{t(copied ? "ui.online.copied" : "ui.online.copy")}</span></button>
+            <a className="btn btn--outline" href={link} target="_blank" rel="noreferrer"><Icon name="globe" /><span>{t("ui.online.open")}</span></a></div>
+          <small className="ff__hint">{t("ui.online.linkHint")} <button type="button" className="link-btn" onClick={() => save(true)}>{t("ui.online.newLink")}</button></small>
+        </div>
+      )}
+      <div className="ff"><span className="ff__label">{t("ui.food.service")}</span>
+        <div className="chip-pick">{["takeaway", "delivery"].map((x) => <button key={x} type="button" aria-pressed={f.services.includes(x)} onClick={() => toggle("services", x)}>{t(`ui.food.services.${x}`)}</button>)}</div></div>
+      <div className="ff"><span className="ff__label">{t("ui.online.payWith")}</span>
+        <div className="chip-pick">{["cash", "mobile_money", "bank"].map((x) => <button key={x} type="button" aria-pressed={f.payments.includes(x)} onClick={() => toggle("payments", x)}>{t(`ui.online.payments.${x}`)}</button>)}</div></div>
+      <Field label={t("ui.food.deliveryFee")} error={sub.fieldErrors.deliveryFee}><input className="input" type="number" min="0" step="any" value={f.deliveryFee} onChange={(e) => setF({ ...f, deliveryFee: e.target.value })} /></Field>
+      <Field label={t("ui.online.minOrderLabel")} error={sub.fieldErrors.minOrder}><input className="input" type="number" min="0" step="any" value={f.minOrder} onChange={(e) => setF({ ...f, minOrder: e.target.value })} /></Field>
+      <Field label={`${t("ui.online.message")} ${t("ui.common.optional")}`} full><input className="input" value={f.message} onChange={(e) => setF({ ...f, message: e.target.value })} placeholder={t("ui.online.messagePh")} maxLength={300} /></Field>
+      <p className="muted ff--full">{t("ui.online.whatsappNote")}</p>
+      <FormError error={sub.formError} />
+      {saved && <p className="form-status form-status--success ff--full">{t("ui.common.saved")}</p>}
+      <div className="form-actions ff--full"><button type="button" className="btn btn--primary" disabled={sub.busy} onClick={() => save(false)}>{t("ui.common.save")}</button></div>
+    </section>
   );
 }

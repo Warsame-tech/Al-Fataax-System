@@ -744,6 +744,12 @@ COLUMNS.push(
   { table: "sales", column: "discount_approved_by", ddl: "ALTER TABLE sales ADD COLUMN discount_approved_by INT UNSIGNED NULL AFTER discount, ADD COLUMN promo_detail TEXT NULL AFTER discount_approved_by" }
 );
 
+// Online ordering and deliveries: where an order came from, the customer's payment choice, tracking code, delivery times; online menu settings.
+COLUMNS.push(
+  { table: "food_orders", column: "source", ddl: "ALTER TABLE food_orders ADD COLUMN source VARCHAR(12) NOT NULL DEFAULT 'pos' AFTER service_type, ADD COLUMN payment_pref VARCHAR(30) NULL AFTER source, ADD COLUMN tracking_code VARCHAR(16) NULL AFTER payment_pref, ADD COLUMN dispatched_at DATETIME NULL AFTER ready_at, ADD COLUMN delivered_at DATETIME NULL AFTER dispatched_at, ADD COLUMN delivery_note VARCHAR(255) NULL AFTER driver" },
+  { table: "business_settings", column: "online_settings", ddl: "ALTER TABLE business_settings ADD COLUMN online_settings TEXT NULL AFTER discount_rules" }
+);
+
 const INDEXES = [
   { table: "products", name: "idx_products_category", ddl: "ALTER TABLE products ADD INDEX idx_products_category (business_id, category_id)" },
   { table: "products", name: "idx_products_brand", ddl: "ALTER TABLE products ADD INDEX idx_products_brand (business_id, brand_id)" },

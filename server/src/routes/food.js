@@ -1,3 +1,4 @@
+import crypto from "node:crypto";
 import { Router } from "express";
 import { pool } from "../config/db.js";
 import { requireAuth, audit } from "../middleware/auth.js";
@@ -25,8 +26,9 @@ router.use(requireAuth);
 router.use((req, res, next) => (req.business.profile.food ? next() : res.status(404).json({ code: "notFound" })));
 
 const any = (...perms) => (req, res, next) => (perms.some((p) => can(req.user, p)) ? next() : res.status(403).json({ code: "forbidden" }));
-const STATUSES = ["received", "sent", "preparing", "ready", "served", "delivered", "completed", "cancelled", "merged"];
-const OPEN = ["received", "sent", "preparing", "ready", "served", "delivered"];
+const STATUSES = ["received", "sent", "preparing", "ready", "served", "on_the_way", "delivered", "completed", "cancelled", "merged"];
+export const OPEN = ["received", "sent", "preparing", "ready", "served", "on_the_way", "delivered"];
+export const SOURCES = ["pos", "online", "phone", "whatsapp"];
 const TABLE_STATUSES = ["available", "occupied", "reserved", "cleaning"];
 const q4 = (v) => Math.round(Number(v) * 10000) / 10000;
 const json = (v, d) => { try { return JSON.parse(v || "null") ?? d; } catch { return d; } };
@@ -253,7 +255,7 @@ async function syncTable(conn, businessId, tableId) {
 }
 
 /* ===================== orders ===================== */
-async function nextOrderNo(conn, businessId) {
+export async function nextOrderNo(conn, businessId) {
   await conn.query("SELECT business_id FROM business_settings WHERE business_id = ? FOR UPDATE", [businessId]);
   const [[n]] = await conn.query("SELECT COUNT(*) n FROM food_orders WHERE business_id = ?", [businessId]);
   return `ORD-${String(Number(n.n) + 1).padStart(5, "0")}`;
@@ -263,7 +265,7 @@ async function nextOrderNo(conn, businessId) {
  * Order lines from a request: [{ productId, qty, size?, extras?: [id], removed?: [recipeLineId], notes? }] — priced here:
  * size price (or the menu price) + extras; left-out ingredients must be optional lines of the item's recipe.
  */
-async function readLines(conn, businessId, list, field = "items") {
+export async function readLines(conn, businessId, list, field = "items") {
   const items = Array.isArray(list) ? list.slice(0, 100) : [];
   if (!items.length) throw badRequest({ [field]: "required" });
   const ids = [...new Set(items.map((x) => id(x?.productId)).filter(Boolean))];
@@ -303,7 +305,7 @@ async function readLines(conn, businessId, list, field = "items") {
   }
   return out;
 }
-async function insertLines(conn, { businessId, orderId, lines, send, userId }) {
+export async function insertLines(conn, { businessId, orderId, lines, send, userId }) {
   for (const l of lines) {
     await conn.query(
       `INSERT INTO food_order_items (business_id, order_id, product_id, qty, size, size_factor, extras, removed, notes, unit_price, line_total, station, status, user_id, sent_at)
@@ -315,7 +317,7 @@ async function insertLines(conn, { businessId, orderId, lines, send, userId }) {
 /* The order's status follows its items: all ready → ready, any started → preparing, otherwise sent. */
 async function refreshStatus(conn, order) {
   const [items] = await conn.query("SELECT status FROM food_order_items WHERE order_id = ? AND status NOT IN ('cancelled', 'new')", [order.id]);
-  if (["completed", "cancelled", "merged", "delivered"].includes(order.status)) return order.status;
+  if (["completed", "cancelled", "merged", "delivered", "on_the_way"].includes(order.status)) return order.status;
   let status = "received";
   if (items.length) {
     if (items.every((i) => i.status === "served")) status = "served";
@@ -363,9 +365,9 @@ router.post("/orders", requirePerm("sales.create"), ah(async (req, res) => {
     const send = b.send !== false;
     const number = await nextOrderNo(conn, req.business.id);
     const [x] = await conn.query(
-      `INSERT INTO food_orders (business_id, order_no, service_type, table_id, guests, customer_id, customer_name, customer_phone, delivery_address, delivery_fee, driver, notes, status, user_id, sent_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${send ? "UTC_TIMESTAMP()" : "NULL"})`,
-      [req.business.id, number, d.service, d.tableId, d.guests, d.customerId, d.customerName, d.customerPhone, d.address, d.fee, d.driver, d.notes, send ? "sent" : "received", req.user.id]);
+      `INSERT INTO food_orders (business_id, order_no, service_type, source, table_id, guests, customer_id, customer_name, customer_phone, delivery_address, delivery_fee, driver, notes, status, user_id, sent_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${send ? "UTC_TIMESTAMP()" : "NULL"})`,
+      [req.business.id, number, d.service, ["phone", "whatsapp"].includes(b.source) ? b.source : "pos", d.tableId, d.guests, d.customerId, d.customerName, d.customerPhone, d.address, d.fee, d.driver, d.notes, send ? "sent" : "received", req.user.id]);
     await insertLines(conn, { businessId: req.business.id, orderId: x.insertId, lines, send, userId: req.user.id });
     await syncTable(conn, req.business.id, d.tableId);
     await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "food.order", entity: "food_order", entityId: x.insertId, meta: { number, service: d.service, items: lines.length }, ip: req.ip });
@@ -509,10 +511,92 @@ router.post("/orders/:id/status", requirePerm("sales.create"), ah(async (req, re
     if (status === "delivered" && o.service_type !== "delivery") throw badRequest({ status: "required" });
     if (status === "served" || status === "delivered") await conn.query("UPDATE food_order_items SET status = 'served', served_at = COALESCE(served_at, UTC_TIMESTAMP()) WHERE order_id = ? AND status IN ('sent', 'preparing', 'ready')", [o.id]);
     if (status === "completed") await conn.query("UPDATE food_order_items SET status = 'served', served_at = COALESCE(served_at, UTC_TIMESTAMP()) WHERE order_id = ? AND status IN ('sent', 'preparing', 'ready')", [o.id]);
-    await conn.query(`UPDATE food_orders SET status = ?${status === "completed" ? ", closed_at = UTC_TIMESTAMP()" : ""} WHERE id = ?`, [status, o.id]);
+    await conn.query(`UPDATE food_orders SET status = ?${status === "completed" ? ", closed_at = UTC_TIMESTAMP()" : ""}${status === "delivered" ? ", delivered_at = UTC_TIMESTAMP(), delivery_note = ?" : ""} WHERE id = ?`,
+      status === "delivered" ? [status, optText(req.body?.note, 255), o.id] : [status, o.id]);
     await syncTable(conn, req.business.id, o.table_id);
   });
   res.json({ code: "saved" });
+}));
+
+/** POST /api/food/orders/:id/accept — an online order goes to the kitchen */
+router.post("/orders/:id/accept", requirePerm("sales.create"), ah(async (req, res) => {
+  await withTx(async (conn) => {
+    const o = await lockOrder(conn, req, req.params.id);
+    if (o.status !== "received") throw conflict("orderClosed");
+    await conn.query("UPDATE food_order_items SET status = 'sent', sent_at = UTC_TIMESTAMP() WHERE order_id = ? AND status = 'new'", [o.id]);
+    await conn.query("UPDATE food_orders SET status = 'sent', sent_at = UTC_TIMESTAMP(), user_id = COALESCE(user_id, ?) WHERE id = ?", [req.user.id, o.id]);
+    await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "food.accepted", entity: "food_order", entityId: o.id, meta: { number: o.order_no, source: o.source }, ip: req.ip });
+  });
+  res.json({ code: "saved" });
+}));
+/** POST /api/food/orders/:id/reject { reason } — an online order not taken (the customer sees it on their status page) */
+router.post("/orders/:id/reject", requirePerm("sales.create"), ah(async (req, res) => {
+  const reason = text(req.body?.reason, 200);
+  if (!reason) throw badRequest({ reason: "required" });
+  await withTx(async (conn) => {
+    const o = await lockOrder(conn, req, req.params.id);
+    if (o.status !== "received" || o.source !== "online") throw conflict("orderClosed");
+    await conn.query("UPDATE food_order_items SET status = 'cancelled' WHERE order_id = ?", [o.id]);
+    await conn.query("UPDATE food_orders SET status = 'cancelled', cancel_reason = ?, closed_at = UTC_TIMESTAMP() WHERE id = ?", [reason, o.id]);
+    await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "food.rejected", entity: "food_order", entityId: o.id, meta: { number: o.order_no, reason }, ip: req.ip });
+  });
+  res.json({ code: "saved" });
+}));
+/** POST /api/food/orders/:id/dispatch { driver } — a delivery leaves with the delivery person */
+router.post("/orders/:id/dispatch", requirePerm("sales.create"), ah(async (req, res) => {
+  const driver = text(req.body?.driver, 100);
+  if (!driver) throw badRequest({ driver: "required" });
+  await withTx(async (conn) => {
+    const o = await lockOrder(conn, req, req.params.id);
+    if (o.service_type !== "delivery" || !["sent", "preparing", "ready", "served"].includes(o.status)) throw conflict("orderClosed");
+    await conn.query("UPDATE food_order_items SET status = 'served', served_at = COALESCE(served_at, UTC_TIMESTAMP()) WHERE order_id = ? AND status IN ('sent', 'preparing', 'ready')", [o.id]);
+    await conn.query("UPDATE food_orders SET status = 'on_the_way', driver = ?, dispatched_at = UTC_TIMESTAMP() WHERE id = ?", [driver, o.id]);
+    await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "food.dispatched", entity: "food_order", entityId: o.id, meta: { driver }, ip: req.ip });
+  });
+  res.json({ code: "saved" });
+}));
+
+/** GET /api/food/deliveries?from&to — delivery performance: times from order to door, by delivery person */
+router.get("/deliveries", any("sales.create", "reports.view"), ah(async (req, res) => {
+  const r = range(req.query, 7);
+  const [rows] = await pool.query(
+    `SELECT driver, COUNT(*) n, AVG(TIMESTAMPDIFF(SECOND, created_at, delivered_at)) total_s, AVG(TIMESTAMPDIFF(SECOND, dispatched_at, delivered_at)) road_s
+       FROM food_orders WHERE business_id = ? AND service_type = 'delivery' AND delivered_at BETWEEN ? AND ? GROUP BY driver ORDER BY n DESC`, [req.business.id, r.start, r.end]);
+  const [[all]] = await pool.query(
+    `SELECT COUNT(*) n, AVG(TIMESTAMPDIFF(SECOND, created_at, delivered_at)) total_s, AVG(TIMESTAMPDIFF(SECOND, dispatched_at, delivered_at)) road_s, COALESCE(SUM(delivery_fee), 0) fees
+       FROM food_orders WHERE business_id = ? AND service_type = 'delivery' AND delivered_at BETWEEN ? AND ?`, [req.business.id, r.start, r.end]);
+  const [[open]] = await pool.query("SELECT COUNT(*) n FROM food_orders WHERE business_id = ? AND service_type = 'delivery' AND status IN (?)", [req.business.id, OPEN.filter((x) => x !== "delivered")]);
+  res.json({ range: r, delivered: Number(all.n), open: Number(open.n), avgMinutes: round1(all.total_s / 60), avgRoadMinutes: round1(all.road_s / 60), fees: num(all.fees),
+    drivers: rows.map((x) => ({ driver: x.driver || "—", count: Number(x.n), avgMinutes: round1(x.total_s / 60), avgRoadMinutes: round1(x.road_s / 60) })) });
+}));
+
+/* ---------- online ordering settings ---------- */
+export async function onlineSettings(db, businessId) {
+  const [[s]] = await db.query("SELECT online_settings FROM business_settings WHERE business_id = ?", [businessId]);
+  const o = json(s?.online_settings, {}) || {};
+  return { enabled: Boolean(o.enabled), code: o.code || null, services: Array.isArray(o.services) && o.services.length ? o.services : ["takeaway", "delivery"],
+    deliveryFee: num(o.deliveryFee), minOrder: num(o.minOrder), payments: Array.isArray(o.payments) && o.payments.length ? o.payments : ["cash", "mobile_money"], message: o.message || "" };
+}
+router.get("/online", any("settings.edit", "sales.create"), ah(async (req, res) => res.json(await onlineSettings(pool, req.business.id))));
+router.put("/online", requirePerm("settings.edit"), ah(async (req, res) => {
+  const b = req.body || {};
+  const cur = await onlineSettings(pool, req.business.id);
+  const services = (Array.isArray(b.services) ? b.services : []).filter((x) => ["takeaway", "delivery"].includes(x));
+  const payments = (Array.isArray(b.payments) ? b.payments : []).filter((x) => ["cash", "mobile_money", "bank"].includes(x));
+  const fee = b.deliveryFee === "" || b.deliveryFee == null ? 0 : money(b.deliveryFee);
+  const min = b.minOrder === "" || b.minOrder == null ? 0 : money(b.minOrder);
+  const e = {};
+  if (!services.length) e.services = "required";
+  if (!payments.length) e.payments = "required";
+  if (Number.isNaN(fee) || fee < 0) e.deliveryFee = "invalidAmount";
+  if (Number.isNaN(min) || min < 0) e.minOrder = "invalidAmount";
+  if (Object.keys(e).length) throw badRequest(e);
+  // the public link's code: made once, or anew when asked (the old link stops working)
+  const code = !cur.code || b.newLink ? crypto.randomBytes(6).toString("hex") : cur.code;
+  const next = { enabled: Boolean(b.enabled), code, services, deliveryFee: fee, minOrder: min, payments, message: text(b.message, 300) };
+  await pool.query("UPDATE business_settings SET online_settings = ? WHERE business_id = ?", [JSON.stringify(next), req.business.id]);
+  await audit(null, { businessId: req.business.id, userId: req.user.id, action: "food.online", entity: "business", entityId: req.business.id, meta: { ...next, code: undefined, newLink: Boolean(b.newLink) }, ip: req.ip });
+  res.json(next);
 }));
 
 /** POST /api/food/orders/:id/cancel { reason } — an unpaid order (a paid one is refunded by cancelling its receipt first) */
@@ -582,6 +666,7 @@ function shapeOrder(o, items) {
     id: o.id, number: o.order_no, service: o.service_type, tableId: o.table_id, table: o.table_name || null, guests: o.guests,
     customerId: o.customer_id, customer: o.customer_name || o.cust_name || "", phone: o.customer_phone || o.cust_phone || "",
     deliveryAddress: o.delivery_address || "", deliveryFee: num(o.delivery_fee), driver: o.driver || "", notes: o.notes || "", status: o.status,
+    source: o.source || "pos", paymentPref: o.payment_pref || null, dispatchedAt: o.dispatched_at, deliveredAt: o.delivered_at, deliveryNote: o.delivery_note || "",
     subtotal, total: round2(subtotal + num(o.delivery_fee)), saleId: o.sale_id, receiptNo: o.receipt_no || null,
     paid: o.sale_id ? num(o.sale_paid) : 0, billTotal: o.sale_id ? num(o.sale_total) : null, saleStatus: o.sale_status || null,
     balance: o.sale_id ? round2(num(o.sale_total) - num(o.sale_paid)) : null, mergedInto: o.merged_into, cancelReason: o.cancel_reason || "",
@@ -599,6 +684,7 @@ router.get("/orders", any("sales.create", "sales.view", "kitchen.view"), ah(asyn
   else if (st === "closed") where.push("o.status IN ('completed', 'cancelled')");
   else if (STATUSES.includes(st)) { where.push("o.status = ?"); params.push(st); }
   if (SERVICES.includes(req.query.service)) { where.push("o.service_type = ?"); params.push(req.query.service); }
+  if (SOURCES.includes(req.query.source)) { where.push("o.source = ?"); params.push(req.query.source); }
   if (id(req.query.tableId)) { where.push("o.table_id = ?"); params.push(id(req.query.tableId)); }
   if (st !== "open" && (req.query.from || req.query.to)) { const r = range(req.query, 7); where.push("o.created_at BETWEEN ? AND ?"); params.push(r.start, r.end); }
   const q = text(req.query.q, 60);

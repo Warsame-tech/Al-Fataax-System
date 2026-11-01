@@ -23,6 +23,7 @@ const en = {
     pattern: "Please match the requested format.", date: "Please enter a valid date.", invalid: "Please check this value."
   },
   errors: {
+    menuClosed: "Online ordering is closed right now.", belowMinOrder: "The minimum order is {min}.",
     tableBooked: "That table is already booked at that time.", tooManyGuests: "That table has only {seats} seats.", reservationClosed: "This reservation can't be changed any more.",
     discountTooHigh: "A discount can't be more than {max}% of the bill.", discountNeedsApproval: "A discount above {limit}% needs a manager's approval.", cannotApprove: "This user can't approve discounts.", tooManyAttempts: "Too many attempts. Try again later.",
     wasteDecided: "This waste record was already approved or rejected.",
@@ -196,7 +197,7 @@ const en = {
   food: {
     posTitle: "Restaurant POS", newOrder: "New order", newItems: "New items", adding: "Adding to this order", pickItems: "Choose items from the menu.",
     services: { dine_in: "Dine-in", takeaway: "Takeaway", counter: "Counter", delivery: "Delivery" }, service: "Service", allServices: "All services",
-    status: { received: "Received", sent: "Sent to kitchen", preparing: "Preparing", ready: "Ready", served: "Served", delivered: "Delivered", completed: "Completed", cancelled: "Cancelled", merged: "Combined" },
+    status: { received: "Received", sent: "Sent to kitchen", preparing: "Preparing", ready: "Ready", served: "Served", on_the_way: "On the way", delivered: "Delivered", completed: "Completed", cancelled: "Cancelled", merged: "Combined" },
     itemStatus: { new: "Not sent", sent: "Sent", preparing: "Preparing", ready: "Ready", served: "Served", cancelled: "Cancelled" },
     table: "Table", tables: "Tables", chooseTable: "Choose a table", guests: "Guests", guestsN: "{n} guests", seats: "{n} seats",
     tableStatus: { available: "Available", occupied: "Occupied", reserved: "Reserved", cleaning: "Cleaning" }, setAvailable: "Mark available", setReserved: "Reserve",
@@ -278,6 +279,22 @@ const en = {
     time: "Time", forMin: "for {n} min", pastNoShows: "{n} earlier no-show(s)", deposit: "Deposit", refundedAmt: "{amount} refunded",
     seat: "Seat", noShow: "No-show", done: "Done", newGuest: "New guest", dateTime: "Date and time", duration: "Duration (minutes)",
     notesPh: "e.g. birthday, window seat", refund: "Refund", depositWas: "Deposit paid: {amount}"
+  },
+  online: {
+    title: "Online ordering", source: "Order source", sources: { pos: "In person", online: "Online", phone: "Phone", whatsapp: "WhatsApp" },
+    payments: { cash: "Cash on delivery / pickup", mobile_money: "Mobile money", bank: "Bank transfer" },
+    accept: "Accept", reject: "Reject", rejectHelp: "The customer sees on their status page that the order was not accepted, with this reason.",
+    dispatch: "Send out", dispatchTitle: "Send out · {n}", deliveredTitle: "Delivered · {n}", confirmNote: "Delivery note", confirmNotePh: "e.g. Handed to the customer",
+    deliveries: "Deliveries", openDeliveries: "Deliveries in progress", deliveredN: "Delivered", openN: "In progress", avgTotal: "Avg. order → door (min)", avgRoad: "Avg. on the road (min)", fees: "Delivery fees",
+    help: "Customers open your menu link, choose items, sizes and extras, and send the order with their phone and address. Orders appear in Open orders marked Online: accept them to send them to the kitchen.",
+    enable: "Take online orders", link: "Your menu link", copy: "Copy", copied: "Copied", open: "Open",
+    linkHint: "Share it on WhatsApp, Facebook or a QR code.", newLink: "Make a new link (the old one stops working)",
+    payWith: "Payment", minOrderLabel: "Minimum order", message: "Message on the menu", messagePh: "e.g. Open 10:00–22:00. Delivery in 30–45 min.",
+    whatsappNote: "Telephone and WhatsApp orders are typed in the POS (choose the order source). Sending messages through WhatsApp itself needs an approved WhatsApp Business provider.",
+    closed: "This menu isn't taking orders right now.", itemsN: "{n} items", checkout: "Checkout", place: "Place order", thanks: "Thank you!",
+    orderNo: "Order", waitConfirm: "The restaurant will confirm your order shortly.", track: "Follow my order", notAccepted: "Sorry, your order was not accepted",
+    minOrder: "The minimum order is {amount}.", refreshes: "This page updates by itself.",
+    steps: { received: "Received", sent: "Confirmed", preparing: "Preparing", ready: "Ready", on_the_way: "On the way", delivered: "Delivered" }
   },
   products: {
     fabricCategory: "Fabric category", colorShade: "Colour / shade", colorShadePh: "Colour / shade", pattern: "Pattern", patternPh: "Pattern",
@@ -587,6 +604,7 @@ const so = {
     pattern: "Fadlan raac qaabka la rabo.", date: "Fadlan geli taariikh sax ah.", invalid: "Fadlan hubi qiimahan."
   },
   errors: {
+    menuClosed: "Dalabka online hadda waa xiran yahay.", belowMinOrder: "Dalabka ugu yar waa {min}.",
     tableBooked: "Miiskaas horay ayaa loo qabsaday waqtigaas.", tooManyGuests: "Miiskaas wuxuu leeyahay {seats} kursi oo keliya.", reservationClosed: "Ballantan lama beddeli karo.",
     discountTooHigh: "Dhimistu kama badnaan karto {max}% biilka.", discountNeedsApproval: "Dhimis ka badan {limit}% waxay u baahan tahay ansixinta maamule.", cannotApprove: "Isticmaalahan ma ansixin karo dhimista.", tooManyAttempts: "Isku day badan. Mar dambe isku day.",
     wasteDecided: "Diiwaankan khasaaraha horay ayaa loo ansixiyay ama loo diiday.",
@@ -760,7 +778,7 @@ const so = {
   food: {
     posTitle: "POS maqaayadda", newOrder: "Dalab cusub", newItems: "Shayo cusub", adding: "Lagu darayo dalabkan", pickItems: "Ka dooro shayada liiska cuntada.",
     services: { dine_in: "Fadhi (dine-in)", takeaway: "La qaato", counter: "Miiska iibka", delivery: "Gaarsiin" }, service: "Adeeg", allServices: "Adeeg kasta",
-    status: { received: "La helay", sent: "Jikada loo diray", preparing: "La diyaarinayaa", ready: "Diyaar", served: "La siiyay", delivered: "La gaarsiiyay", completed: "Dhammaaday", cancelled: "La joojiyay", merged: "La isku daray" },
+    status: { received: "La helay", sent: "Jikada loo diray", preparing: "La diyaarinayaa", ready: "Diyaar", served: "La siiyay", on_the_way: "Waddada", delivered: "La gaarsiiyay", completed: "Dhammaaday", cancelled: "La joojiyay", merged: "La isku daray" },
     itemStatus: { new: "Lama dirin", sent: "La diray", preparing: "La diyaarinayaa", ready: "Diyaar", served: "La siiyay", cancelled: "La joojiyay" },
     table: "Miis", tables: "Miisaska", chooseTable: "Dooro miis", guests: "Martida", guestsN: "{n} marti", seats: "{n} kursi",
     tableStatus: { available: "Bannaan", occupied: "La fadhiyo", reserved: "La qabsaday", cleaning: "La nadiifinayaa" }, setAvailable: "Calaamadee bannaan", setReserved: "Qabso",
@@ -842,6 +860,22 @@ const so = {
     time: "Waqtiga", forMin: "{n} daqiiqo", pastNoShows: "{n} jeer hore ma iman", deposit: "Horudhac", refundedAmt: "{amount} la celiyay",
     seat: "Fadhiisi", noShow: "Ma iman", done: "Dhammaaday", newGuest: "Marti cusub", dateTime: "Taariikhda iyo waqtiga", duration: "Muddada (daqiiqo)",
     notesPh: "tusaale dhalasho, kursi daaqadda ag yaal", refund: "Celin lacag", depositWas: "Horudhaca la bixiyay: {amount}"
+  },
+  online: {
+    title: "Dalabka online", source: "Halka dalabku ka yimid", sources: { pos: "Fool ka fool", online: "Online", phone: "Taleefan", whatsapp: "WhatsApp" },
+    payments: { cash: "Lacag caddaan marka la keeno / la qaato", mobile_money: "Lacag mobile", bank: "Wareejin bangi" },
+    accept: "Aqbal", reject: "Diid", rejectHelp: "Macmiilku wuxuu bogga xaaladda ku arkayaa in dalabka la aqbalin, iyo sababtan.",
+    dispatch: "U dir", dispatchTitle: "U dir · {n}", deliveredTitle: "La gaarsiiyay · {n}", confirmNote: "Qoraalka gaarsiinta", confirmNotePh: "tusaale Waxaa la gacansiiyay macmiilka",
+    deliveries: "Gaarsiinta", openDeliveries: "Gaarsiin socota", deliveredN: "La gaarsiiyay", openN: "Socda", avgTotal: "Celcelis dalab → albaab (daq.)", avgRoad: "Celcelis waddada (daq.)", fees: "Khidmadaha gaarsiinta",
+    help: "Macaamiishu waxay furaan xiriirka liiskaaga cuntada, doortaan shayada, cabbirrada iyo kordhinta, oo diraan dalabka iyagoo raacinaya taleefanka iyo cinwaanka. Dalabaadku waxay ka muuqdaan Dalabaadka furan iyagoo calaamad Online leh: aqbal si ay jikada u aadaan.",
+    enable: "Qaado dalabaad online", link: "Xiriirka liiskaaga cuntada", copy: "Koobi", copied: "Waa la koobiyay", open: "Fur",
+    linkHint: "Ku wadaag WhatsApp, Facebook ama QR code.", newLink: "Samee xiriir cusub (kii hore wuu shaqayn waayayaa)",
+    payWith: "Lacag-bixin", minOrderLabel: "Dalabka ugu yar", message: "Fariinta liiska", messagePh: "tusaale Furan 10:00–22:00. Gaarsiin 30–45 daqiiqo.",
+    whatsappNote: "Dalabaadka taleefanka iyo WhatsApp-ka waxaa lagu qoraa POS-ka (dooro halka uu ka yimid). Fariin u dirista WhatsApp laftiisa waxay u baahan tahay bixiye WhatsApp Business oo la ansixiyay.",
+    closed: "Liiskan hadda dalab ma qaadanayo.", itemsN: "{n} shay", checkout: "Dalbo", place: "Dir dalabka", thanks: "Mahadsanid!",
+    orderNo: "Dalab", waitConfirm: "Maqaayaddu dhowaan ayay xaqiijin doontaa dalabkaaga.", track: "La soco dalabkayga", notAccepted: "Waan ka xumahay, dalabkaaga lama aqbalin",
+    minOrder: "Dalabka ugu yar waa {amount}.", refreshes: "Boggani iskiis ayuu isu cusbooneysiiyaa.",
+    steps: { received: "La helay", sent: "La xaqiijiyay", preparing: "La diyaarinayaa", ready: "Diyaar", on_the_way: "Waddada ayuu ku jiraa", delivered: "La gaarsiiyay" }
   },
   products: {
     fabricCategory: "Qaybta marada", colorShade: "Midab / hadh", colorShadePh: "Midab / hadh", pattern: "Naqshad", patternPh: "Naqshad",

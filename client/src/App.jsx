@@ -12,11 +12,13 @@ import InvoiceView from "./app/InvoiceView.jsx";
 import { InvoiceForm } from "./app/pages/Invoices.jsx";
 import Receipt from "./app/pages/Receipt.jsx";
 import AdminApp from "./admin/AdminApp.jsx";
+import OnlineOrder, { OrderTracking } from "./pages/OnlineOrder.jsx";
 
 /*
  * Route map.
  *   Public site:  /  (one page: sections), /signin, /register
  *   Business app: /app (dashboard), /app/m/:id (modules), /app/invoices/:id
+ *   Online ordering (food businesses, no sign-in): /order/:code, /order/:code/track/:tracking
  * The API enforces authentication and tenant isolation on every request;
  * RequireAuth only handles navigation.
  */
@@ -40,6 +42,8 @@ export default function App() {
       </Route>
 
       <Route path="admin/*" element={<AdminApp />} />
+      <Route path="order/:code" element={<OnlineOrder />} />
+      <Route path="order/:code/track/:tracking" element={<OrderTracking />} />
     </Routes>
   );
 }
