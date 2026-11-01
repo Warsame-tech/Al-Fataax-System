@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest, fileUrl } from "../../services/api.js";
-import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, FormError, Money, EmptyState, Loading, SearchBox, StatusBadge, DateRange, daysAgo, isoDate, Modal } from "../ui.jsx";
+import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, FormError, Money, EmptyState, Loading, SearchBox, StatusBadge, DateRange, daysAgo, isoDate, Modal, Field } from "../ui.jsx";
 import { fill, qty, date } from "../format.js";
 import CameraScanner from "../CameraScanner.jsx";
 import { VAT_RATE, vatOf } from "../vat.js";
@@ -19,6 +19,7 @@ const tracked = (p) => ["serial", "imei", "serial_imei"].includes(p?.tracking);
 /* A cart line may be sold in a pack of the product (pharmacy: box, strip…); stock is counted in base units.
  * Fabric sold from rolls: a line per roll, sold by the meter, the yard or the whole roll (never more than the roll has). */
 const rollPer = (l) => (l.unit === "yard" ? YARD : l.unit === "roll" ? l.roll?.remaining || 1 : 1);
+const r4 = (v) => Math.round(Number(v) * 10000) / 10000;
 const perOf = (l) => (isRoll(l.product) ? rollPer(l) : l.unit ? unitsPer(l.product, l.unit) || 1 : 1);
 const priceOf = (l) => (isRoll(l.product) ? Math.round(l.product.sellingPrice * rollPer(l) * 10000) / 10000 : l.unit ? packPrice(l.product, l.unit) : l.product.sellingPrice);
 const maxOf = (l) => Math.floor(((isRoll(l.product) ? l.roll?.remaining ?? 0 : l.product.stock) / perOf(l)) * 10000 + 1e-6) / 10000;
@@ -306,6 +307,7 @@ function Register() {
 
       {paying && (
         <PaymentModal cart={cart} subtotal={subtotal} customer={customer} addVat={addVat} setAddVat={setAddVat}
+          previewItems={cart.map((l) => ({ productId: l.product.id, qty: r4(l.qty * perOf(l)), lineTotal: r4(l.qty * priceOf(l)) }))}
           onClose={() => setPaying(false)} onDone={(result) => { setPaying(false); setDone(result); draft.finish(); }} />
       )}
 
@@ -335,7 +337,7 @@ function Register() {
  * on credit for the chosen customer.
  * Restaurant bills reuse it: fee (delivery) is added to the total, and submit(body) pays the food order instead of /api/sales.
  */
-export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer, addVat, setAddVat, onClose, onDone, submit = null }) {
+export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer, addVat, setAddVat, onClose, onDone, submit = null, previewItems = null }) {
   const { t } = useLanguage();
   const can = usePerm();
   const m = useMoney();
@@ -345,18 +347,33 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
   const [discount, setDiscount] = useState("");
   const [discMode, setDiscMode] = useState("percent"); // "percent" | "amount"
   const [payments, setPayments] = useState([]);    // [{ key, paymentMethodId, kind, label, amount }]
+  // promotions running now (server works them out the same way when the sale is saved) and the discount rules
+  const [promo, setPromo] = useState(null);
+  const rules = useApi("/api/promotions/rules");
+  const [approval, setApproval] = useState(null);  // { token, approver } a manager approved this discount
+  const [asking, setAsking] = useState(false);
+  useEffect(() => {
+    if (!previewItems?.length) return;
+    apiRequest("/api/promotions/preview", { method: "POST", body: { items: previewItems } }).then(setPromo).catch(() => {});
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const r2 = (v) => Math.round(v * 10000) / 10000;   // money to 4 decimals (exact VAT)
+  const promoOff = promo?.total || 0;
+  const base = r2(subtotal - promoOff);              // what a manual discount is taken from
   const discValue = Math.max(Number(discount) || 0, 0);
-  const disc = discMode === "percent" ? r2(subtotal * Math.min(discValue, 100) / 100) : Math.min(discValue, subtotal);
-  const vat = vatOf(addVat, r2(subtotal - disc));
-  const total = r2(subtotal - disc + vat + fee);
+  const disc = discMode === "percent" ? r2(base * Math.min(discValue, 100) / 100) : Math.min(discValue, base);
+  const discPct = base > 0 ? (disc / base) * 100 : 0;
+  const tooHigh = rules.data && discPct > rules.data.maxPct + 0.0001 && !can("settings.edit");
+  const needsApproval = rules.data && disc > 0 && discPct > rules.data.approvalPct + 0.0001 && !can("discounts.approve") && !approval;
+  const vat = vatOf(addVat, r2(base - disc));
+  const total = r2(base - disc + vat + fee);
+  const promoNames = promo ? [...new Set([...promo.lines.filter((l) => l.promo).map((l) => l.promo.name), promo.order.promo?.name].filter(Boolean))] : [];
   const paid = r2(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0));
   const remaining = r2(total - paid);
   const cashPaid = r2(payments.filter((p) => p.kind === "cash").reduce((s, p) => s + (Number(p.amount) || 0), 0));
   const change = remaining < 0 ? -remaining : 0;
   const changeOk = change === 0 || cashPaid >= change;
-  const canConfirm = cart.length > 0 && changeOk && (remaining <= 0 || customer) && !sub.busy;
+  const canConfirm = cart.length > 0 && changeOk && (remaining <= 0 || customer) && !sub.busy && !tooHigh && !needsApproval;
 
   const METHODS = (methodsApi.data?.methods || []).map((pm) => ({ key: `pm-${pm.id}`, paymentMethodId: pm.id, kind: pm.kind, label: pm.label }));
 
@@ -374,6 +391,7 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
       ...(submit ? {} : { items: cart.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}), ...(l.rollId ? { rollId: l.rollId } : {}) })) }),
       customerId: customer?.id || null,
       discount: disc || 0,
+      ...(approval ? { approvalToken: approval.token } : {}),
       vat: addVat,
       payments: payments.filter((p) => Number(p.amount) > 0).map((p) => ({ paymentMethodId: p.paymentMethodId, amount: Number(p.amount) }))
     };
@@ -383,10 +401,12 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
 
   return (
     <Modal title={t("ui.pos.payTitle")} onClose={onClose} wide>
+      {asking && <ManagerApproval onClose={() => setAsking(false)} onApproved={(a) => { setApproval(a); setAsking(false); }} />}
       <div className="paybox">
         <div className="paybox__left">
           <dl className="paybox__sum">
             <div><dt>{t("ui.common.subtotal")}</dt><dd>{m(subtotal)}</dd></div>
+            {promoOff > 0 && <div className="paybox__promo"><dt>{t("ui.promo.promotions")}<small>{promoNames.join(", ")}</small></dt><dd>− {m(promoOff)}</dd></div>}
             <div className="paybox__disc">
               <dt>{t("ui.common.discount")}</dt>
               <dd>
@@ -400,6 +420,9 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
                 </span>
                 {!can("sales.discount") && <span className="paybox__lock" title={t("ui.pos.discountLocked")}><Icon name="lock" />{t("ui.pos.locked")}</span>}
                 <strong className="paybox__disc-amt">{disc > 0 ? `− ${m(disc)}` : m(0)}</strong>
+                {tooHigh && <small className="ff__error">{fill(t("ui.errors.discountTooHigh"), { max: rules.data.maxPct })}</small>}
+                {needsApproval && <button type="button" className="btn btn--outline btn--sm" onClick={() => setAsking(true)}><Icon name="lock" /><span>{t("ui.promo.askApproval")}</span></button>}
+                {approval && <small className="paybox__approved"><Icon name="check" /> {fill(t("ui.promo.approvedBy"), { name: approval.approver })}</small>}
               </dd>
             </div>
             <div className="paybox__vat">
@@ -518,5 +541,24 @@ function History() {
         </div>
       )}
     </>
+  );
+}
+
+/** A manager types their username and password to approve one discount above the approval level. */
+function ManagerApproval({ onClose, onApproved }) {
+  const { t } = useLanguage();
+  const [f, setF] = useState({ username: "", password: "" });
+  const sub = useSubmit();
+  const save = async (e) => { e.preventDefault(); const r = await sub.run(() => apiRequest("/api/promotions/approval", { method: "POST", body: f })); if (r) onApproved(r); };
+  return (
+    <Modal title={t("ui.promo.askApproval")} onClose={onClose}>
+      <form onSubmit={save} className="form-grid">
+        <p className="modal__help">{t("ui.promo.approvalHelp")}</p>
+        <Field label={t("ui.promo.managerUser")} error={sub.fieldErrors.username}><input className="input" autoComplete="off" value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} /></Field>
+        <Field label={t("ui.promo.managerPassword")} error={sub.fieldErrors.password}><input className="input" type="password" autoComplete="off" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
+        <FormError error={sub.formError} />
+        <div className="form-actions"><button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button><button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.promo.approve")}</button></div>
+      </form>
+    </Modal>
   );
 }

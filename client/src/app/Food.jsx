@@ -272,7 +272,7 @@ export function FoodPos() {
 
       {picking && <ItemChoice item={picking} onClose={() => setPicking(null)} onAdd={(choice) => { addToCart(picking, choice); setPicking(null); }} />}
       {paying && o && (
-        <PaymentModal cart={o.items} subtotal={o.subtotal} fee={o.deliveryFee} feeLabel={t("ui.food.deliveryFee")} customer={orderCustomer} addVat={false} setAddVat={() => {}}
+        <PaymentModal cart={o.items} subtotal={o.subtotal} fee={o.deliveryFee} previewItems={o.items.filter((i) => i.status !== "cancelled").map((i) => ({ productId: i.productId, qty: i.qty, lineTotal: i.total }))} feeLabel={t("ui.food.deliveryFee")} customer={orderCustomer} addVat={false} setAddVat={() => {}}
           submit={(body) => apiRequest(`/api/food/orders/${o.id}/pay`, { method: "POST", body: { ...body, customerId: body.customerId || o.customerId || undefined } })}
           onClose={() => setPaying(false)} onDone={(r) => { setPaying(false); setDone(r); reloadAll(); }} />
       )}

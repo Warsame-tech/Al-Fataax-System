@@ -23,6 +23,7 @@ const en = {
     pattern: "Please match the requested format.", date: "Please enter a valid date.", invalid: "Please check this value."
   },
   errors: {
+    discountTooHigh: "A discount can't be more than {max}% of the bill.", discountNeedsApproval: "A discount above {limit}% needs a manager's approval.", cannotApprove: "This user can't approve discounts.", tooManyAttempts: "Too many attempts. Try again later.",
     wasteDecided: "This waste record was already approved or rejected.",
     shiftNotOpen: "Open your cashier shift before selling.", shiftAlreadyOpen: "You already have an open shift.", shiftClosed: "This shift is already closed.",
     shiftNotClosed: "Only a closed shift can be approved.", approveOwnShift: "Another manager must approve your own shift.", explainDifference: "Explain the difference between counted and expected cash.",
@@ -251,6 +252,23 @@ const en = {
     status: { pending: "Waiting for approval", approved: "Approved", rejected: "Rejected" },
     willApprove: "Approved now: it leaves stock immediately.", willWait: "A manager approves it before it leaves stock.",
     savedApproved: "Recorded and approved (about {amount}).", savedPending: "Recorded (about {amount}). A manager will approve it."
+  },
+  promo: {
+    title: "Promotions", history: "Discount history", rules: "Discount rules", add: "New promotion", none: "No promotions yet.", namePh: "e.g. Happy hour coffee",
+    help: "Promotions apply by themselves at the POS when they are running: each item gets its best promotion, and the order gets its best order promotion.",
+    offer: "Offer", appliesTo: "Applies to", when: "When", wholeOrder: "Whole order", allItems: "All items", chosenN: "{n} chosen", always: "Always",
+    running: "Running now", notNow: "Not running now", off: "Switched off", active: "Active",
+    kinds: { percent: "% off items", amount: "Amount off each item", price: "Special price", bogo: "Buy … get … free", order_percent: "% off the order", order_amount: "Amount off the order" },
+    valueLabel: { percent: "Percent off", amount: "Amount off each", price: "Special price", order_percent: "Percent off", order_amount: "Amount off" },
+    describe: { percent: "{v}% off", amount: "{v} off each", price: "for {v}", bogo: "buy {buy} get {get} free", order_percent: "{v}% off orders from {min}", order_amount: "{v} off orders from {min}" },
+    buy: "Buy", getFree: "Get free", minTotal: "From an order total of", starts: "Starts", ends: "Ends", daysLabel: "Days", daysHint: "None chosen = every day.",
+    days: { 1: "Sun", 2: "Mon", 3: "Tue", 4: "Wed", 5: "Thu", 6: "Fri", 7: "Sat" },
+    categories: "Categories", products: "Products", findProduct: "Find a product", eligibleHint: "No category and no product chosen = every item.",
+    promotions: "Promotions", askApproval: "Manager approval", approvedBy: "Approved by {name}", approvalHelp: "A manager enters their username and password to approve this discount.",
+    managerUser: "Manager username", managerPassword: "Manager password", approve: "Approve",
+    rulesHelp: "Limits for discounts typed at the POS (promotions are not counted). Staff who may approve discounts are set in Staff & roles.",
+    approvalPct: "Manager approval above (%)", approvalPctHint: "A bigger discount needs a manager's username and password.", maxPct: "Maximum discount (%)", maxPctHint: "Nobody but the owner can go above it.",
+    whoCan: "Who may give and approve discounts:", manualTotal: "Manual discounts", promoTotal: "Promotions", approvedN: "{n} approved by a manager", manual: "Manual discount", approvedByCol: "Approved by"
   },
   products: {
     fabricCategory: "Fabric category", colorShade: "Colour / shade", colorShadePh: "Colour / shade", pattern: "Pattern", patternPh: "Pattern",
@@ -492,6 +510,7 @@ const en = {
     noRoles: "There are no roles yet.", manageRoles: "Manage roles"
   },
   perms: {
+    "discounts.approve": "Approve discounts above the approval level", "promotions.manage": "Set up promotions",
     "kitchen.view": "See the kitchen display and kitchen reports", "kitchen.update": "Update preparation status and mark items sold out", "tables.manage": "Set up tables",
     "dashboard.finance": "See money totals (sales, profit, cash)",
     "sales.create": "Open POS and make sales", "sales.view": "See sales history and receipts", "sales.discount": "Give discounts and change prices", "sales.cancel": "Cancel sales and refund",
@@ -559,6 +578,7 @@ const so = {
     pattern: "Fadlan raac qaabka la rabo.", date: "Fadlan geli taariikh sax ah.", invalid: "Fadlan hubi qiimahan."
   },
   errors: {
+    discountTooHigh: "Dhimistu kama badnaan karto {max}% biilka.", discountNeedsApproval: "Dhimis ka badan {limit}% waxay u baahan tahay ansixinta maamule.", cannotApprove: "Isticmaalahan ma ansixin karo dhimista.", tooManyAttempts: "Isku day badan. Mar dambe isku day.",
     wasteDecided: "Diiwaankan khasaaraha horay ayaa loo ansixiyay ama loo diiday.",
     shiftNotOpen: "Fur wareeggaaga khasnajiga ka hor intaadan iibin.", shiftAlreadyOpen: "Horay ayaad wareeg furan u leedahay.", shiftClosed: "Wareeggan horay ayaa loo xiray.",
     shiftNotClosed: "Kaliya wareeg la xiray ayaa la ansixin karaa.", approveOwnShift: "Maamule kale ayaa ansixinaya wareeggaaga.", explainDifference: "Sharax farqiga u dhexeeya lacagta la tiriyay iyo tan la filayay.",
@@ -787,6 +807,23 @@ const so = {
     status: { pending: "Sugaya ansixin", approved: "La ansixiyay", rejected: "La diiday" },
     willApprove: "Hadda ayaa la ansixiyay: isla markiiba kaydka ayuu ka baxayaa.", willWait: "Maamule ayaa ansixinaya ka hor inta uusan kaydka ka bixin.",
     savedApproved: "Waa la diiwaangeliyay lana ansixiyay (qiyaastii {amount}).", savedPending: "Waa la diiwaangeliyay (qiyaastii {amount}). Maamule ayaa ansixin doona."
+  },
+  promo: {
+    title: "Dalacsiinta", history: "Taariikhda dhimista", rules: "Xeerarka dhimista", add: "Dalacsiin cusub", none: "Weli dalacsiin ma jirto.", namePh: "tusaale Kafee saacadda farxadda",
+    help: "Dalacsiintu iyada ayaa POS-ka ka shaqaysa marka ay socoto: shay kasta wuxuu helaa dalacsiintiisa ugu fiican, dalabkuna wuxuu helaa dalacsiinta dalabka ugu fiican.",
+    offer: "Dalab", appliesTo: "Waxay khusaysaa", when: "Goorma", wholeOrder: "Dalabka oo dhan", allItems: "Shay kasta", chosenN: "{n} la doortay", always: "Mar walba",
+    running: "Hadda socota", notNow: "Hadda ma socoto", off: "La damiyay", active: "Firfircoon",
+    kinds: { percent: "% ka dhimis shayada", amount: "Qaddar ka dhimis shay kasta", price: "Qiimo gaar ah", bogo: "Iibso … hel … bilaash", order_percent: "% ka dhimis dalabka", order_amount: "Qaddar ka dhimis dalabka" },
+    valueLabel: { percent: "Boqolleyda la dhimayo", amount: "Qaddarka shay kasta", price: "Qiimaha gaarka ah", order_percent: "Boqolleyda la dhimayo", order_amount: "Qaddarka la dhimayo" },
+    describe: { percent: "{v}% dhimis", amount: "{v} dhimis shay kasta", price: "{v} ku", bogo: "iibso {buy} hel {get} bilaash", order_percent: "{v}% dhimis dalabka ka badan {min}", order_amount: "{v} dhimis dalabka ka badan {min}" },
+    buy: "Iibso", getFree: "Hel bilaash", minTotal: "Laga bilaabo wadarta dalabka", starts: "Bilaabanaysa", ends: "Dhammaanaysa", daysLabel: "Maalmaha", daysHint: "Haddii aan la dooran = maalin walba.",
+    days: { 1: "Axd", 2: "Isn", 3: "Tal", 4: "Arb", 5: "Kha", 6: "Jim", 7: "Sab" },
+    categories: "Qaybaha", products: "Alaabta", findProduct: "Raadi alaab", eligibleHint: "Qayb iyo alaab midna la ma dooran = shay kasta.",
+    promotions: "Dalacsiinta", askApproval: "Ansixinta maamulaha", approvedBy: "Waxaa ansixiyay {name}", approvalHelp: "Maamule ayaa gelinaya magaciisa isticmaale iyo furaha si uu u ansixiyo dhimistan.",
+    managerUser: "Magaca isticmaale ee maamulaha", managerPassword: "Furaha maamulaha", approve: "Ansixi",
+    rulesHelp: "Xadka dhimista lagu qoro POS-ka (dalacsiinta laguma xisaabo). Shaqaalaha ansixin kara dhimista waxaa lagu dejiyaa Shaqaalaha & doorarka.",
+    approvalPct: "Ansixinta maamule ka sare (%)", approvalPctHint: "Dhimis ka weyn waxay u baahan tahay magaca iyo furaha maamulaha.", maxPct: "Dhimista ugu badan (%)", maxPctHint: "Qof aan milkiilaha ahayn kama gudbi karo.",
+    whoCan: "Cidda dhimis bixin karta oo ansixin karta:", manualTotal: "Dhimis gacanta ah", promoTotal: "Dalacsiinta", approvedN: "{n} uu ansixiyay maamule", manual: "Dhimis gacanta ah", approvedByCol: "Waxaa ansixiyay"
   },
   products: {
     fabricCategory: "Qaybta marada", colorShade: "Midab / hadh", colorShadePh: "Midab / hadh", pattern: "Naqshad", patternPh: "Naqshad",
@@ -1028,6 +1065,7 @@ const so = {
     noRoles: "Weli door ma jiro.", manageRoles: "Maamul doorarka"
   },
   perms: {
+    "discounts.approve": "Ansixi dhimista ka badan heerka ansixinta", "promotions.manage": "Diyaari dalacsiinta",
     "kitchen.view": "Arag shaashadda jikada iyo warbixinnada jikada", "kitchen.update": "Cusbooneysii xaaladda diyaarinta oo calaamadee waxa dhammaaday", "tables.manage": "Diyaari miisaska",
     "dashboard.finance": "Arag wadarta lacagta (iib, faa'iido, caddaan)",
     "sales.create": "Fur POS oo samee iib", "sales.view": "Arag taariikhda iibka iyo rasiidyada", "sales.discount": "Bixi dhimis oo beddel qiimaha", "sales.cancel": "Baaji iibka oo celi lacagta",

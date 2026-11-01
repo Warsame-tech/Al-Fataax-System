@@ -13,7 +13,7 @@
  * of each group is the one that opens the module ("can see it"). */
 export const PERMISSION_GROUPS = [
   { module: "overview", perms: ["dashboard.finance"] },
-  { module: "pos", perms: ["sales.create", "sales.view", "sales.discount", "sales.cancel"] },
+  { module: "pos", perms: ["sales.create", "sales.view", "sales.discount", "sales.cancel", "discounts.approve", "promotions.manage"] },
   { module: "invoices", perms: ["invoices.view", "invoices.create", "invoices.cancel", "payments.receive"] },
   { module: "products", perms: ["products.view", "products.edit"] },
   { module: "stock", perms: ["stock.view", "stock.add", "stock.adjust", "stock.transfer", "stock.locations"] },
@@ -48,7 +48,7 @@ export function normalizePermissions(list) {
 const OM = ["owner", "manager"];
 const LEGACY = {
   "dashboard.finance": OM,
-  "sales.create": ["manager", "cashier"], "sales.view": ["manager", "cashier"], "sales.discount": OM, "sales.cancel": OM,
+  "sales.create": ["manager", "cashier"], "sales.view": ["manager", "cashier"], "sales.discount": OM, "sales.cancel": OM, "discounts.approve": OM, "promotions.manage": OM,
   "invoices.view": ["manager", "cashier"], "invoices.create": ["manager", "cashier"], "invoices.cancel": OM, "payments.receive": ["manager", "cashier"],
   "products.view": ["manager", "cashier", "stockkeeper"], "products.edit": ["manager", "stockkeeper"],
   "stock.view": ["manager", "stockkeeper"], "stock.add": ["manager", "stockkeeper"], "stock.adjust": OM, "stock.transfer": OM, "stock.locations": OM,

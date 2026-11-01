@@ -1320,3 +1320,9 @@ tr.is-muted td { opacity: .6; }
 .waste-status.is-pending { background: #fff4e0; color: #9a5b00; }
 .waste-status.is-approved { background: #fde8e8; color: #b42318; }
 .waste-status.is-rejected { background: #eef1f7; color: var(--muted); }
+
+.promo-status { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef1f7; color: var(--muted); font-size: .76rem; font-weight: 700; }
+.promo-status.is-on { background: #e7f6ee; color: #146c43; }
+.paybox__promo dt small { display: block; color: var(--muted); font-size: .74rem; }
+.paybox__promo dd { color: #146c43; }
+.paybox__approved { display: inline-flex; align-items: center; gap: 4px; color: #146c43; font-weight: 600; }

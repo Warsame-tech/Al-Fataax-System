@@ -580,6 +580,29 @@ const TABLES = [
       CONSTRAINT fk_waste_business FOREIGN KEY (business_id) REFERENCES businesses(id),
       CONSTRAINT fk_waste_product FOREIGN KEY (product_id) REFERENCES products(id)
     ) ENGINE=InnoDB`
+  },
+  {
+    table: "promotions",
+    ddl: `CREATE TABLE IF NOT EXISTS promotions (
+      id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id  INT UNSIGNED NOT NULL,
+      name         VARCHAR(120) NOT NULL,
+      kind         VARCHAR(16) NOT NULL,                 -- percent, amount, price, bogo, order_percent, order_amount
+      value        DECIMAL(14,4) NOT NULL DEFAULT 0,
+      buy_qty      INT UNSIGNED NULL,                    -- bogo: buy N …
+      get_qty      INT UNSIGNED NULL,                    -- … get M free
+      min_total    DECIMAL(14,4) NOT NULL DEFAULT 0,     -- order promotions: from this order total
+      product_ids  TEXT NULL,                            -- JSON [id] eligible products (with categories; none = all)
+      category_ids TEXT NULL,                            -- JSON [id]
+      days_json    TEXT NULL,                            -- JSON [1..7] Sunday = 1 (none = every day)
+      starts_at    DATETIME NULL,
+      ends_at      DATETIME NULL,
+      is_active    TINYINT(1) NOT NULL DEFAULT 1,
+      user_id      INT UNSIGNED NULL,
+      created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_promotions (business_id, is_active),
+      CONSTRAINT fk_promo_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+    ) ENGINE=InnoDB`
   }
 ];
 
@@ -686,6 +709,12 @@ COLUMNS.push(
 // Cashier shifts: sales may require an open shift.
 COLUMNS.push(
   { table: "business_settings", column: "require_shift", ddl: "ALTER TABLE business_settings ADD COLUMN require_shift TINYINT(1) NOT NULL DEFAULT 0 AFTER food_settings" }
+);
+
+// Promotions and discount controls: limits / approval level, who approved a discount, the promotions a sale used.
+COLUMNS.push(
+  { table: "business_settings", column: "discount_rules", ddl: "ALTER TABLE business_settings ADD COLUMN discount_rules TEXT NULL AFTER require_shift" },
+  { table: "sales", column: "discount_approved_by", ddl: "ALTER TABLE sales ADD COLUMN discount_approved_by INT UNSIGNED NULL AFTER discount, ADD COLUMN promo_detail TEXT NULL AFTER discount_approved_by" }
 );
 
 const INDEXES = [

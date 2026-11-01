@@ -20,6 +20,7 @@ import { RollsPage, TailoringPage } from "./Fabric.jsx";
 import { FoodPos, KitchenPage, TablesPage, MenuPage } from "./Food.jsx";
 import { ShiftsPage } from "./Shifts.jsx";
 import { WastePage } from "./Waste.jsx";
+import { PromotionsPage } from "./Promotions.jsx";
 import { useProfile } from "./profile.js";
 
 const SCREENS = {
@@ -42,6 +43,7 @@ const SCREENS = {
   kitchen: KitchenPage,
   shifts: ShiftsPage,
   waste: WastePage,
+  promotions: PromotionsPage,
   expenses: Expenses,
   cashbook: Cashbook,
   reports: Reports,

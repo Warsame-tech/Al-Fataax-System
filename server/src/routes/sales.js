@@ -13,6 +13,7 @@ import { defaultLocationId } from "../lib/stock.js";
 import { currentRates, weightPrice, unsellable } from "../lib/jewelry.js";
 import { isRoll, toMeters, YARD, attachRolls, cutFromRoll, returnCuts, cutsByItem } from "../lib/rolls.js";
 import { viaRecipe, consumeForSale, restoreConsumption } from "../lib/food.js";
+import { activePromotions, applyPromotions, checkDiscount } from "../lib/promotions.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -162,9 +163,9 @@ export async function createSale(conn, ctx, body) {
   const split = Array.isArray(body.payments);
   let method = split ? null : body.paymentMethod;
   if (!split && ![...METHODS, "credit"].includes(method)) throw badRequest({ paymentMethod: "required" });
-  const discount = body.discount ? money(body.discount) : 0;
-  if (Number.isNaN(discount)) throw badRequest({ discount: "invalidAmount" });
-  if (discount > 0 && !can(role, "sales.discount")) throw badRequest({ discount: "forbidden" });
+  const manualDiscount = body.discount ? money(body.discount) : 0;
+  if (Number.isNaN(manualDiscount)) throw badRequest({ discount: "invalidAmount" });
+  if (manualDiscount > 0 && !can(role, "sales.discount")) throw badRequest({ discount: "forbidden" });
 
   let customerId = id(body.customerId);
   if (customerId) await ensureOwned(conn, "customers", customerId, businessId);
@@ -174,11 +175,20 @@ export async function createSale(conn, ctx, body) {
   const rates = [...products.values()].some((p) => p.pricing_mode === "weight") ? await currentRates(conn, businessId) : null;
   await attachRolls(conn, businessId, items);
   const lines = priceLines(items, products, { allowCustomPrice: can(role, "sales.discount"), rates });
+  // promotions (lib/promotions.js): item promotions lower their lines, an order promotion adds to the discount
+  const promos = await activePromotions(conn, businessId);
+  const promo = applyPromotions(promos, lines.map((l) => ({ productId: l.product.id, categoryId: l.product.category_id, qty: l.qty, unitPrice: l.qty ? l.lineTotal / l.qty : 0, lineTotal: l.lineTotal })));
+  lines.forEach((l, i) => { const d = promo.lines[i]?.discount || 0; if (d > 0) { l.discount = d; l.promo = { ...promo.lines[i].promo, amount: d }; l.lineTotal = round2(l.lineTotal - d); } });
   const subtotal = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
+  // a manual discount: within the business limits, above the approval level only with a manager approval
+  const approvedBy = await checkDiscount(conn, { businessId, role, discount: manualDiscount, base: subtotal, approvalToken: body.approvalToken });
+  const discount = round2(manualDiscount + promo.order.discount);
   if (discount > subtotal) throw badRequest({ discount: "tooLarge" });
   const vat = vatFor(body.vat, round2(subtotal - discount));   // optional 5% VAT on the amount after discount
   const fee = ctx.fee?.amount > 0 ? round2(ctx.fee.amount) : 0;  // e.g. delivery fee
   const total = round2(subtotal - discount + vat.amount + fee);
+  const promoDetail = promo.order.promo || lines.some((l) => l.promo)
+    ? { order: promo.order.promo ? { ...promo.order.promo, amount: promo.order.discount } : null, items: round2(lines.reduce((s, l) => s + (l.discount || 0), 0)), manual: manualDiscount } : null;
 
   // Money actually collected now (one entry per payment method).
   let paid; let paidMethod; let change = 0;
@@ -202,9 +212,9 @@ export async function createSale(conn, ctx, body) {
 
   const receiptNo = await nextNumber(conn, businessId, "receipt");
   const [s] = await conn.query(
-    `INSERT INTO sales (business_id, receipt_no, customer_id, user_id, subtotal, discount, vat_rate, vat_amount, fee_amount, fee_label, total, amount_paid, change_amount, payment_method, sold_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, UTC_TIMESTAMP()))`,
-    [businessId, receiptNo, customerId, userId, subtotal, discount, vat.rate, vat.amount, fee, fee ? ctx.fee.label || null : null, total, paid, change, method, ctx.at || null]
+    `INSERT INTO sales (business_id, receipt_no, customer_id, user_id, subtotal, discount, discount_approved_by, promo_detail, vat_rate, vat_amount, fee_amount, fee_label, total, amount_paid, change_amount, payment_method, sold_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, UTC_TIMESTAMP()))`,
+    [businessId, receiptNo, customerId, userId, subtotal, discount, approvedBy, promoDetail ? JSON.stringify(promoDetail) : null, vat.rate, vat.amount, fee, fee ? ctx.fee.label || null : null, total, paid, change, method, ctx.at || null]
   );
   const saleId = s.insertId;
   const loc = await defaultLocationId(conn, businessId);       // the POS sells from the default location
@@ -212,9 +222,10 @@ export async function createSale(conn, ctx, body) {
     // menu items / extras: the recipe's ingredients leave stock; the cost of what was used stays on the line
     const food = await consumeForSale(conn, { businessId, userId, product: l.product, qty: l.qty, menu: l.menu, locationId: loc, refType: "sale", refId: saleId, note: receiptNo });
     if (food) { l.unitCost = food.unitCost; l.priceDetail = food.detail; }
+    if (l.promo) l.priceDetail = { ...(l.priceDetail || {}), promo: l.promo };
     const [it] = await conn.query(
-      `INSERT INTO sale_items (business_id, sale_id, product_id, qty, unit_price, unit_cost, line_total, sell_unit, sell_qty, sell_price, price_detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [businessId, saleId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null, l.priceDetail ? JSON.stringify(l.priceDetail) : null]
+      `INSERT INTO sale_items (business_id, sale_id, product_id, qty, unit_price, unit_cost, discount, line_total, sell_unit, sell_qty, sell_price, price_detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [businessId, saleId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.discount || 0, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null, l.priceDetail ? JSON.stringify(l.priceDetail) : null]
     );
     const devices = await sellDevices(conn, { businessId, userId, product: l.product, line: l, index: i, locationId: loc, refType: "sale", refId: saleId, itemId: it.insertId, customerId });
     if (isRoll(l.product)) await cutFromRoll(conn, { businessId, product: l.product, rollId: l.rollId, meters: l.qty, locationId: loc, refType: "sale", refId: saleId, itemId: it.insertId, userId, field: `items.${i}.rollId` });
@@ -229,7 +240,7 @@ export async function createSale(conn, ctx, body) {
     );
     await moneyMove(conn, { businessId, userId, direction: "in", method: pay.method, bankAccountId: pay.bankAccountId, account: pay.account, amount: pay.amount, refType: "customer_payment", refId: p.insertId, description: receiptNo, at: ctx.at || null });
   }
-  await audit(conn, { businessId, userId, action: "sale.created", entity: "sale", entityId: saleId, meta: { total, method } });
+  await audit(conn, { businessId, userId, action: "sale.created", entity: "sale", entityId: saleId, meta: { total, method, ...(discount ? { discount, approvedBy } : {}), ...(promoDetail ? { promo: promoDetail } : {}) } });
   return { id: saleId, receiptNo, total, paid, change };
 }
 
@@ -272,7 +283,7 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
   res.json({
     business: req.business,
     sale: { id: s.id, number: s.receipt_no, at: s.sold_at, status: s.status, method: s.payment_method, subtotal: num(s.subtotal), discount: num(s.discount), vatRate: num(s.vat_rate || 0), vat: num(s.vat_amount || 0),
-      fee: num(s.fee_amount || 0), feeLabel: s.fee_label || null, total: num(s.total), paid: num(s.amount_paid), change: num(s.change_amount || 0), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
+      fee: num(s.fee_amount || 0), feeLabel: s.fee_label || null, promo: s.promo_detail ? JSON.parse(s.promo_detail) : null, total: num(s.total), paid: num(s.amount_paid), change: num(s.change_amount || 0), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
     // sold in a pack: shown as e.g. 2 Strip × 1.50 (qty / unitPrice); baseQty is the stock that left
     items: items.map((i) => ({ name: i.name, sku: i.sku, qty: i.sell_unit ? num(i.sell_qty) : num(i.qty), unitPrice: i.sell_unit ? num(i.sell_price) : num(i.unit_price),
       unit: i.sell_unit || null, baseQty: num(i.qty), baseUnit: i.base_unit, total: num(i.line_total),

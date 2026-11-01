@@ -337,6 +337,7 @@ const translations = {
         menu: "Menu & recipes",
         tables: "Tables & orders",
         kitchen: "Kitchen display",
+        promotions: "Promotions & discounts",
         waste: "Food waste",
         shifts: "Cashier shifts"
       },
@@ -766,6 +767,7 @@ const translations = {
         menu: "Liiska cuntada & cunto-karinta",
         tables: "Miisaska & dalabaadka",
         kitchen: "Shaashadda jikada",
+        promotions: "Dalacsiinta & dhimista",
         waste: "Khasaaraha cuntada",
         shifts: "Wareegyada khasnajiga"
       },

@@ -137,7 +137,8 @@ CREATE TABLE IF NOT EXISTS business_settings (
   tailoring_stages TEXT NULL,
   kitchen_stations TEXT NULL,                            -- food: kitchen stations (JSON list; default by food type)
   food_settings    TEXT NULL,
-  require_shift    TINYINT(1) NOT NULL DEFAULT 0,          -- sales need an open cashier shift                            -- food: { delayMinutes } (JSON)                            -- fabric / tailoring: work stages (JSON list)                            -- extra technical specification fields per product type (JSON)
+  require_shift    TINYINT(1) NOT NULL DEFAULT 0,          -- sales need an open cashier shift
+  discount_rules   TEXT NULL,                              -- { maxPct, approvalPct } manual discount limits (lib/promotions.js)                            -- food: { delayMinutes } (JSON)                            -- fabric / tailoring: work stages (JSON list)                            -- extra technical specification fields per product type (JSON)
   timezone         VARCHAR(40) NOT NULL DEFAULT 'Africa/Mogadishu',
   updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_settings_business FOREIGN KEY (business_id) REFERENCES businesses(id)
@@ -404,6 +405,8 @@ CREATE TABLE IF NOT EXISTS sales (
   user_id        INT UNSIGNED NOT NULL,
   subtotal       DECIMAL(14,4) NOT NULL,
   discount       DECIMAL(14,4) NOT NULL DEFAULT 0,
+  discount_approved_by INT UNSIGNED NULL,          -- manager who approved a discount above the approval level
+  promo_detail   TEXT NULL,                       -- promotions used (JSON)
   vat_rate       DECIMAL(5,2)  NOT NULL DEFAULT 0,  -- optional VAT (5%) on the amount after discount
   vat_amount     DECIMAL(14,4) NOT NULL DEFAULT 0,  -- included in total; not counted as sales income
   fee_amount     DECIMAL(14,4) NOT NULL DEFAULT 0,  -- e.g. delivery fee (food orders), included in total
@@ -1083,6 +1086,27 @@ CREATE TABLE IF NOT EXISTS waste_records (
   INDEX idx_waste (business_id, waste_date, status),
   CONSTRAINT fk_waste_business FOREIGN KEY (business_id) REFERENCES businesses(id),
   CONSTRAINT fk_waste_product FOREIGN KEY (product_id) REFERENCES products(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS promotions (
+  id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id  INT UNSIGNED NOT NULL,
+  name         VARCHAR(120) NOT NULL,
+  kind         VARCHAR(16) NOT NULL,                 -- percent, amount, price, bogo, order_percent, order_amount
+  value        DECIMAL(14,4) NOT NULL DEFAULT 0,
+  buy_qty      INT UNSIGNED NULL,                    -- bogo: buy N …
+  get_qty      INT UNSIGNED NULL,                    -- … get M free
+  min_total    DECIMAL(14,4) NOT NULL DEFAULT 0,     -- order promotions: from this order total
+  product_ids  TEXT NULL,                            -- JSON [id] eligible products (with categories; none = all)
+  category_ids TEXT NULL,                            -- JSON [id]
+  days_json    TEXT NULL,                            -- JSON [1..7] Sunday = 1 (none = every day)
+  starts_at    DATETIME NULL,
+  ends_at      DATETIME NULL,
+  is_active    TINYINT(1) NOT NULL DEFAULT 1,
+  user_id      INT UNSIGNED NULL,
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_promotions (business_id, is_active),
+  CONSTRAINT fk_promo_business FOREIGN KEY (business_id) REFERENCES businesses(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS audit_logs (
