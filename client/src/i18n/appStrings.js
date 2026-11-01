@@ -23,6 +23,7 @@ const en = {
     pattern: "Please match the requested format.", date: "Please enter a valid date.", invalid: "Please check this value."
   },
   errors: {
+    tableBooked: "That table is already booked at that time.", tooManyGuests: "That table has only {seats} seats.", reservationClosed: "This reservation can't be changed any more.",
     discountTooHigh: "A discount can't be more than {max}% of the bill.", discountNeedsApproval: "A discount above {limit}% needs a manager's approval.", cannotApprove: "This user can't approve discounts.", tooManyAttempts: "Too many attempts. Try again later.",
     wasteDecided: "This waste record was already approved or rejected.",
     shiftNotOpen: "Open your cashier shift before selling.", shiftAlreadyOpen: "You already have an open shift.", shiftClosed: "This shift is already closed.",
@@ -269,6 +270,14 @@ const en = {
     rulesHelp: "Limits for discounts typed at the POS (promotions are not counted). Staff who may approve discounts are set in Staff & roles.",
     approvalPct: "Manager approval above (%)", approvalPctHint: "A bigger discount needs a manager's username and password.", maxPct: "Maximum discount (%)", maxPctHint: "Nobody but the owner can go above it.",
     whoCan: "Who may give and approve discounts:", manualTotal: "Manual discounts", promoTotal: "Promotions", approvedN: "{n} approved by a manager", manual: "Manual discount", approvedByCol: "Approved by"
+  },
+  resv: {
+    title: "Reservations", add: "New reservation", edit: "Change reservation", cancel: "Cancel reservation", none: "No reservations on this day.",
+    status: { booked: "Booked", seated: "Seated", completed: "Completed", cancelled: "Cancelled", no_show: "No-show" },
+    countN: "{n} bookings · {guests} guests", cameN: "{n} came", noShowN: "{n} no-shows", cancelledN: "{n} cancelled",
+    time: "Time", forMin: "for {n} min", pastNoShows: "{n} earlier no-show(s)", deposit: "Deposit", refundedAmt: "{amount} refunded",
+    seat: "Seat", noShow: "No-show", done: "Done", newGuest: "New guest", dateTime: "Date and time", duration: "Duration (minutes)",
+    notesPh: "e.g. birthday, window seat", refund: "Refund", depositWas: "Deposit paid: {amount}"
   },
   products: {
     fabricCategory: "Fabric category", colorShade: "Colour / shade", colorShadePh: "Colour / shade", pattern: "Pattern", patternPh: "Pattern",
@@ -578,6 +587,7 @@ const so = {
     pattern: "Fadlan raac qaabka la rabo.", date: "Fadlan geli taariikh sax ah.", invalid: "Fadlan hubi qiimahan."
   },
   errors: {
+    tableBooked: "Miiskaas horay ayaa loo qabsaday waqtigaas.", tooManyGuests: "Miiskaas wuxuu leeyahay {seats} kursi oo keliya.", reservationClosed: "Ballantan lama beddeli karo.",
     discountTooHigh: "Dhimistu kama badnaan karto {max}% biilka.", discountNeedsApproval: "Dhimis ka badan {limit}% waxay u baahan tahay ansixinta maamule.", cannotApprove: "Isticmaalahan ma ansixin karo dhimista.", tooManyAttempts: "Isku day badan. Mar dambe isku day.",
     wasteDecided: "Diiwaankan khasaaraha horay ayaa loo ansixiyay ama loo diiday.",
     shiftNotOpen: "Fur wareeggaaga khasnajiga ka hor intaadan iibin.", shiftAlreadyOpen: "Horay ayaad wareeg furan u leedahay.", shiftClosed: "Wareeggan horay ayaa loo xiray.",
@@ -824,6 +834,14 @@ const so = {
     rulesHelp: "Xadka dhimista lagu qoro POS-ka (dalacsiinta laguma xisaabo). Shaqaalaha ansixin kara dhimista waxaa lagu dejiyaa Shaqaalaha & doorarka.",
     approvalPct: "Ansixinta maamule ka sare (%)", approvalPctHint: "Dhimis ka weyn waxay u baahan tahay magaca iyo furaha maamulaha.", maxPct: "Dhimista ugu badan (%)", maxPctHint: "Qof aan milkiilaha ahayn kama gudbi karo.",
     whoCan: "Cidda dhimis bixin karta oo ansixin karta:", manualTotal: "Dhimis gacanta ah", promoTotal: "Dalacsiinta", approvedN: "{n} uu ansixiyay maamule", manual: "Dhimis gacanta ah", approvedByCol: "Waxaa ansixiyay"
+  },
+  resv: {
+    title: "Ballamaha miisaska", add: "Ballan cusub", edit: "Beddel ballanta", cancel: "Jooji ballanta", none: "Ballan maalintan ma jirto.",
+    status: { booked: "La qabsaday", seated: "La fadhiisiyay", completed: "Dhammaaday", cancelled: "La joojiyay", no_show: "Ma iman" },
+    countN: "{n} ballan · {guests} marti", cameN: "{n} yimid", noShowN: "{n} ma iman", cancelledN: "{n} la joojiyay",
+    time: "Waqtiga", forMin: "{n} daqiiqo", pastNoShows: "{n} jeer hore ma iman", deposit: "Horudhac", refundedAmt: "{amount} la celiyay",
+    seat: "Fadhiisi", noShow: "Ma iman", done: "Dhammaaday", newGuest: "Marti cusub", dateTime: "Taariikhda iyo waqtiga", duration: "Muddada (daqiiqo)",
+    notesPh: "tusaale dhalasho, kursi daaqadda ag yaal", refund: "Celin lacag", depositWas: "Horudhaca la bixiyay: {amount}"
   },
   products: {
     fabricCategory: "Qaybta marada", colorShade: "Midab / hadh", colorShadePh: "Midab / hadh", pattern: "Naqshad", patternPh: "Naqshad",

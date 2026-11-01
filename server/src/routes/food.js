@@ -202,7 +202,12 @@ router.get("/tables", any("sales.create", "kitchen.view", "tables.manage"), ah(a
     `SELECT o.id, o.order_no, o.table_id, o.status, o.guests, o.created_at, o.sale_id,
             (SELECT COALESCE(SUM(i.line_total), 0) FROM food_order_items i WHERE i.order_id = o.id AND i.status <> 'cancelled') total
        FROM food_orders o WHERE o.business_id = ? AND o.table_id IS NOT NULL AND o.status IN (?)`, [bid, OPEN]);
+  // the next booking today for each table (from 30 minutes ago), shown on the table map
+  const [booked] = await pool.query(
+    `SELECT id, table_id, reserved_for, guests, COALESCE(customer_name, '') name FROM reservations WHERE business_id = ? AND status = 'booked' AND table_id IS NOT NULL
+        AND reserved_for BETWEEN DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 MINUTE) AND DATE_ADD(DATE(UTC_TIMESTAMP()), INTERVAL 1 DAY) ORDER BY reserved_for`, [bid]);
   res.json({ tables: tables.map((tb) => ({ id: tb.id, name: tb.name, area: tb.area || "", capacity: tb.capacity, status: tb.status,
+    nextReservation: (() => { const x = booked.find((r) => r.table_id === tb.id); return x ? { id: x.id, at: x.reserved_for, guests: x.guests, name: x.name } : null; })(),
     orders: orders.filter((o) => o.table_id === tb.id).map((o) => ({ id: o.id, number: o.order_no, status: o.status, guests: o.guests, total: num(o.total), paid: Boolean(o.sale_id), at: o.created_at })) })) });
 }));
 function readTable(b) {

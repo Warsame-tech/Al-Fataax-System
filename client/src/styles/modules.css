@@ -1326,3 +1326,9 @@ tr.is-muted td { opacity: .6; }
 .paybox__promo dt small { display: block; color: var(--muted); font-size: .74rem; }
 .paybox__promo dd { color: #146c43; }
 .paybox__approved { display: inline-flex; align-items: center; gap: 4px; color: #146c43; font-weight: 600; }
+
+.resv-status { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef1f7; font-size: .76rem; font-weight: 700; }
+.resv-status.is-booked { background: #eef1ff; color: #2c3494; }
+.resv-status.is-seated { background: #e7f6ee; color: #146c43; }
+.resv-status.is-no_show, .resv-status.is-cancelled { background: #fde8e8; color: #b42318; }
+.table-card__resv { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 8px; background: rgba(255, 255, 255, .7); font-size: .78rem; font-weight: 600; color: #2c3494; }

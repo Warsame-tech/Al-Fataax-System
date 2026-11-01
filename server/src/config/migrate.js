@@ -603,6 +603,33 @@ const TABLES = [
       INDEX idx_promotions (business_id, is_active),
       CONSTRAINT fk_promo_business FOREIGN KEY (business_id) REFERENCES businesses(id)
     ) ENGINE=InnoDB`
+  },
+  {
+    table: "reservations",
+    ddl: `CREATE TABLE IF NOT EXISTS reservations (
+      id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id    INT UNSIGNED NOT NULL,
+      table_id       INT UNSIGNED NULL,
+      customer_id    INT UNSIGNED NULL,
+      customer_name  VARCHAR(150) NULL,
+      customer_phone VARCHAR(30) NULL,
+      guests         INT UNSIGNED NOT NULL,
+      reserved_for   DATETIME NOT NULL,
+      duration_min   INT UNSIGNED NOT NULL DEFAULT 90,
+      notes          VARCHAR(255) NULL,
+      deposit        DECIMAL(14,4) NOT NULL DEFAULT 0,
+      deposit_method VARCHAR(20) NULL,
+      refunded       DECIMAL(14,4) NOT NULL DEFAULT 0,
+      status         VARCHAR(12) NOT NULL DEFAULT 'booked', -- booked, seated, completed, cancelled, no_show
+      cancel_reason  VARCHAR(200) NULL,
+      seated_at      DATETIME NULL,
+      user_id        INT UNSIGNED NULL,
+      created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      INDEX idx_reservations (business_id, reserved_for),
+      INDEX idx_reservations_table (business_id, table_id, status),
+      CONSTRAINT fk_resv_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+    ) ENGINE=InnoDB`
   }
 ];
 

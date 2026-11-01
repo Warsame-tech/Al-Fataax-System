@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { apiRequest, fileUrl } from "../services/api.js";
-import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, Modal, Field, FormError, EmptyState, Loading, SearchBox, ReasonModal, DateRange, daysAgo, isoDate } from "./ui.jsx";
+import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, Modal, Field, FormError, EmptyState, Loading, SearchBox, ReasonModal, DateRange, daysAgo, isoDate, PaymentFields } from "./ui.jsx";
 import { date, fill, qty } from "./format.js";
 import { useProfile } from "./profile.js";
 import SearchSelect from "./SearchSelect.jsx";
@@ -526,15 +526,15 @@ export function TablesPage() {
       <PageHeader icon="grid" title={t("app.modules.tables")} actions={<Link className="btn btn--primary" to="/app/m/pos"><Icon name="plus" /><span>{t("ui.food.newOrder")}</span></Link>} />
       <Tabs value={tab} onChange={setTab} tabs={[
         ...(profile.food?.tables ? [{ id: "tables", label: t("ui.food.tables"), icon: "grid" }] : []),
-        { id: "orders", label: t("ui.food.openOrders"), icon: "receipt" }, { id: "history", label: t("ui.food.orderHistory"), icon: "history" },
+        { id: "orders", label: t("ui.food.openOrders"), icon: "receipt" }, { id: "reservations", label: t("ui.resv.title"), icon: "calendar" }, { id: "history", label: t("ui.food.orderHistory"), icon: "history" },
         ...(profile.food?.tables && can("tables.manage") ? [{ id: "setup", label: t("ui.food.tableSetup"), icon: "settings" }] : [])]} />
-      {tab === "tables" ? <TableMap /> : tab === "setup" ? <TableSetup /> : <OrderBoard closed={tab === "history"} />}
+      {tab === "tables" ? <TableMap /> : tab === "setup" ? <TableSetup /> : tab === "reservations" ? <Reservations /> : <OrderBoard closed={tab === "history"} />}
     </div>
   );
 }
 
 function TableMap() {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const m = useMoney();
   const can = usePerm();
   const errText = useErrorText();
@@ -557,6 +557,7 @@ function TableMap() {
                 <Link to={`/app/m/pos?table=${tb.id}`} className="table-card__main">
                   <strong>{tb.name}</strong>
                   <small>{fill(t("ui.food.seats"), { n: tb.capacity })} · {t(`ui.food.tableStatus.${tb.status}`)}</small>
+                  {tb.nextReservation && !tb.orders.length && <span className="table-card__resv"><Icon name="calendar" /> {date(tb.nextReservation.at, lang, true).split(", ").pop()} · {fill(t("ui.food.guestsN"), { n: tb.nextReservation.guests })}{tb.nextReservation.name ? ` · ${tb.nextReservation.name}` : ""}</span>}
                   {tb.orders.map((o) => <span key={o.id} className="table-card__order">{o.number} · {m(o.total)}{o.paid ? ` · ${t("ui.food.paidShort")}` : ""}{o.guests ? ` · ${fill(t("ui.food.guestsN"), { n: o.guests })}` : ""}</span>)}
                 </Link>
                 {can("sales.create") && !tb.orders.length && (
@@ -932,6 +933,128 @@ function Production({ product, onClose, onDone }) {
             <button type="button" className="btn btn--primary" disabled={!(Number(n) > 0) || sub.busy} onClick={save}>{t("ui.food.makeBatch")}</button></>}
         </div>
       </div>
+    </Modal>
+  );
+}
+
+/* ===================== Reservations ===================== */
+const RESV = ["booked", "seated", "completed", "cancelled", "no_show"];
+/** a stored UTC time → datetime-local value (times are kept in UTC like every other date) */
+const toLocalInput = (iso) => { if (!iso) return ""; const s = String(iso); const d = new Date(s.includes("T") || s.endsWith("Z") ? s : `${s.replace(" ", "T")}Z`); return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16); };
+
+function Reservations() {
+  const { t, lang } = useLanguage();
+  const m = useMoney();
+  const errText = useErrorText();
+  const [day, setDay] = useState(isoDate(new Date()));
+  const [status, setStatus] = useState("");
+  const list = useApi(`/api/reservations?${new URLSearchParams({ from: day, to: day, status })}`);
+  const [editing, setEditing] = useState(null);
+  const [cancelling, setCancelling] = useState(null);
+  const [err, setErr] = useState(null);
+  const act = async (r, s) => { setErr(null); try { await apiRequest(`/api/reservations/${r.id}/status`, { method: "POST", body: { status: s } }); list.reload(); } catch (e) { setErr(e); } };
+  const d = list.data;
+  return (
+    <>
+      <div className="toolbar">
+        <input className="input input--auto" type="date" value={day} onChange={(e) => setDay(e.target.value)} aria-label={t("ui.common.date")} />
+        <select className="input input--auto" value={status} onChange={(e) => setStatus(e.target.value)} aria-label={t("ui.common.status")}>
+          <option value="">{t("ui.common.all")}</option>{RESV.map((s) => <option key={s} value={s}>{t(`ui.resv.status.${s}`)}</option>)}
+        </select>
+        <button type="button" className="btn btn--primary" onClick={() => setEditing({})}><Icon name="plus" /><span>{t("ui.resv.add")}</span></button>
+      </div>
+      {err && <p className="form-status form-status--error">{errText(err)}</p>}
+      {d && <div className="shift-summary"><span>{fill(t("ui.resv.countN"), { n: d.summary.count, guests: d.summary.guests })}</span><span>{fill(t("ui.resv.cameN"), { n: d.summary.came })}</span><span className="is-neg">{fill(t("ui.resv.noShowN"), { n: d.summary.noShows })}</span><span>{fill(t("ui.resv.cancelledN"), { n: d.summary.cancelled })}</span></div>}
+      {!d ? <Loading /> : !d.reservations.length ? <EmptyState icon="calendar" text={t("ui.resv.none")} /> : (
+        <div className="table-wrap"><table className="table">
+          <thead><tr><th>{t("ui.resv.time")}</th><th>{t("ui.common.customer")}</th><th className="num">{t("ui.food.guests")}</th><th>{t("ui.food.table")}</th><th className="num">{t("ui.resv.deposit")}</th><th>{t("ui.common.status")}</th><th /></tr></thead>
+          <tbody>{d.reservations.map((r) => (
+            <tr key={r.id}>
+              <td><strong>{date(r.at, lang, true).split(", ").pop()}</strong><small className="cell-sub">{fill(t("ui.resv.forMin"), { n: r.durationMin })}</small></td>
+              <td>{r.name}<small className="cell-sub">{r.phone}</small>{r.noShows > 0 && <small className="cell-sub is-neg">{fill(t("ui.resv.pastNoShows"), { n: r.noShows })}</small>}{r.notes && <small className="cell-sub">{r.notes}</small>}</td>
+              <td className="num">{r.guests}</td><td>{r.table || "—"}</td>
+              <td className="num">{r.deposit ? m(r.deposit) : "—"}{r.refunded > 0 && <small className="cell-sub">{fill(t("ui.resv.refundedAmt"), { amount: m(r.refunded) })}</small>}</td>
+              <td><span className={`resv-status is-${r.status}`}>{t(`ui.resv.status.${r.status}`)}</span>{r.cancelReason && <small className="cell-sub">{r.cancelReason}</small>}</td>
+              <td className="row-actions">
+                {r.status === "booked" && <>
+                  <Link className="btn btn--primary btn--sm" to={r.tableId ? `/app/m/pos?table=${r.tableId}` : "/app/m/pos"} onClick={() => act(r, "seated")}>{t("ui.resv.seat")}</Link>
+                  <button type="button" className="btn btn--outline btn--sm" onClick={() => setEditing(r)}>{t("ui.common.edit")}</button>
+                  <button type="button" className="btn btn--outline btn--sm" onClick={() => act(r, "no_show")}>{t("ui.resv.noShow")}</button>
+                  <button type="button" className="btn btn--outline btn--sm" onClick={() => setCancelling(r)}>{t("ui.common.cancel")}</button></>}
+                {r.status === "seated" && <button type="button" className="btn btn--outline btn--sm" onClick={() => act(r, "completed")}>{t("ui.resv.done")}</button>}
+              </td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      )}
+      {editing && <ReservationForm resv={editing} day={day} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); list.reload(); }} />}
+      {cancelling && <CancelReservation resv={cancelling} onClose={() => setCancelling(null)} onDone={() => { setCancelling(null); list.reload(); }} />}
+    </>
+  );
+}
+
+function ReservationForm({ resv, day, onClose, onSaved }) {
+  const { t } = useLanguage();
+  const isNew = !resv.id;
+  const tables = useApi("/api/food/tables");
+  const customers = useApi("/api/customers");
+  const [f, setF] = useState(() => ({ customerId: resv.customerId ? String(resv.customerId) : "", name: resv.name || "", phone: resv.phone || "", guests: resv.guests || 2,
+    at: resv.at ? toLocalInput(resv.at) : `${day}T19:00`, durationMin: resv.durationMin || 90, tableId: resv.tableId ? String(resv.tableId) : "", notes: resv.notes || "",
+    deposit: "", method: "cash", bankAccountId: "" }));
+  const sub = useSubmit();
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
+  const save = async (e) => {
+    e.preventDefault();
+    const body = { ...f, at: f.at ? new Date(f.at).toISOString() : "", guests: Number(f.guests), durationMin: Number(f.durationMin), tableId: f.tableId || null, customerId: f.customerId || null };
+    if (!isNew) { delete body.deposit; delete body.method; }
+    if (await sub.run(() => apiRequest(isNew ? "/api/reservations" : `/api/reservations/${resv.id}`, { method: isNew ? "POST" : "PUT", body }))) onSaved();
+  };
+  const err = sub.fieldErrors;
+  return (
+    <Modal title={t(isNew ? "ui.resv.add" : "ui.resv.edit")} onClose={onClose} wide>
+      <form onSubmit={save} className="form-grid form-grid--2">
+        <Field label={`${t("ui.common.customer")} ${t("ui.common.optional")}`}>
+          <select className="input" value={f.customerId} onChange={set("customerId")}><option value="">{t("ui.resv.newGuest")}</option>
+            {(customers.data?.customers || []).map((c) => <option key={c.id} value={c.id}>{c.name}{c.phone ? ` · ${c.phone}` : ""}</option>)}</select>
+        </Field>
+        {!f.customerId && <Field label={t("ui.jewelry.customerName")} error={err.name}><input className="input" value={f.name} onChange={set("name")} /></Field>}
+        {!f.customerId && <Field label={t("ui.common.phone")} error={err.phone}><input className="input" type="tel" value={f.phone} onChange={set("phone")} /></Field>}
+        <Field label={t("ui.resv.dateTime")} error={err.at}><input className="input" type="datetime-local" value={f.at} onChange={set("at")} /></Field>
+        <Field label={t("ui.food.guests")} error={err.guests}><input className="input" type="number" min="1" value={f.guests} onChange={set("guests")} /></Field>
+        <Field label={t("ui.resv.duration")} error={err.durationMin}><input className="input" type="number" min="15" step="15" value={f.durationMin} onChange={set("durationMin")} /></Field>
+        <Field label={`${t("ui.food.table")} ${t("ui.common.optional")}`}>
+          <select className="input" value={f.tableId} onChange={set("tableId")}><option value="">—</option>
+            {(tables.data?.tables || []).map((tb) => <option key={tb.id} value={tb.id}>{tb.name} · {fill(t("ui.food.seats"), { n: tb.capacity })}</option>)}</select>
+        </Field>
+        <Field label={`${t("ui.common.notes")} ${t("ui.common.optional")}`}><input className="input" value={f.notes} onChange={set("notes")} placeholder={t("ui.resv.notesPh")} /></Field>
+        {isNew && <Field label={`${t("ui.resv.deposit")} ${t("ui.common.optional")}`} error={err.deposit}><input className="input" type="number" min="0" step="any" value={f.deposit} onChange={set("deposit")} /></Field>}
+        {isNew && Number(f.deposit) > 0 && <div className="ff ff--full"><PaymentFields method={f.method} onMethod={(v) => setF({ ...f, method: v })} bankId={f.bankAccountId} onBank={(v) => setF({ ...f, bankAccountId: v })} errors={err} /></div>}
+        <FormError error={sub.formError} />
+        <div className="form-actions ff--full sheet-actions">
+          <button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button>
+          <button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.common.save")}</button>
+        </div>
+      </form>
+    </Modal>
+  );
+}
+
+function CancelReservation({ resv, onClose, onDone }) {
+  const { t } = useLanguage();
+  const m = useMoney();
+  const [f, setF] = useState({ reason: "", refund: resv.deposit ? String(resv.deposit) : "", method: resv.depositMethod || "cash", bankAccountId: "" });
+  const sub = useSubmit();
+  const save = async (e) => { e.preventDefault(); if (await sub.run(() => apiRequest(`/api/reservations/${resv.id}/status`, { method: "POST", body: { status: "cancelled", ...f } }))) onDone(); };
+  return (
+    <Modal title={t("ui.resv.cancel")} onClose={onClose}>
+      <form onSubmit={save} className="form-grid">
+        <Field label={t("ui.common.reason")} error={sub.fieldErrors.reason}><input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} /></Field>
+        {resv.deposit > 0 && <Field label={`${t("ui.resv.refund")} ${t("ui.common.optional")}`} error={sub.fieldErrors.refund} hint={fill(t("ui.resv.depositWas"), { amount: m(resv.deposit) })}>
+          <input className="input" type="number" min="0" step="any" value={f.refund} onChange={(e) => setF({ ...f, refund: e.target.value })} /></Field>}
+        {Number(f.refund) > 0 && <PaymentFields method={f.method} onMethod={(v) => setF({ ...f, method: v })} bankId={f.bankAccountId} onBank={(v) => setF({ ...f, bankAccountId: v })} errors={sub.fieldErrors} />}
+        <FormError error={sub.formError} />
+        <div className="form-actions"><button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.close")}</button><button type="submit" className="btn btn--danger" disabled={sub.busy}>{t("ui.resv.cancel")}</button></div>
+      </form>
     </Modal>
   );
 }
