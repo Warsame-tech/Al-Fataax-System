@@ -32,7 +32,9 @@ export const EMPTY = {
   // clothing (profile.fashion)
   collection: "", season: "",
   // jewelry (profile.jewelry)
-  metal: "", purity: "", grossWeight: "", stoneWeight: "", pricingMode: "fixed", makingCharge: "", makingType: "per_gram", extraCharge: "", uniqueItem: false, itemStatus: "active"
+  metal: "", purity: "", grossWeight: "", stoneWeight: "", pricingMode: "fixed", makingCharge: "", makingType: "per_gram", extraCharge: "", uniqueItem: false, itemStatus: "active",
+  // food (profile.itemKinds): menu item, goods, ingredient, packaging, extra, prepared; kitchen station
+  itemKind: "", station: ""
 };
 const unitName = (t, u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
 const uniqList = (list) => [...new Set(list.filter(Boolean))];
@@ -212,6 +214,7 @@ export default function Products() {
                         {p.genericName && <small className="cell-sub">{p.genericName}</small>}
                         {p.barcode && <small className="cell-sub"><Icon name="barcode" /> {p.barcode}</small>}
                         {!p.isActive && <small className="cell-sub archived-tag">{t("ui.products.statusValues.archived")}</small>}
+                        {profile.itemKinds && <small className="cell-sub"><span className={`track-tag kind-${p.itemKind}`}>{t(`ui.food.kinds.${p.itemKind}`)}</span></small>}
                         {p.tracking && p.tracking !== "qty" && <small className="cell-sub"><span className="track-tag">{p.tracking === "roll" ? t("ui.fabric.rollsTag") : trackingShort(p.tracking)}</span></small>}
                         {profile.jewelry && (p.uniqueItem || (p.itemStatus && p.itemStatus !== "active")) && <small className="cell-sub">{p.uniqueItem && <span className="track-tag">{t("ui.jewelry.uniqueShort")}</span>} {p.itemStatus !== "active" && <span className={`gb-status is-${p.itemStatus}`}>{t(`ui.jewelry.itemStatus.${p.itemStatus}`)}</span>}</small>}
                         {groups && p.variantCount > 1 && !f.variantOf && (
@@ -354,6 +357,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
   /* packaging structure (pharmacy): packs above the base unit, largest first */
   const [pack, setPack] = useState(() => (product.packaging || []).map((l) => ({ ...l, per: l.per, price: l.price ?? "" })));
   const suppliers = useApi(profile.medicine || profile.electronics || profile.fabric ? "/api/suppliers" : null);
+  const foodSettings = useApi(profile.food ? "/api/food/settings" : null);   // kitchen stations
   /* choosing a dosage form fills its usual packaging, unless counts were already entered */
   const chooseForm = (form) => {
     setF((x) => ({ ...x, dosageForm: form }));
@@ -407,7 +411,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     if (owner) return;
     const fd = new FormData();
     // clothing: attributes the category does not use are not kept (e.g. a bag has no size)
-    const unused = (k) => profile.fashion && ["size", "shade", "formula", "packSize"].includes(k) && !variantFields.includes(k);
+    const unused = (k) => (profile.fashion && ["size", "shade", "formula", "packSize"].includes(k) && !variantFields.includes(k)) || (!profile.itemKinds && ["itemKind", "station"].includes(k));
     Object.keys(EMPTY).forEach((k) => fd.append(k, unused(k) || f[k] === null || f[k] === undefined ? "" : String(f[k])));
     if (profile.extraBarcodes) fd.append("barcodes", JSON.stringify(barcodes.filter((b) => String(b.barcode).trim())));
     if (profile.electronics) fd.append("specs", JSON.stringify(Object.fromEntries(Object.entries(specs).filter(([k, v]) => specFields.includes(k) && String(v).trim()))));
@@ -492,6 +496,21 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
             options={asOptions(cat.brands)} placeholder={L("brand")} searchPlaceholder={t("ui.common.searchPh")} />
         </div>
 
+        {profile.itemKinds && (
+          <>
+            <Field label={t("ui.food.itemKind")} hint={t(`ui.food.kindHint.${f.itemKind || "goods"}`)} error={err.itemKind}>
+              <select className="input" value={f.itemKind || "goods"} onChange={set("itemKind")}>{profile.itemKinds.map((k) => <option key={k} value={k}>{t(`ui.food.kinds.${k}`)}</option>)}</select>
+            </Field>
+            {["menu", "modifier"].includes(f.itemKind) && (
+              <Field label={`${t("ui.food.station")} ${t("ui.common.optional")}`}>
+                <select className="input" value={f.station} onChange={set("station")}>
+                  <option value="">—</option>
+                  {uniqList([...(foodSettings.data?.stations || profile.food?.stations || []), f.station]).map((x) => <option key={x} value={x}>{x}</option>)}
+                </select>
+              </Field>
+            )}
+          </>
+        )}
         {profile.electronics && (
           <>
             <Field label={t("ui.products.productType")} hint={t("ui.products.productTypeHint")}>

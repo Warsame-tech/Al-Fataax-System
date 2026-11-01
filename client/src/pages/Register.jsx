@@ -7,7 +7,7 @@ import usePageTitle from "../hooks/usePageTitle.js";
 import { register } from "../services/authService.js";
 
 /* Business categories (same list as the server: routes/auth.js; "fashion" = Clothing) */
-const TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "jewelry", "fabric"];
+const TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "jewelry", "fabric", "restaurant", "cafe", "fast_food", "bakery", "juice_bar", "food_truck", "takeaway", "food_other"];
 const LOGO_TYPES = ["image/png", "image/jpeg", "image/webp"];
 const EMPTY = { businessName: "", businessType: "", phone: "", ownerName: "", username: "", password: "", confirmPassword: "" };
 

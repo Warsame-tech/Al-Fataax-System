@@ -36,7 +36,7 @@ export function PriceDetailLine({ detail, className }) {
   const { t } = useLanguage();
   const m = useMoney();
   const fmtW = useWeight();
-  if (!detail) return null;
+  if (!detail?.metal) return null;   // other details (food: size, extras) are shown by their own line
   return (
     <small className={className}>
       {metalName(t, detail.metal)} {detail.purity} · {fmtW(detail.netWeight)} × {m(detail.rate)}

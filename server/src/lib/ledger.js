@@ -83,6 +83,8 @@ export async function moveStock(conn, {
 }) {
   // serial / IMEI and roll products: the caller must move the exact devices / rolls too (lib/devices.js, lib/rolls.js)
   if (product.tracking && product.tracking !== "qty" && !devices) throw new HttpError(400, "devicesRequired", null, { product: productName(product) });
+  // food: a menu item / extra has no stock of its own — selling it uses its recipe (lib/food.js)
+  if (product.item_kind === "menu" || product.item_kind === "modifier") throw new HttpError(409, "noStockForMenu", null, { product: productName(product) });
   const loc = locationId || (await defaultLocationId(conn, businessId));
   const row = await lockStockRow(conn, businessId, product.id, loc);
   const before = Number(row.qty);

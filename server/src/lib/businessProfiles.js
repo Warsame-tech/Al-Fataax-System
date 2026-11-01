@@ -55,6 +55,8 @@ const DEFAULT = {
   fashion: false,
   jewelry: false,
   fabric: false,
+  food: false,
+  itemKinds: null,
   categories: {}
 };
 
@@ -215,6 +217,50 @@ const PROFILES = {
     categories: CATEGORIES.electronics
   }
 };
+
+/*
+ * Food businesses (restaurant, cafe, fast food, bakery, juice bar, food truck, takeaway, other): one shared interface
+ * (menu with sizes and extras, recipes deducted from ingredients, restaurant POS, kitchen display, tables) whose
+ * ready-made menu categories, kitchen stations, service types and tables follow the food type. A new food type is one
+ * entry in FOOD_TYPES.
+ *   food           { type, stations, services, tables } — see lib/food.js and routes/food.js
+ *   itemKinds      what a product is: menu (prepared, sold through its recipe), goods (bought and sold as is),
+ *                  ingredient, packaging, modifier (extra / add-on with its own recipe), prepared (made in batches, kept in stock)
+ */
+const INGREDIENTS = {
+  "Ingredients": ["Meat & Poultry", "Fish & Seafood", "Vegetables", "Fruits", "Dairy & Eggs", "Grains, Rice & Flour", "Spices & Sauces", "Oils & Fats", "Sugar & Sweeteners", "Coffee & Tea"],
+  "Packaging": ["Boxes", "Cups & Lids", "Bags", "Napkins & Cutlery"], "Extras & Add-ons": [], "Other": []
+};
+const FOOD_TYPES = {
+  restaurant: { menu: ["Breakfast", "Main Dishes", "Rice & Pasta", "Grills", "Soups", "Salads", "Sandwiches & Burgers", "Desserts", "Hot Drinks", "Cold Drinks", "Fresh Juices"],
+    stations: ["Hot Kitchen", "Grill", "Drinks", "Dessert Section"], services: ["dine_in", "takeaway", "delivery", "counter"], tables: true },
+  cafe: { menu: ["Hot Coffee", "Tea", "Cold Coffee", "Smoothies & Shakes", "Pastries", "Sandwiches", "Breakfast", "Desserts"],
+    stations: ["Coffee Bar", "Kitchen", "Bakery"], services: ["dine_in", "takeaway", "counter", "delivery"], tables: true },
+  fast_food: { menu: ["Burgers", "Chicken", "Pizza", "Wraps & Sandwiches", "Fries & Sides", "Combos & Meal Deals", "Drinks", "Desserts"],
+    stations: ["Grill", "Fryer", "Drinks"], services: ["counter", "takeaway", "delivery", "dine_in"], tables: true },
+  bakery: { menu: ["Bread", "Cakes", "Pastries", "Cookies & Biscuits", "Custom Cakes", "Hot Drinks", "Cold Drinks"],
+    stations: ["Bakery", "Decoration", "Drinks"], services: ["counter", "takeaway", "delivery"], tables: false },
+  juice_bar: { menu: ["Fresh Juices", "Smoothies", "Milkshakes", "Fruit Salads", "Snacks"],
+    stations: ["Juice Bar"], services: ["counter", "takeaway", "delivery"], tables: false },
+  food_truck: { menu: ["Main Items", "Sides", "Combos & Meal Deals", "Drinks"], stations: ["Kitchen", "Drinks"], services: ["counter", "takeaway"], tables: false },
+  takeaway: { menu: ["Main Dishes", "Sandwiches & Burgers", "Sides", "Combos & Meal Deals", "Drinks", "Desserts"],
+    stations: ["Kitchen", "Drinks"], services: ["takeaway", "delivery", "counter"], tables: false },
+  food_other: { menu: ["Main Items", "Sides", "Drinks", "Desserts"], stations: ["Kitchen", "Drinks"], services: ["counter", "takeaway", "dine_in", "delivery"], tables: true }
+};
+export const FOOD_BUSINESS_TYPES = Object.keys(FOOD_TYPES);
+for (const [type, f] of Object.entries(FOOD_TYPES)) {
+  PROFILES[type] = {
+    key: "food",
+    variants: [],
+    labels: { sellingPrice: "menuPrice", costPrice: "costPerUnit", lowStockAlert: "minStockLevel", lowStockShort: "minStockLevel" },
+    units: ["pcs", "portion", "plate", "cup", "glass", "g", "kg", "ml", "liter", "bottle", "can", "pack", "box", "tray", "dozen"],
+    hiddenFields: ["wholesalePrice"],
+    purchaseOrders: true,
+    itemKinds: ["menu", "goods", "ingredient", "packaging", "modifier", "prepared"],
+    food: { type, stations: f.stations, services: f.services, tables: f.tables },
+    categories: { ...Object.fromEntries(f.menu.map((c) => [c, []])), ...INGREDIENTS }
+  };
+}
 
 export function profileFor(type) {
   return { ...DEFAULT, ...(PROFILES[type] || {}) };

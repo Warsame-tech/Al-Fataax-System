@@ -134,7 +134,9 @@ CREATE TABLE IF NOT EXISTS business_settings (
   allow_duplicate_codes TINYINT(1) NOT NULL DEFAULT 0,  -- products may share a SKU / barcode
   spec_fields      TEXT NULL,
   weight_decimals  TINYINT UNSIGNED NOT NULL DEFAULT 3,  -- jewelry: decimals shown / entered for weights
-  tailoring_stages TEXT NULL,                            -- fabric / tailoring: work stages (JSON list)                            -- extra technical specification fields per product type (JSON)
+  tailoring_stages TEXT NULL,
+  kitchen_stations TEXT NULL,                            -- food: kitchen stations (JSON list; default by food type)
+  food_settings    TEXT NULL,                            -- food: { delayMinutes } (JSON)                            -- fabric / tailoring: work stages (JSON list)                            -- extra technical specification fields per product type (JSON)
   timezone         VARCHAR(40) NOT NULL DEFAULT 'Africa/Mogadishu',
   updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_settings_business FOREIGN KEY (business_id) REFERENCES businesses(id)
@@ -215,7 +217,11 @@ CREATE TABLE IF NOT EXISTS products (
   wholesale_price DECIMAL(14,4) NULL,
   stock_qty       DECIMAL(14,4) NOT NULL DEFAULT 0,  -- maintained only inside stock-movement transactions
   min_stock       DECIMAL(14,4) NOT NULL DEFAULT 0,  -- Low Stock Alert Level (per location: product_stock.alert_level)
-  tracking        VARCHAR(12) NOT NULL DEFAULT 'qty', -- qty | serial | imei | serial_imei (devices table)
+  tracking        VARCHAR(12) NOT NULL DEFAULT 'qty', -- qty | serial | imei | serial_imei (devices table) | roll (fabric_rolls)
+  item_kind       VARCHAR(12) NOT NULL DEFAULT 'goods', -- food: menu, goods, ingredient, packaging, modifier, prepared
+  station         VARCHAR(60) NULL,                  -- food: kitchen station that prepares it
+  menu_options    TEXT NULL,                         -- food: { sizes: [{ name, price, factor }], extras: [productId] } (JSON)
+  available       TINYINT(1) NOT NULL DEFAULT 1,     -- food: 0 = sold out today (still on the menu)
   warranty_months INT UNSIGNED NULL,                 -- warranty policy for sales (warranties table)
   warranty_provider VARCHAR(100) NULL,
   warranty_terms  VARCHAR(255) NULL,
@@ -399,6 +405,8 @@ CREATE TABLE IF NOT EXISTS sales (
   discount       DECIMAL(14,4) NOT NULL DEFAULT 0,
   vat_rate       DECIMAL(5,2)  NOT NULL DEFAULT 0,  -- optional VAT (5%) on the amount after discount
   vat_amount     DECIMAL(14,4) NOT NULL DEFAULT 0,  -- included in total; not counted as sales income
+  fee_amount     DECIMAL(14,4) NOT NULL DEFAULT 0,  -- e.g. delivery fee (food orders), included in total
+  fee_label      VARCHAR(60) NULL,
   total          DECIMAL(14,4) NOT NULL,
   amount_paid    DECIMAL(14,4) NOT NULL DEFAULT 0,  -- informational; money in = customer_payments
   change_amount  DECIMAL(14,4) NOT NULL DEFAULT 0,  -- change given back (receipt)
@@ -930,6 +938,103 @@ CREATE TABLE IF NOT EXISTS tailoring_events (
   user_id     INT UNSIGNED NULL,
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_toev (order_id, id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS recipes (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id INT UNSIGNED NOT NULL,
+  product_id  INT UNSIGNED NOT NULL,             -- the menu item / extra / prepared item this recipe makes
+  version     INT UNSIGNED NOT NULL,
+  yield_qty   DECIMAL(14,4) NOT NULL DEFAULT 1,  -- how many units of the item one recipe makes (batch preparation)
+  notes       VARCHAR(255) NULL,
+  is_current  TINYINT(1) NOT NULL DEFAULT 1,     -- older versions are kept as history
+  user_id     INT UNSIGNED NULL,
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_recipes_product (business_id, product_id, is_current),
+  CONSTRAINT fk_recipes_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+  CONSTRAINT fk_recipes_product  FOREIGN KEY (product_id)  REFERENCES products(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS recipe_lines (
+  id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  recipe_id     INT UNSIGNED NOT NULL,
+  ingredient_id INT UNSIGNED NOT NULL,           -- an ingredient, packaging, prepared item, or another menu item (combos)
+  qty           DECIMAL(14,4) NOT NULL,
+  unit          VARCHAR(20) NOT NULL,            -- converted to the ingredient's unit (g ↔ kg, ml ↔ liter)
+  optional      TINYINT(1) NOT NULL DEFAULT 0,   -- the customer may ask for it to be left out
+  service       VARCHAR(10) NOT NULL DEFAULT 'all', -- all | takeaway (takeaway and delivery only, e.g. a box) | dine_in
+  sort          INT NOT NULL DEFAULT 0,
+  INDEX idx_recipe_lines (recipe_id),
+  CONSTRAINT fk_rl_recipe FOREIGN KEY (recipe_id) REFERENCES recipes(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS food_tables (
+  id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id INT UNSIGNED NOT NULL,
+  name        VARCHAR(40) NOT NULL,              -- table number / name
+  area        VARCHAR(60) NULL,                  -- e.g. Indoor, Terrace, Family section
+  capacity    INT UNSIGNED NOT NULL DEFAULT 4,
+  status      VARCHAR(12) NOT NULL DEFAULT 'available', -- available, occupied, reserved, cleaning
+  is_active   TINYINT(1) NOT NULL DEFAULT 1,
+  sort        INT NOT NULL DEFAULT 0,
+  UNIQUE KEY uq_food_table (business_id, name),
+  CONSTRAINT fk_ft_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS food_orders (
+  id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id     INT UNSIGNED NOT NULL,
+  order_no        VARCHAR(30) NOT NULL,
+  service_type    VARCHAR(12) NOT NULL,          -- dine_in, takeaway, counter, delivery
+  table_id        INT UNSIGNED NULL,
+  guests          INT UNSIGNED NULL,
+  customer_id     INT UNSIGNED NULL,
+  customer_name   VARCHAR(150) NULL,
+  customer_phone  VARCHAR(30) NULL,
+  delivery_address VARCHAR(255) NULL,
+  delivery_fee    DECIMAL(14,4) NOT NULL DEFAULT 0,
+  driver          VARCHAR(100) NULL,
+  notes           VARCHAR(500) NULL,
+  status          VARCHAR(20) NOT NULL DEFAULT 'received', -- received, sent, preparing, ready, served, delivered, completed, cancelled
+  sale_id         BIGINT UNSIGNED NULL,          -- the POS sale (receipt, payments) once billed
+  merged_into     BIGINT UNSIGNED NULL,          -- tables combined: this order's items moved to that order
+  cancel_reason   VARCHAR(255) NULL,
+  user_id         INT UNSIGNED NULL,
+  created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  sent_at         DATETIME NULL,
+  ready_at        DATETIME NULL,
+  closed_at       DATETIME NULL,
+  updated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_food_order (business_id, order_no),
+  INDEX idx_food_orders_status (business_id, status),
+  INDEX idx_food_orders_table (business_id, table_id),
+  CONSTRAINT fk_fo_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS food_order_items (
+  id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id  INT UNSIGNED NOT NULL,
+  order_id     BIGINT UNSIGNED NOT NULL,
+  product_id   INT UNSIGNED NOT NULL,
+  qty          DECIMAL(14,4) NOT NULL,
+  size         VARCHAR(40) NULL,
+  size_factor  DECIMAL(14,4) NOT NULL DEFAULT 1,   -- recipe quantities × this (e.g. large = 1.5)
+  extras       TEXT NULL,                           -- JSON [{ id, name, price }]
+  removed      TEXT NULL,                           -- JSON [{ lineId, name }] optional ingredients left out
+  notes        VARCHAR(255) NULL,
+  unit_price   DECIMAL(14,4) NOT NULL,              -- size price + extras, per item
+  line_total   DECIMAL(14,4) NOT NULL,
+  station      VARCHAR(60) NULL,
+  status       VARCHAR(12) NOT NULL DEFAULT 'new',  -- new, sent, preparing, ready, served, cancelled
+  user_id      INT UNSIGNED NULL,
+  created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  sent_at      DATETIME NULL,
+  started_at   DATETIME NULL,
+  ready_at     DATETIME NULL,
+  served_at    DATETIME NULL,
+  INDEX idx_foi_order (order_id),
+  INDEX idx_foi_kitchen (business_id, status, station),
+  CONSTRAINT fk_foi_business FOREIGN KEY (business_id) REFERENCES businesses(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS audit_logs (

@@ -5,13 +5,14 @@ import { pool } from "../config/db.js";
 import { env } from "../config/env.js";
 import { setSessionCookie, clearSessionCookie, requireAuth, audit } from "../middleware/auth.js";
 import { imageUpload, imageType, saveImage } from "../lib/files.js";
+import { FOOD_BUSINESS_TYPES } from "../lib/businessProfiles.js";
 
 const router = Router();
 
 /* ---------- validation ---------- */
 /* Business categories offered at sign-up ("fashion" = Clothing). Older businesses may still have a type
  * that is no longer offered; they keep it until they choose another one. */
-export const BUSINESS_TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "jewelry", "fabric"];
+export const BUSINESS_TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "jewelry", "fabric", ...FOOD_BUSINESS_TYPES];
 
 const USERNAME = /^[a-zA-Z0-9_.]{3,30}$/;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

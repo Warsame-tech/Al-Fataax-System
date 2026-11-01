@@ -25,7 +25,9 @@ router.get("/", ah(async (req, res) => {
   const [rows] = await pool.query(
     `SELECT ro.*, (SELECT COUNT(*) FROM business_user_roles bur WHERE bur.business_id = ro.business_id AND bur.role_id = ro.id) staff_count
        FROM roles ro WHERE ro.business_id = ? ORDER BY ro.created_at, ro.id`, [bid]);
-  res.json({ roles: rows.map(shape), catalog: { groups: PERMISSION_GROUPS, ownerOnly: OWNER_ONLY } });
+  // groups for one business type only (e.g. kitchen: food businesses) are shown to that type
+  const groups = PERMISSION_GROUPS.filter((g) => !g.profile || req.business.profile[g.profile]);
+  res.json({ roles: rows.map(shape), catalog: { groups, ownerOnly: OWNER_ONLY } });
 }));
 
 function readRole(body) {

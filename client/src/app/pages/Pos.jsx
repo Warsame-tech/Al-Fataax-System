@@ -331,8 +331,9 @@ function Register() {
  * Right: the applied payments (amount editable, removable) and Confirm order.
  * Paying more than the total gives change from cash; paying less leaves the rest
  * on credit for the chosen customer.
+ * Restaurant bills reuse it: fee (delivery) is added to the total, and submit(body) pays the food order instead of /api/sales.
  */
-function PaymentModal({ cart, subtotal, customer, addVat, setAddVat, onClose, onDone }) {
+export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer, addVat, setAddVat, onClose, onDone, submit = null }) {
   const { t } = useLanguage();
   const can = usePerm();
   const m = useMoney();
@@ -347,7 +348,7 @@ function PaymentModal({ cart, subtotal, customer, addVat, setAddVat, onClose, on
   const discValue = Math.max(Number(discount) || 0, 0);
   const disc = discMode === "percent" ? r2(subtotal * Math.min(discValue, 100) / 100) : Math.min(discValue, subtotal);
   const vat = vatOf(addVat, r2(subtotal - disc));
-  const total = r2(subtotal - disc + vat);
+  const total = r2(subtotal - disc + vat + fee);
   const paid = r2(payments.reduce((s, p) => s + (Number(p.amount) || 0), 0));
   const remaining = r2(total - paid);
   const cashPaid = r2(payments.filter((p) => p.kind === "cash").reduce((s, p) => s + (Number(p.amount) || 0), 0));
@@ -368,13 +369,13 @@ function PaymentModal({ cart, subtotal, customer, addVat, setAddVat, onClose, on
 
   const confirm = async () => {
     const body = {
-      items: cart.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}), ...(l.rollId ? { rollId: l.rollId } : {}) })),
+      ...(submit ? {} : { items: cart.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}), ...(l.rollId ? { rollId: l.rollId } : {}) })) }),
       customerId: customer?.id || null,
       discount: disc || 0,
       vat: addVat,
       payments: payments.filter((p) => Number(p.amount) > 0).map((p) => ({ paymentMethodId: p.paymentMethodId, amount: Number(p.amount) }))
     };
-    const result = await sub.run(() => apiRequest("/api/sales", { method: "POST", body }));
+    const result = await sub.run(() => (submit ? submit(body) : apiRequest("/api/sales", { method: "POST", body })));
     if (result) onDone(result);
   };
 
@@ -408,6 +409,7 @@ function PaymentModal({ cart, subtotal, customer, addVat, setAddVat, onClose, on
               </dt>
               <dd>{addVat ? m(vat) : "—"}{addVat && <small className="paybox__vat-base">{fill(t("ui.pos.vatOf"), { rate: VAT_RATE, amount: m(r2(subtotal - disc)) })}</small>}</dd>
             </div>
+            {fee > 0 && <div><dt>{feeLabel}</dt><dd>{m(fee)}</dd></div>}
             <div><dt>{t("ui.pos.totalDue")}</dt><dd>{m(total)}</dd></div>
             <div><dt>{t("ui.pos.totalPaid")}</dt><dd>{m(paid)}</dd></div>
             <div className="paybox__remaining">

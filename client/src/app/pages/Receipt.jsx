@@ -7,6 +7,7 @@ import { useApi, usePerm, useMoney, Loading, EmptyState, ReasonModal, StatusBadg
 import { qty, date, fill } from "../format.js";
 import { savePdf } from "../pdf.js";
 import { PriceDetailLine } from "../Jewelry.jsx";
+import { MenuDetailLine } from "../Food.jsx";
 
 const PAPER_KEY = "faatix.receiptPaper";
 
@@ -101,6 +102,7 @@ export default function Receipt() {
                 {i.devices?.map((d) => <small key={d.id} className="thermal__device">{d.label}</small>)}
                 {i.rolls?.map((r) => <small key={r.code} className="thermal__device">{fill(t("ui.fabric.cutFrom"), { code: r.code, m: qty(r.meters) })}</small>)}
                 <PriceDetailLine detail={i.priceDetail} className="thermal__device" />
+                <MenuDetailLine detail={i.priceDetail} className="thermal__device" />
                 {i.warranty && i.warranty.status !== "void" && <small className="thermal__device">{fill(t("ui.warranty.receiptLine"), { n: i.warranty.months, date: date(i.warranty.endDate, lang) })}</small>}
               </span>
               <span role="cell" className="num">{qty(i.qty)}{i.unit ? ` ${i.unit}` : ""}</span>
@@ -116,6 +118,7 @@ export default function Receipt() {
           <div><dt>{t("ui.common.subtotal")}:</dt><dd>{m(s.subtotal)}</dd></div>
           {s.discount > 0 && <div><dt>{t("ui.receipt.totalDiscount")}{discountPct ? ` (${discountPct}%)` : ""}:</dt><dd>−{m(s.discount)}</dd></div>}
           {s.vat > 0 && <div><dt>{fill(t("ui.pos.vatLine"), { rate: s.vatRate })}:</dt><dd>{m(s.vat)}</dd></div>}
+          {s.fee > 0 && <div><dt>{s.feeLabel === "Delivery" ? t("ui.food.deliveryFee") : s.feeLabel}:</dt><dd>{m(s.fee)}</dd></div>}
           <div className="is-total"><dt>{t("ui.common.total")}:</dt><dd>{m(s.total)}</dd></div>
         </dl>
 

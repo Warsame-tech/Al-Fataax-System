@@ -7,7 +7,7 @@ import { PageHeader, Tabs, useApi, usePerm, useSubmit, Modal, Field, FormError, 
 import { fill, date, daysLeft } from "../format.js";
 
 /* Business categories (same list as sign-up); a business registered under an older type keeps it in the list */
-const TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "jewelry", "fabric"];
+const TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "jewelry", "fabric", "restaurant", "cafe", "fast_food", "bakery", "juice_bar", "food_truck", "takeaway", "food_other"];
 const CURRENCIES = ["USD", "SOS", "KES", "ETB", "DJF", "EUR", "GBP", "AED"];
 
 function Saved({ show }) {

@@ -12,6 +12,7 @@ import { createWarranties, voidWarranties } from "../lib/warranties.js";
 import { defaultLocationId } from "../lib/stock.js";
 import { currentRates, weightPrice, unsellable } from "../lib/jewelry.js";
 import { isRoll, toMeters, YARD, attachRolls, cutFromRoll, returnCuts, cutsByItem } from "../lib/rolls.js";
+import { viaRecipe, consumeForSale, restoreConsumption } from "../lib/food.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -23,6 +24,8 @@ router.use(requireAuth);
  * A pack's price is its own price, or the base price × units per pack.
  * Fabric sold from rolls (price per meter): each line names its roll (rollId, it.roll from attachRolls) and is sold by the
  * meter, by the yard (exact: 1 yd = 0.9144 m) or as the whole roll (unit "roll": what is left on it).
+ * Food: a line from a food order carries it.menu (priced by the server: size + extras, routes/food.js); menu items and
+ * extras use their recipe's ingredients when sold (lib/food.js), and a sold-out item can't be sold.
  */
 export function priceLines(items, products, { allowCustomPrice, priceList = "retail", rates = null }) {
   const lines = [];
@@ -33,6 +36,11 @@ export function priceLines(items, products, { allowCustomPrice, priceList = "ret
     if (!p || !p.is_active) { errors[`items.${i}.productId`] = "required"; return; }
     if (Number.isNaN(qty)) { errors[`items.${i}.qty`] = "invalidAmount"; return; }
     if (unsellable(p)) { errors[`items.${i}.productId`] = "itemNotSellable"; return; }
+    if (viaRecipe(p) && !Number(p.available ?? 1)) { errors[`items.${i}.productId`] = "soldOut"; return; }
+    if (it.menu) {
+      lines.push({ product: p, qty, unitPrice: it.menu.unitPrice, unitCost: num(p.cost_price), lineTotal: round2(qty * it.menu.unitPrice), sell: null, menu: it.menu, priceDetail: null, warrantyMonths: null });
+      return;
+    }
     // jewelry sold by weight: today's price (net weight × rate + making + extra), recorded with its breakdown
     const live = weightPrice(p, rates);
     const unit = typeof it.unit === "string" && it.unit && it.unit !== p.unit ? it.unit : null;
@@ -143,7 +151,8 @@ async function readSplitPayments(conn, businessId, list, total, customerId) {
  */
 export async function createSale(conn, ctx, body) {
   const { businessId, userId, role } = ctx;
-  const items = readItems(body);
+  // ctx.items: lines built by the server (food orders: size, extras and price already worked out); ctx.fee: { amount, label }
+  const items = ctx.items || readItems(body);
   const split = Array.isArray(body.payments);
   let method = split ? null : body.paymentMethod;
   if (!split && ![...METHODS, "credit"].includes(method)) throw badRequest({ paymentMethod: "required" });
@@ -162,7 +171,8 @@ export async function createSale(conn, ctx, body) {
   const subtotal = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
   if (discount > subtotal) throw badRequest({ discount: "tooLarge" });
   const vat = vatFor(body.vat, round2(subtotal - discount));   // optional 5% VAT on the amount after discount
-  const total = round2(subtotal - discount + vat.amount);
+  const fee = ctx.fee?.amount > 0 ? round2(ctx.fee.amount) : 0;  // e.g. delivery fee
+  const total = round2(subtotal - discount + vat.amount + fee);
 
   // Money actually collected now (one entry per payment method).
   let paid; let paidMethod; let change = 0;
@@ -186,20 +196,23 @@ export async function createSale(conn, ctx, body) {
 
   const receiptNo = await nextNumber(conn, businessId, "receipt");
   const [s] = await conn.query(
-    `INSERT INTO sales (business_id, receipt_no, customer_id, user_id, subtotal, discount, vat_rate, vat_amount, total, amount_paid, change_amount, payment_method, sold_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, UTC_TIMESTAMP()))`,
-    [businessId, receiptNo, customerId, userId, subtotal, discount, vat.rate, vat.amount, total, paid, change, method, ctx.at || null]
+    `INSERT INTO sales (business_id, receipt_no, customer_id, user_id, subtotal, discount, vat_rate, vat_amount, fee_amount, fee_label, total, amount_paid, change_amount, payment_method, sold_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, UTC_TIMESTAMP()))`,
+    [businessId, receiptNo, customerId, userId, subtotal, discount, vat.rate, vat.amount, fee, fee ? ctx.fee.label || null : null, total, paid, change, method, ctx.at || null]
   );
   const saleId = s.insertId;
   const loc = await defaultLocationId(conn, businessId);       // the POS sells from the default location
   for (const [i, l] of lines.entries()) {
+    // menu items / extras: the recipe's ingredients leave stock; the cost of what was used stays on the line
+    const food = await consumeForSale(conn, { businessId, userId, product: l.product, qty: l.qty, menu: l.menu, locationId: loc, refType: "sale", refId: saleId, note: receiptNo });
+    if (food) { l.unitCost = food.unitCost; l.priceDetail = food.detail; }
     const [it] = await conn.query(
       `INSERT INTO sale_items (business_id, sale_id, product_id, qty, unit_price, unit_cost, line_total, sell_unit, sell_qty, sell_price, price_detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [businessId, saleId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null, l.priceDetail ? JSON.stringify(l.priceDetail) : null]
     );
     const devices = await sellDevices(conn, { businessId, userId, product: l.product, line: l, index: i, locationId: loc, refType: "sale", refId: saleId, itemId: it.insertId, customerId });
     if (isRoll(l.product)) await cutFromRoll(conn, { businessId, product: l.product, rollId: l.rollId, meters: l.qty, locationId: loc, refType: "sale", refId: saleId, itemId: it.insertId, userId, field: `items.${i}.rollId` });
-    await moveStock(conn, { businessId, userId, product: l.product, qtyChange: -l.qty, type: "sale", refType: "sale", refId: saleId, locationId: loc, devices: true });
+    if (!food) await moveStock(conn, { businessId, userId, product: l.product, qtyChange: -l.qty, type: "sale", refType: "sale", refId: saleId, locationId: loc, devices: true });
     await createWarranties(conn, { businessId, product: l.product, devices, qty: l.qty, months: l.warrantyMonths, customerId, refType: "sale", refId: saleId, userId, date: ctx.at || null });
     if (Number(l.product.unique_item) && Number(l.product.stock_qty) <= 0) await conn.query("UPDATE products SET item_status = 'sold' WHERE id = ?", [l.product.id]);
   }
@@ -252,7 +265,8 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
       WHERE cp.sale_id = ? AND cp.business_id = ? ORDER BY cp.id`, [s.id, bid]);
   res.json({
     business: req.business,
-    sale: { id: s.id, number: s.receipt_no, at: s.sold_at, status: s.status, method: s.payment_method, subtotal: num(s.subtotal), discount: num(s.discount), vatRate: num(s.vat_rate || 0), vat: num(s.vat_amount || 0), total: num(s.total), paid: num(s.amount_paid), change: num(s.change_amount || 0), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
+    sale: { id: s.id, number: s.receipt_no, at: s.sold_at, status: s.status, method: s.payment_method, subtotal: num(s.subtotal), discount: num(s.discount), vatRate: num(s.vat_rate || 0), vat: num(s.vat_amount || 0),
+      fee: num(s.fee_amount || 0), feeLabel: s.fee_label || null, total: num(s.total), paid: num(s.amount_paid), change: num(s.change_amount || 0), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
     // sold in a pack: shown as e.g. 2 Strip × 1.50 (qty / unitPrice); baseQty is the stock that left
     items: items.map((i) => ({ name: i.name, sku: i.sku, qty: i.sell_unit ? num(i.sell_qty) : num(i.qty), unitPrice: i.sell_unit ? num(i.sell_price) : num(i.unit_price),
       unit: i.sell_unit || null, baseQty: num(i.qty), baseUnit: i.base_unit, total: num(i.line_total),
@@ -272,7 +286,7 @@ router.post("/:id/cancel", requirePerm("sales.cancel"), ah(async (req, res) => {
   await withTx(async (conn) => {
     const s = await ensureOwned(conn, "sales", id(req.params.id), bid, true);
     if (s.status !== "completed") throw conflict("alreadyCancelled");
-    const [items] = await conn.query("SELECT product_id, qty, unit_price, unit_cost, line_total FROM sale_items WHERE sale_id = ? AND business_id = ?", [s.id, bid]);
+    const [items] = await conn.query("SELECT product_id, qty, unit_price, unit_cost, line_total, price_detail FROM sale_items WHERE sale_id = ? AND business_id = ?", [s.id, bid]);
     const products = await lockProducts(conn, bid, items.map((i) => i.product_id));
     const [ret] = await conn.query(
       "INSERT INTO returns (business_id, type, sale_id, total, refund_amount, reason, user_id, approved_by, returned_at) VALUES (?, 'sale', ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())",
@@ -281,7 +295,9 @@ router.post("/:id/cancel", requirePerm("sales.cancel"), ah(async (req, res) => {
     for (const i of items) {
       await conn.query("INSERT INTO return_items (business_id, return_id, product_id, qty, unit_price, unit_cost, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [bid, ret.insertId, i.product_id, i.qty, i.unit_price, i.unit_cost, i.line_total]);
-      await moveStock(conn, { businessId: bid, userId: uid, product: products.get(i.product_id), qtyChange: num(i.qty), type: "return_in", refType: "sale", refId: s.id, note: reason, devices: true });
+      // dishes: the ingredients they used come back; other products come back themselves
+      if (viaRecipe(products.get(i.product_id))) await restoreConsumption(conn, { businessId: bid, userId: uid, detail: JSON.parse(i.price_detail || "{}"), refType: "sale", refId: s.id, note: reason });
+      else await moveStock(conn, { businessId: bid, userId: uid, product: products.get(i.product_id), qtyChange: num(i.qty), type: "return_in", refType: "sale", refId: s.id, note: reason, devices: true });
       if (Number(products.get(i.product_id).unique_item)) await conn.query("UPDATE products SET item_status = 'returned' WHERE id = ?", [i.product_id]);
     }
     // sold devices come back to stock; the sale's warranties become void

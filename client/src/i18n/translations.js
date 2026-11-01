@@ -211,9 +211,10 @@ const translations = {
         furniture: "Furniture & home",
         hardware: "Hardware & building",
         books: "Books & stationery",
-        bakery: "Bakery & food",
+        bakery: "Bakery & pastry",
         jewelry: "Jewelry",
         fabric: "Fabric",
+        restaurant: "Restaurant", cafe: "Cafe", fast_food: "Fast food", juice_bar: "Juice bar", food_truck: "Food truck", takeaway: "Takeaway", food_other: "Other food business",
         wholesale: "Wholesale / distribution",
         services: "Services",
         other: "Other"
@@ -332,7 +333,10 @@ const translations = {
         metalRates: "Gold & silver rates",
         usedGold: "Used gold purchases",
         rolls: "Fabric rolls",
-        tailoring: "Tailoring orders"
+        tailoring: "Tailoring orders",
+        menu: "Menu & recipes",
+        tables: "Tables & orders",
+        kitchen: "Kitchen display"
       },
       coming: {
         title: "{name} is coming next",
@@ -634,9 +638,10 @@ const translations = {
         furniture: "Fadhiyo & alaab guri",
         hardware: "Qalab & agab dhismo",
         books: "Buugaag & qalab qoraal",
-        bakery: "Foorno & cunto",
+        bakery: "Foorno & macmacaan",
         jewelry: "Dahab",
         fabric: "Maro",
+        restaurant: "Maqaayad", cafe: "Kafee", fast_food: "Cunto degdeg ah", juice_bar: "Dukaan cabitaan (juice)", food_truck: "Baabuur cunto", takeaway: "Cunto la qaato (takeaway)", food_other: "Ganacsi cunto oo kale",
         wholesale: "Jumlad / qaybin",
         services: "Adeegyo",
         other: "Kale"
@@ -755,7 +760,10 @@ const translations = {
         metalRates: "Qiimaha dahabka & lacagta",
         usedGold: "Iibsiga dahab duug ah",
         rolls: "Duubabka maryaha",
-        tailoring: "Dalabaadka harqaanka"
+        tailoring: "Dalabaadka harqaanka",
+        menu: "Liiska cuntada & cunto-karinta",
+        tables: "Miisaska & dalabaadka",
+        kitchen: "Shaashadda jikada"
       },
       coming: {
         title: "{name} ayaa xiga",

@@ -1,4 +1,4 @@
-import { Navigate, useParams } from "react-router-dom";
+import { Navigate, useParams, useSearchParams } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import usePageTitle from "../hooks/usePageTitle.js";
@@ -17,6 +17,7 @@ import { Staff, BusinessInfo, Settings, Profile, Subscription, Audit } from "./p
 import { DevicesPage, WarrantiesPage } from "./Devices.jsx";
 import { MetalRatesPage, UsedGoldPage } from "./Jewelry.jsx";
 import { RollsPage, TailoringPage } from "./Fabric.jsx";
+import { FoodPos, KitchenPage, TablesPage, MenuPage } from "./Food.jsx";
 import { useProfile } from "./profile.js";
 
 const SCREENS = {
@@ -34,6 +35,9 @@ const SCREENS = {
   usedGold: UsedGoldPage,
   rolls: RollsPage,
   tailoring: TailoringPage,
+  menu: MenuPage,
+  tables: TablesPage,
+  kitchen: KitchenPage,
   expenses: Expenses,
   cashbook: Cashbook,
   reports: Reports,
@@ -51,6 +55,7 @@ export default function ModulePage() {
   const { t } = useLanguage();
   const can = usePerm();
   const profile = useProfile();
+  const [params] = useSearchParams();
   usePageTitle("meta.app");
   const mod = moduleById(id);
   if (!mod || (mod.profile && !profile[mod.profile])) return <Navigate to="/app" replace />;
@@ -62,6 +67,7 @@ export default function ModulePage() {
       </div>
     );
   }
-  const Screen = SCREENS[mod.id];
+  // food businesses sell through orders (restaurant POS); their receipts history stays the POS history
+  const Screen = mod.id === "pos" && profile.food && params.get("tab") !== "history" ? FoodPos : SCREENS[mod.id];
   return <Screen key={mod.id} />;
 }

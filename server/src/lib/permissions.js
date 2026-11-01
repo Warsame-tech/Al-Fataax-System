@@ -23,7 +23,9 @@ export const PERMISSION_GROUPS = [
   { module: "expenses", perms: ["expenses.view", "expenses.create", "expenses.delete"] },
   { module: "cashbook", perms: ["cash.view", "cash.edit"] },
   { module: "reports", perms: ["reports.view"] },
-  { module: "audit", perms: ["audit.view"] }
+  { module: "audit", perms: ["audit.view"] },
+  // food businesses only (profile.food): kitchen display, kitchen status updates, table setup
+  { module: "kitchen", perms: ["kitchen.view", "kitchen.update", "tables.manage"], profile: "food" }
 ];
 
 export const OWNER_ONLY = ["staff.manage", "business.edit", "settings.edit"];
@@ -54,7 +56,8 @@ const LEGACY = {
   "suppliers.view": ["manager", "stockkeeper"], "suppliers.edit": ["manager", "stockkeeper"],
   "purchases.view": ["manager", "stockkeeper"], "purchases.create": ["manager", "stockkeeper"], "purchases.pay": OM, "purchases.cancel": OM,
   "expenses.view": OM, "expenses.create": OM, "expenses.delete": [],
-  "cash.view": OM, "cash.edit": OM, "reports.view": OM, "audit.view": OM
+  "cash.view": OM, "cash.edit": OM, "reports.view": OM, "audit.view": OM,
+  "kitchen.view": ["manager"], "kitchen.update": ["manager"], "tables.manage": ["manager"]
 };
 export const DEFAULT_ROLES = [
   { key: "manager", name: "Manager", description: "Everything except staff and business settings" },

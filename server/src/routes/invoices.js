@@ -7,6 +7,7 @@ import { nextNumber, lockProducts, moveStock } from "../lib/ledger.js";
 import { priceLines } from "./sales.js";
 import { sellDevices, returnSoldDevices, deviceLabel } from "../lib/devices.js";
 import { isRoll, attachRolls, cutFromRoll, returnCuts, cutsByItem } from "../lib/rolls.js";
+import { consumeForSale, restoreConsumption, viaRecipe } from "../lib/food.js";
 import { createWarranties, voidWarranties } from "../lib/warranties.js";
 import { defaultLocationId } from "../lib/stock.js";
 import { currentRates } from "../lib/jewelry.js";
@@ -79,13 +80,15 @@ export async function createInvoice(conn, ctx, body) {
   );
   const loc = await defaultLocationId(conn, businessId);
   for (const [i, l] of lines.entries()) {
+    const food = await consumeForSale(conn, { businessId, userId, product: l.product, qty: l.qty, locationId: loc, refType: "invoice", refId: r.insertId, note: number });
+    if (food) { l.unitCost = food.unitCost; l.priceDetail = food.detail; }
     const [it] = await conn.query(
       `INSERT INTO invoice_items (business_id, invoice_id, product_id, qty, unit_price, unit_cost, line_total, sell_unit, sell_qty, sell_price, price_detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [businessId, r.insertId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null, l.priceDetail ? JSON.stringify(l.priceDetail) : null]
     );
     const devices = await sellDevices(conn, { businessId, userId, product: l.product, line: l, index: i, locationId: loc, refType: "invoice", refId: r.insertId, itemId: it.insertId, customerId });
     if (isRoll(l.product)) await cutFromRoll(conn, { businessId, product: l.product, rollId: l.rollId, meters: l.qty, locationId: loc, refType: "invoice", refId: r.insertId, itemId: it.insertId, userId, field: `items.${i}.rollId` });
-    await moveStock(conn, { businessId, userId, product: l.product, qtyChange: -l.qty, type: "invoice", refType: "invoice", refId: r.insertId, locationId: loc, devices: true });
+    if (!food) await moveStock(conn, { businessId, userId, product: l.product, qtyChange: -l.qty, type: "invoice", refType: "invoice", refId: r.insertId, locationId: loc, devices: true });
     await createWarranties(conn, { businessId, product: l.product, devices, qty: l.qty, months: l.warrantyMonths, customerId, refType: "invoice", refId: r.insertId, userId, date: ctx.at || null });
     if (Number(l.product.unique_item) && Number(l.product.stock_qty) <= 0) await conn.query("UPDATE products SET item_status = 'sold' WHERE id = ?", [l.product.id]);
   }
@@ -176,10 +179,11 @@ router.post("/:id/cancel", requirePerm("invoices.cancel"), ah(async (req, res) =
     const inv = await ensureOwned(conn, "invoices", id(req.params.id), bid, true);
     if (inv.status === "cancelled") throw conflict("alreadyCancelled");
     if (num(inv.amount_paid) > 0) throw conflict("hasPayments");
-    const [items] = await conn.query("SELECT product_id, qty FROM invoice_items WHERE invoice_id = ? AND business_id = ?", [inv.id, bid]);
+    const [items] = await conn.query("SELECT product_id, qty, price_detail FROM invoice_items WHERE invoice_id = ? AND business_id = ?", [inv.id, bid]);
     const products = await lockProducts(conn, bid, items.map((i) => i.product_id));
     for (const i of items) {
-      await moveStock(conn, { businessId: bid, userId: req.user.id, product: products.get(i.product_id), qtyChange: num(i.qty), type: "return_in", refType: "invoice", refId: inv.id, note: reason, devices: true });
+      if (viaRecipe(products.get(i.product_id))) await restoreConsumption(conn, { businessId: bid, userId: req.user.id, detail: JSON.parse(i.price_detail || "{}"), refType: "invoice", refId: inv.id, note: reason });
+      else await moveStock(conn, { businessId: bid, userId: req.user.id, product: products.get(i.product_id), qtyChange: num(i.qty), type: "return_in", refType: "invoice", refId: inv.id, note: reason, devices: true });
       if (Number(products.get(i.product_id).unique_item)) await conn.query("UPDATE products SET item_status = 'returned' WHERE id = ?", [i.product_id]);
     }
     await returnSoldDevices(conn, { businessId: bid, userId: req.user.id, refType: "invoice", refId: inv.id, locationId: await defaultLocationId(conn, bid), note: reason });

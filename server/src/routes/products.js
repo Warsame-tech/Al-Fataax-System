@@ -12,6 +12,7 @@ import { readPackaging, packagingOf } from "../lib/packaging.js";
 import { TRACKING } from "../lib/devices.js";
 import { conflict } from "../lib/http.js";
 import { currentRates, weightPrice, netWeight } from "../lib/jewelry.js";
+import { ITEM_KINDS, viaRecipe, optionsOf } from "../lib/food.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -47,6 +48,8 @@ const shape = (p, rates = null) => withJewelry(p, rates, {
   productType: p.product_type || "", modelNumber: p.model_number || "", countryOfOrigin: p.country_of_origin || "", notes: p.notes || "",
   specs: specsOf(p), tracking: p.tracking || "qty", minPrice: p.min_price === null || p.min_price === undefined ? null : num(p.min_price),
   warrantyMonths: p.warranty_months ?? null, warrantyProvider: p.warranty_provider || "", warrantyTerms: p.warranty_terms || "",
+  // food: what the item is, its kitchen station, sizes / extras, sold out today
+  itemKind: p.item_kind || "goods", station: p.station || "", available: p.available === undefined ? true : Boolean(p.available), menuOptions: optionsOf(p),
   stockStatus: num(p.stock_qty) < 0 ? "negative" : num(p.stock_qty) === 0 ? "out" : num(p.stock_qty) <= num(p.min_stock) ? "low" : "in"
 });
 
@@ -143,6 +146,9 @@ router.get("/", requirePerm("products.view"), ah(async (req, res) => {
   if (req.query.expiry === "soon") { where.push(EXPIRY_WHERE.soon); params.push(req.business.profile.expirySoonDays); }
   if (id(req.query.variantOf)) { where.push("COALESCE(p.variant_of, p.id) = ?"); params.push(id(req.query.variantOf)); }
   if (id(req.query.id)) { where.push("p.id = ?"); params.push(id(req.query.id)); }
+  // food: kind=menu,modifier (comma list)
+  const kinds = String(req.query.kind || "").split(",").filter((k) => ITEM_KINDS.includes(k));
+  if (kinds.length) { where.push("p.item_kind IN (?)"); params.push(kinds); }
   const ptype = text(req.query.productType, 60);
   if (ptype) { where.push("p.product_type = ?"); params.push(ptype); }
   if (id(req.query.supplierId)) {
@@ -316,7 +322,9 @@ function readProduct(body, { creating }) {
     tracking: TRACKING.includes(body.tracking) ? body.tracking : "qty",
     minPrice: body.minPrice === "" || body.minPrice == null ? null : money(body.minPrice),
     warrantyMonths: body.warrantyMonths === "" || body.warrantyMonths == null ? null : Number(body.warrantyMonths),
-    warrantyProvider: optText(body.warrantyProvider, 100), warrantyTerms: optText(body.warrantyTerms, 255)
+    warrantyProvider: optText(body.warrantyProvider, 100), warrantyTerms: optText(body.warrantyTerms, 255),
+    // food: not sent by other businesses (kept as saved)
+    itemKind: ITEM_KINDS.includes(body.itemKind) ? body.itemKind : undefined, station: body.station === undefined ? undefined : optText(body.station, 60)
   };
   const pack = readPackaging(body.packaging);
   // not sent (businesses without packaging): keep what is saved
@@ -440,6 +448,7 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
           group, d.description, d.sku, d.barcode, image, d.unit, d.packaging ?? null, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0]
       );
       await saveBarcodes(conn, bid, r.insertId, d.barcodes || []);
+      if (d.itemKind || d.station) await conn.query("UPDATE products SET item_kind = ?, station = ? WHERE id = ?", [d.itemKind || "goods", d.station ?? null, r.insertId]);
       // A product can exist with zero stock. Opening stock is normally entered in Stock → Opening stock.
       if (d.openingStock > 0 && d.tracking === "qty") {
         const product = { id: r.insertId, name: d.name, stock_qty: 0, unit: d.unit, cost_price: d.costPrice, track_batches: d.trackBatches ? 1 : 0 };
@@ -468,6 +477,11 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
       // the tracking method can change only while nothing is in stock (devices must match the stock)
       if ((p.tracking || "qty") !== d.tracking && num(p.stock_qty) !== 0) throw conflict("trackingNeedsZeroStock");
       if (d.uniqueItem && num(p.stock_qty) > 1) throw conflict("uniqueOne");
+      // food: a dish / extra has no stock of its own (its recipe is used), so the kind changes only at zero stock
+      if (d.itemKind && d.itemKind !== (p.item_kind || "goods") && viaRecipe({ item_kind: d.itemKind }) !== viaRecipe(p) && num(p.stock_qty) !== 0) throw conflict("kindNeedsZeroStock");
+      if (d.itemKind !== undefined || d.station !== undefined) {
+        await conn.query("UPDATE products SET item_kind = ?, station = ? WHERE id = ?", [d.itemKind || p.item_kind || "goods", d.station === undefined ? p.station : d.station, p.id]);
+      }
       const next = image || (req.body?.removeImage === "true" ? null : p.image_path);
       await conn.query(
         `UPDATE products SET category_id = ?, brand_id = ?, subcategory = ?, name = ?, generic_name = ?, dosage_form = ?, manufacturer = ?, supplier_id = ?, rx_required = ?,
@@ -524,11 +538,11 @@ router.post("/:id/variants", requirePerm("products.edit"), ah(async (req, res) =
       if (Number.isNaN(selling) || Number.isNaN(cost)) throw badRequest({ [`variants.${i}.sellingPrice`]: "invalidAmount" });
       const [r] = await conn.query(
         `INSERT INTO products (business_id, category_id, brand_id, subcategory, name, generic_name, dosage_form, manufacturer, supplier_id, rx_required, storage_instructions,
-                               product_type, model_number, collection, season, country_of_origin, notes, specs, tracking, min_price, warranty_months, warranty_provider, warranty_terms,
+                               product_type, model_number, collection, season, country_of_origin, notes, specs, tracking, item_kind, station, menu_options, min_price, warranty_months, warranty_provider, warranty_terms,
                                size, shade, fragrance, formula, pack_size, variant_of, description, sku, barcode, image_path, unit, packaging,
                                cost_price, selling_price, wholesale_price, min_stock, track_batches, is_active)
          SELECT business_id, category_id, brand_id, subcategory, name, generic_name, dosage_form, manufacturer, supplier_id, rx_required, storage_instructions,
-                product_type, model_number, collection, season, country_of_origin, notes, specs, tracking, min_price, warranty_months, warranty_provider, warranty_terms,
+                product_type, model_number, collection, season, country_of_origin, notes, specs, tracking, item_kind, station, menu_options, min_price, warranty_months, warranty_provider, warranty_terms,
                 ?, ?, fragrance, ?, ?, ?, description, ?, ?, NULL, unit, packaging, ?, ?, wholesale_price, min_stock, track_batches, 1
            FROM products WHERE id = ?`,
         [v.size, v.shade, v.formula, v.pack_size, group, d.sku, d.barcode, cost, selling, parent.id]);
