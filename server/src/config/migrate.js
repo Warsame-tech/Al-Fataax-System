@@ -529,6 +529,30 @@ const TABLES = [
       INDEX idx_foi_kitchen (business_id, status, station),
       CONSTRAINT fk_foi_business FOREIGN KEY (business_id) REFERENCES businesses(id)
     ) ENGINE=InnoDB`
+  },
+  {
+    table: "cash_sessions",
+    ddl: `CREATE TABLE IF NOT EXISTS cash_sessions (
+      id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id   INT UNSIGNED NOT NULL,
+      user_id       INT UNSIGNED NOT NULL,             -- the cashier
+      status        VARCHAR(10) NOT NULL DEFAULT 'open', -- open, closed (awaiting review), approved
+      opened_at     DATETIME NOT NULL,
+      opening_cash  DECIMAL(14,4) NOT NULL DEFAULT 0,
+      opening_note  VARCHAR(255) NULL,
+      closed_at     DATETIME NULL,
+      closed_by     INT UNSIGNED NULL,
+      counted_cash  DECIMAL(14,4) NULL,
+      expected_cash DECIMAL(14,4) NULL,                -- opening + cash in − cash out during the shift
+      difference    DECIMAL(14,4) NULL,                -- counted − expected (− shortage, + overage)
+      explanation   VARCHAR(500) NULL,
+      totals        TEXT NULL,                         -- JSON snapshot at closing (cash / mobile / bank in and out, sales)
+      approved_by   INT UNSIGNED NULL,
+      approved_at   DATETIME NULL,
+      review_note   VARCHAR(255) NULL,
+      INDEX idx_cash_sessions (business_id, user_id, status),
+      CONSTRAINT fk_cs_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+    ) ENGINE=InnoDB`
   }
 ];
 
@@ -630,6 +654,11 @@ COLUMNS.push(
   { table: "products", column: "item_kind", ddl: "ALTER TABLE products ADD COLUMN item_kind VARCHAR(12) NOT NULL DEFAULT 'goods' AFTER tracking, ADD COLUMN station VARCHAR(60) NULL AFTER item_kind, ADD COLUMN menu_options TEXT NULL AFTER station, ADD COLUMN available TINYINT(1) NOT NULL DEFAULT 1 AFTER menu_options" },
   { table: "business_settings", column: "kitchen_stations", ddl: "ALTER TABLE business_settings ADD COLUMN kitchen_stations TEXT NULL AFTER tailoring_stages, ADD COLUMN food_settings TEXT NULL AFTER kitchen_stations" },
   { table: "sales", column: "fee_amount", ddl: "ALTER TABLE sales ADD COLUMN fee_amount DECIMAL(14,4) NOT NULL DEFAULT 0 AFTER vat_amount, ADD COLUMN fee_label VARCHAR(60) NULL AFTER fee_amount" }
+);
+
+// Cashier shifts: sales may require an open shift.
+COLUMNS.push(
+  { table: "business_settings", column: "require_shift", ddl: "ALTER TABLE business_settings ADD COLUMN require_shift TINYINT(1) NOT NULL DEFAULT 0 AFTER food_settings" }
 );
 
 const INDEXES = [

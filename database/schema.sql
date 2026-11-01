@@ -136,7 +136,8 @@ CREATE TABLE IF NOT EXISTS business_settings (
   weight_decimals  TINYINT UNSIGNED NOT NULL DEFAULT 3,  -- jewelry: decimals shown / entered for weights
   tailoring_stages TEXT NULL,
   kitchen_stations TEXT NULL,                            -- food: kitchen stations (JSON list; default by food type)
-  food_settings    TEXT NULL,                            -- food: { delayMinutes } (JSON)                            -- fabric / tailoring: work stages (JSON list)                            -- extra technical specification fields per product type (JSON)
+  food_settings    TEXT NULL,
+  require_shift    TINYINT(1) NOT NULL DEFAULT 0,          -- sales need an open cashier shift                            -- food: { delayMinutes } (JSON)                            -- fabric / tailoring: work stages (JSON list)                            -- extra technical specification fields per product type (JSON)
   timezone         VARCHAR(40) NOT NULL DEFAULT 'Africa/Mogadishu',
   updated_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   CONSTRAINT fk_settings_business FOREIGN KEY (business_id) REFERENCES businesses(id)
@@ -1035,6 +1036,28 @@ CREATE TABLE IF NOT EXISTS food_order_items (
   INDEX idx_foi_order (order_id),
   INDEX idx_foi_kitchen (business_id, status, station),
   CONSTRAINT fk_foi_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+) ENGINE=InnoDB;
+
+CREATE TABLE IF NOT EXISTS cash_sessions (
+  id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id   INT UNSIGNED NOT NULL,
+  user_id       INT UNSIGNED NOT NULL,             -- the cashier
+  status        VARCHAR(10) NOT NULL DEFAULT 'open', -- open, closed (awaiting review), approved
+  opened_at     DATETIME NOT NULL,
+  opening_cash  DECIMAL(14,4) NOT NULL DEFAULT 0,
+  opening_note  VARCHAR(255) NULL,
+  closed_at     DATETIME NULL,
+  closed_by     INT UNSIGNED NULL,
+  counted_cash  DECIMAL(14,4) NULL,
+  expected_cash DECIMAL(14,4) NULL,                -- opening + cash in − cash out during the shift
+  difference    DECIMAL(14,4) NULL,                -- counted − expected (− shortage, + overage)
+  explanation   VARCHAR(500) NULL,
+  totals        TEXT NULL,                         -- JSON snapshot at closing (cash / mobile / bank in and out, sales)
+  approved_by   INT UNSIGNED NULL,
+  approved_at   DATETIME NULL,
+  review_note   VARCHAR(255) NULL,
+  INDEX idx_cash_sessions (business_id, user_id, status),
+  CONSTRAINT fk_cs_business FOREIGN KEY (business_id) REFERENCES businesses(id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE IF NOT EXISTS audit_logs (

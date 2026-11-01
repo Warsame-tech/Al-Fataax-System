@@ -5,7 +5,7 @@ import { requirePerm } from "../lib/permissions.js";
 import { ah, id, money, withTx, ensureOwned, badRequest, conflict, num, METHODS, text, optText, isDate, today, range } from "../lib/http.js";
 import { moneyMove, resolveAccount } from "../lib/ledger.js";
 
-export const EXPENSE_CATEGORIES = ["rent", "salaries", "electricity", "internet", "transport", "repairs", "marketing", "water", "taxes", "other"];
+export const EXPENSE_CATEGORIES = ["rent", "salaries", "electricity", "water", "gas", "internet", "transport", "repairs", "maintenance", "cleaning", "marketing", "taxes", "other"];
 export const INCOME_CATEGORIES = ["service", "commission", "rental", "interest", "other"];
 
 /* ===================== Expenses & other income ===================== */
@@ -38,7 +38,7 @@ export async function recordEntry(conn, ctx, kind, body) {
     [ctx.businessId, d.category, d.amount, d.date, d.method, acc.cash_account_id, acc.bank_account_id, d.description, ctx.userId]
   );
   await moneyMove(conn, { businessId: ctx.businessId, userId: ctx.userId, direction: isExpense ? "out" : "in", account: acc, amount: d.amount,
-    refType: isExpense ? "expense" : "other_income", refId: r.insertId, description: d.description || d.category, at: `${d.date} 12:00:00` });
+    refType: isExpense ? "expense" : "other_income", refId: r.insertId, description: d.description || d.category, at: d.date === today() ? null : `${d.date} 12:00:00` });   // today: the real time (cashier shifts)
   await audit(conn, { businessId: ctx.businessId, userId: ctx.userId, action: `${kind}.created`, entity: kind, entityId: r.insertId, meta: { amount: d.amount } });
   return r.insertId;
 }

@@ -21,6 +21,7 @@ export const MODULES = [
   { id: "tables",       icon: "grid",        color: "#2373f4", perm: "sales.create", profile: "food" },
   { id: "kitchen",      icon: "flame",       color: "#dc2626", perm: "kitchen.view", profile: "food" },
   { id: "tailoring",    icon: "scissors",    color: "#be185d", perm: "sales.view", profile: "fabric" },
+  { id: "shifts",       icon: "clock",       color: "#0f766e", perm: "sales.create" },
   { id: "expenses",     icon: "wallet",      color: "#dc2626", perm: "expenses.view" },
   { id: "cashbook",     icon: "book-open",   color: "#2373f4", perm: "cash.view" },
   { id: "reports",      icon: "file-chart",  color: "#0f9488", perm: "reports.view" },

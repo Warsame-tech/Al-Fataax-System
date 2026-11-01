@@ -336,7 +336,8 @@ const translations = {
         tailoring: "Tailoring orders",
         menu: "Menu & recipes",
         tables: "Tables & orders",
-        kitchen: "Kitchen display"
+        kitchen: "Kitchen display",
+        shifts: "Cashier shifts"
       },
       coming: {
         title: "{name} is coming next",
@@ -763,7 +764,8 @@ const translations = {
         tailoring: "Dalabaadka harqaanka",
         menu: "Liiska cuntada & cunto-karinta",
         tables: "Miisaska & dalabaadka",
-        kitchen: "Shaashadda jikada"
+        kitchen: "Shaashadda jikada",
+        shifts: "Wareegyada khasnajiga"
       },
       coming: {
         title: "{name} ayaa xiga",

@@ -23,6 +23,8 @@ const en = {
     pattern: "Please match the requested format.", date: "Please enter a valid date.", invalid: "Please check this value."
   },
   errors: {
+    shiftNotOpen: "Open your cashier shift before selling.", shiftAlreadyOpen: "You already have an open shift.", shiftClosed: "This shift is already closed.",
+    shiftNotClosed: "Only a closed shift can be approved.", approveOwnShift: "Another manager must approve your own shift.", explainDifference: "Explain the difference between counted and expected cash.",
     soldOut: "This item is sold out.", ingredientShort: "Not enough {ingredient} for {dish} ({available} {unit} left).", noStockForMenu: "{product} is a menu item: it has no stock of its own (its recipe's ingredients are used).",
     kindNeedsZeroStock: "This item type can only change while it has no stock.", unitMismatch: "This unit can't be converted to the ingredient's unit.", recipeSelf: "An item can't be in its own recipe.",
     recipeLoop: "This combo contains an item that contains it.", noRecipeKind: "Only menu items, extras and prepared items have recipes.", noRecipe: "{product} has no recipe yet.", notPrepared: "Only prepared items are made in batches.",
@@ -230,6 +232,16 @@ const en = {
     noExtras: "No extras yet. Add them under Extras.", makeTitle: "Make a batch · {name}", makeHelp: "The recipe's ingredients are taken out of stock and this item goes into stock at what the batch cost.",
     made: "{qty} {unit} made · cost {cost} ({each} each)."
   },
+  shifts: {
+    help: "Open a shift with the cash in the drawer. Cash sales, payments, refunds and expenses you record during the shift are added up; at closing you count the drawer and any shortage or overage is recorded with your explanation for a manager to review.",
+    require: "Sales need an open cashier shift", needShift: "Sales need an open cashier shift.", openShift: "Open shift", openingCash: "Opening cash", openingHint: "The cash in the drawer now.",
+    openSince: "Shift open since {at}", countedCash: "Counted cash", countHint: "Count the drawer and enter the total.", balanced: "Balanced — no difference.",
+    shortage: "Shortage: {amount}", overage: "Overage: {amount}", explanation: "Explanation", explanationPh: "Why is the cash different?", closedOk: "Shift closed. A manager will review it.",
+    closeShift: "Close shift", cashIn: "Cash in", cashOut: "Cash out", expected: "Expected cash", sales: "Sales", salesN: "{n} sales", mobile: "Mobile money", bank: "Bank",
+    reconcileApart: "Mobile money and bank are checked against their own statements, not the drawer.", allShifts: "All shifts", myShifts: "My shifts", none: "No shifts in this period.",
+    awaitingN: "{n} awaiting review", shortages: "Shortages", overages: "Overages", cashier: "Cashier", opened: "Opened", closed: "Closed", counted: "Counted", difference: "Difference",
+    status: { open: "Open", closed: "Awaiting review", approved: "Approved" }, approvedBy: "Approved by {name} · {at}", reviewNote: "Review note", approve: "Approve closing", moves: "Money moved during the shift"
+  },
   products: {
     fabricCategory: "Fabric category", colorShade: "Colour / shade", colorShadePh: "Colour / shade", pattern: "Pattern", patternPh: "Pattern",
     qualityGrade: "Quality / grade", composition: "Composition", compositionPh: "e.g. 65% polyester, 35% cotton", fabricSection: "Fabric details", itemType: "Item type",
@@ -430,7 +442,7 @@ const en = {
   money: {
     expenses: "Expenses", income: "Other income", addExpense: "Add expense", addIncome: "Add income", byCategory: "By category",
     empty: "Nothing recorded in this period.", deleteConfirm: "Delete this entry? The money movement will be reversed.",
-    categories: { rent: "Rent", salaries: "Salaries", electricity: "Electricity", internet: "Internet", transport: "Transport", repairs: "Repairs", marketing: "Marketing", water: "Water", taxes: "Taxes & fees", other: "Other" },
+    categories: { gas: "Gas", maintenance: "Maintenance", cleaning: "Cleaning", rent: "Rent", salaries: "Salaries", electricity: "Electricity", internet: "Internet", transport: "Transport", repairs: "Repairs", marketing: "Marketing", water: "Water", taxes: "Taxes & fees", other: "Other" },
     incomeCategories: { service: "Service income", commission: "Commission", rental: "Rental income", interest: "Interest", other: "Other" }
   },
   cash: {
@@ -537,6 +549,8 @@ const so = {
     pattern: "Fadlan raac qaabka la rabo.", date: "Fadlan geli taariikh sax ah.", invalid: "Fadlan hubi qiimahan."
   },
   errors: {
+    shiftNotOpen: "Fur wareeggaaga khasnajiga ka hor intaadan iibin.", shiftAlreadyOpen: "Horay ayaad wareeg furan u leedahay.", shiftClosed: "Wareeggan horay ayaa loo xiray.",
+    shiftNotClosed: "Kaliya wareeg la xiray ayaa la ansixin karaa.", approveOwnShift: "Maamule kale ayaa ansixinaya wareeggaaga.", explainDifference: "Sharax farqiga u dhexeeya lacagta la tiriyay iyo tan la filayay.",
     soldOut: "Shaygan waa dhammaaday.", ingredientShort: "{ingredient} kuguma filna {dish} ({available} {unit} ayaa haray).", noStockForMenu: "{product} waa shay liiska cuntada: kayd u gaar ah ma leh (agabka cunto-karinta ayaa la isticmaalaa).",
     kindNeedsZeroStock: "Nooca shaygan waxaa la beddeli karaa oo keliya marka kayd la'dahay.", unitMismatch: "Cabbirkan looma beddeli karo cabbirka agabka.", recipeSelf: "Shay kuma jiri karo cunto-karintiisa.",
     recipeLoop: "Isku-darkan wuxuu ka kooban yahay shay isaga laftiisa ka kooban.", noRecipeKind: "Kaliya shayada liiska, kordhinta iyo waxyaabaha la diyaariyo ayaa cunto-karin leh.", noRecipe: "{product} weli cunto-karin ma laha.", notPrepared: "Kaliya waxyaabaha la diyaariyo ayaa dufcado lagu sameeyaa.",
@@ -744,6 +758,16 @@ const so = {
     noExtras: "Weli kordhin ma jirto. Ku dar qaybta Kordhin.", makeTitle: "Samee dufcad · {name}", makeHelp: "Agabka cunto-karinta waa laga saaraa kaydka shaygana waxaa lagu daraa kaydka qiimaha dufcadda.",
     made: "{qty} {unit} ayaa la sameeyay · kharash {cost} ({each} midkiiba)."
   },
+  shifts: {
+    help: "Wareeg ku fur lacagta khaanadda ku jirta. Iibka lacagta caddaanka ah, lacag-bixinta, celinta iyo kharashyada aad diiwaangeliso inta wareeggu socdo waa la isku daraa; markaad xireyso waxaad tirinaysaa khaanadda, yaraanta ama korodhka waxaa lagu diiwaangeliyaa sharaxaaddaada si maamule u eego.",
+    require: "Iibku wuxuu u baahan yahay wareeg khasnaji oo furan", needShift: "Iibku wuxuu u baahan yahay wareeg khasnaji oo furan.", openShift: "Fur wareeg", openingCash: "Lacagta bilowga", openingHint: "Lacagta hadda khaanadda ku jirta.",
+    openSince: "Wareeggu wuu furan yahay tan iyo {at}", countedCash: "Lacagta la tiriyay", countHint: "Tiri khaanadda oo geli wadarta.", balanced: "Waa isku dheellitiran — farqi ma jiro.",
+    shortage: "Yaraan: {amount}", overage: "Korodh: {amount}", explanation: "Sharaxaad", explanationPh: "Maxay lacagtu u kala duwan tahay?", closedOk: "Wareegga waa la xiray. Maamule ayaa eegi doona.",
+    closeShift: "Xir wareegga", cashIn: "Lacag soo gashay", cashOut: "Lacag baxday", expected: "Lacagta la filayo", sales: "Iibka", salesN: "{n} iib", mobile: "Lacag mobile", bank: "Bangi",
+    reconcileApart: "Lacagta mobile-ka iyo bangiga waxaa lagu hubiyaa warbixintooda, ma aha khaanadda.", allShifts: "Dhammaan wareegyada", myShifts: "Wareegyadayda", none: "Wareeg muddadan ma jiro.",
+    awaitingN: "{n} sugaya dib-u-eegis", shortages: "Yaraan", overages: "Korodh", cashier: "Khasnaji", opened: "La furay", closed: "La xiray", counted: "La tiriyay", difference: "Farqi",
+    status: { open: "Furan", closed: "Sugaya dib-u-eegis", approved: "La ansixiyay" }, approvedBy: "Waxaa ansixiyay {name} · {at}", reviewNote: "Qoraalka dib-u-eegista", approve: "Ansixi xiritaanka", moves: "Lacagta dhaqaaqday inta wareeggu socday"
+  },
   products: {
     fabricCategory: "Qaybta marada", colorShade: "Midab / hadh", colorShadePh: "Midab / hadh", pattern: "Naqshad", patternPh: "Naqshad",
     qualityGrade: "Tayada / heerka", composition: "Ka-sameysanka", compositionPh: "tusaale 65% polyester, 35% cudbi", fabricSection: "Faahfaahinta marada", itemType: "Nooca shayga",
@@ -944,7 +968,7 @@ const so = {
   money: {
     expenses: "Kharashyada", income: "Dakhli kale", addExpense: "Ku dar kharash", addIncome: "Ku dar dakhli", byCategory: "Qayb ahaan",
     empty: "Muddadan waxba lama diiwaan gelin.", deleteConfirm: "Tirtir tan? Dhaqdhaqaaqa lacagta waa la celin doonaa.",
-    categories: { rent: "Kiro", salaries: "Mushaharaad", electricity: "Koronto", internet: "Internet", transport: "Gaadiid", repairs: "Dayactir", marketing: "Suuq-geyn", water: "Biyo", taxes: "Canshuuro & khidmado", other: "Kale" },
+    categories: { gas: "Gaas", maintenance: "Dayactir joogto ah", cleaning: "Nadaafad", rent: "Kiro", salaries: "Mushaharaad", electricity: "Koronto", internet: "Internet", transport: "Gaadiid", repairs: "Dayactir", marketing: "Suuq-geyn", water: "Biyo", taxes: "Canshuuro & khidmado", other: "Kale" },
     incomeCategories: { service: "Dakhli adeeg", commission: "Komishan", rental: "Dakhli kiro", interest: "Faa'iido", other: "Kale" }
   },
   cash: {

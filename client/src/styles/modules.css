@@ -1300,3 +1300,18 @@ tr.is-muted td { opacity: .6; }
   .recipe-line { grid-template-columns: 1fr 1fr 1fr; }
   .recipe-line > :first-child { grid-column: 1 / -1; }
 }
+
+/* ---------- Cashier shifts ---------- */
+.shift-banner { display: flex; align-items: center; gap: 6px; }
+.shift-require { margin: 0 0 12px; }
+.shift-card { margin-bottom: 18px; }
+.shift-diff { align-self: end; padding: 12px; border-radius: 12px; font-weight: 700; }
+.shift-diff.is-neg { background: #fde8e8; }
+.shift-diff.is-pos { background: #e7f6ee; }
+.shift-diff.is-ok { background: #e8f1fe; color: #1d4ed8; }
+.list-title { margin: 8px 0 10px; font-size: 1.1rem; color: var(--navy); }
+.shift-summary { display: flex; flex-wrap: wrap; gap: 14px; margin-bottom: 10px; font-weight: 600; }
+.shift-status { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef1f7; font-size: .76rem; font-weight: 700; }
+.shift-status.is-open { background: #e7f6ee; color: #146c43; }
+.shift-status.is-closed { background: #fff4e0; color: #9a5b00; }
+.shift-status.is-approved { background: #e8f1fe; color: #1d4ed8; }

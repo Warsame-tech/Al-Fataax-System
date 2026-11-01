@@ -153,6 +153,12 @@ export async function createSale(conn, ctx, body) {
   const { businessId, userId, role } = ctx;
   // ctx.items: lines built by the server (food orders: size, extras and price already worked out); ctx.fee: { amount, label }
   const items = ctx.items || readItems(body);
+  // cashier shifts: when the business requires one, the seller must have an open shift (routes/shifts.js)
+  const [[st]] = await conn.query("SELECT require_shift FROM business_settings WHERE business_id = ?", [businessId]);
+  if (st?.require_shift) {
+    const [[open]] = await conn.query("SELECT id FROM cash_sessions WHERE business_id = ? AND user_id = ? AND status = 'open'", [businessId, userId]);
+    if (!open) throw conflict("shiftNotOpen");
+  }
   const split = Array.isArray(body.payments);
   let method = split ? null : body.paymentMethod;
   if (!split && ![...METHODS, "credit"].includes(method)) throw badRequest({ paymentMethod: "required" });

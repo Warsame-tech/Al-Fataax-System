@@ -11,6 +11,7 @@ import { useDraft, DraftBar } from "../Drafts.jsx";
 import { unitsOf, unitsPer, packPrice } from "../packaging.js";
 import { DevicePicker, deviceText } from "../Devices.jsx";
 import { isRoll, YARD, RollPicker, lengthText } from "../Fabric.jsx";
+import { ShiftBanner } from "../Shifts.jsx";
 
 /* serial / IMEI products (electronics): a line is the exact devices chosen or scanned */
 const tracked = (p) => ["serial", "imei", "serial_imei"].includes(p?.tracking);
@@ -36,6 +37,7 @@ export default function Pos() {
         { id: "sell", label: t("ui.pos.newSale"), icon: "plus" },
         ...(can("sales.view") ? [{ id: "history", label: t("ui.pos.history"), icon: "history" }] : [])
       ]} />
+      {tab === "sell" && <ShiftBanner />}
       {tab === "sell" ? <Register /> : <History />}
     </div>
   );

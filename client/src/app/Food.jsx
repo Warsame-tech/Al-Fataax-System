@@ -9,6 +9,7 @@ import { useProfile } from "./profile.js";
 import SearchSelect from "./SearchSelect.jsx";
 import { PaymentModal } from "./pages/Pos.jsx";
 import { ProductForm } from "./pages/Products.jsx";
+import { ShiftBanner } from "./Shifts.jsx";
 
 /*
  * Restaurant & cafe (food business types):
@@ -138,6 +139,7 @@ export function FoodPos() {
   return (
     <div className="page food-pos">
       <PageHeader icon="cart" title={t("ui.food.posTitle")} actions={<Link className="btn btn--outline" to="/app/m/pos?tab=history"><Icon name="history" /><span>{t("ui.pos.history")}</span></Link>} />
+      <ShiftBanner />
       {/* open orders */}
       <div className="fpos-orders">
         <button type="button" className={"fpos-chip fpos-chip--new" + (!orderId ? " is-on" : "")} onClick={newOrder}><Icon name="plus" /> {t("ui.food.newOrder")}</button>

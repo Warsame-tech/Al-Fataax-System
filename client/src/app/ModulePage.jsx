@@ -18,6 +18,7 @@ import { DevicesPage, WarrantiesPage } from "./Devices.jsx";
 import { MetalRatesPage, UsedGoldPage } from "./Jewelry.jsx";
 import { RollsPage, TailoringPage } from "./Fabric.jsx";
 import { FoodPos, KitchenPage, TablesPage, MenuPage } from "./Food.jsx";
+import { ShiftsPage } from "./Shifts.jsx";
 import { useProfile } from "./profile.js";
 
 const SCREENS = {
@@ -38,6 +39,7 @@ const SCREENS = {
   menu: MenuPage,
   tables: TablesPage,
   kitchen: KitchenPage,
+  shifts: ShiftsPage,
   expenses: Expenses,
   cashbook: Cashbook,
   reports: Reports,
