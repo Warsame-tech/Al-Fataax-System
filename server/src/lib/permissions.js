@@ -24,6 +24,7 @@ export const PERMISSION_GROUPS = [
   { module: "cashbook", perms: ["cash.view", "cash.edit"] },
   { module: "reports", perms: ["reports.view"] },
   { module: "audit", perms: ["audit.view"] },
+  { module: "hr", perms: ["hr.view", "hr.manage", "hr.payroll"] },
   // food businesses only (profile.food): kitchen display, kitchen status updates, table setup
   { module: "kitchen", perms: ["kitchen.view", "kitchen.update", "tables.manage"], profile: "food" }
 ];
@@ -57,6 +58,7 @@ const LEGACY = {
   "purchases.view": ["manager", "stockkeeper"], "purchases.create": ["manager", "stockkeeper"], "purchases.pay": OM, "purchases.cancel": OM,
   "expenses.view": OM, "expenses.create": OM, "expenses.delete": [],
   "cash.view": OM, "cash.edit": OM, "reports.view": OM, "audit.view": OM,
+  "hr.view": ["manager"], "hr.manage": ["manager"], "hr.payroll": [],
   "kitchen.view": ["manager"], "kitchen.update": ["manager"], "tables.manage": ["manager"]
 };
 export const DEFAULT_ROLES = [

@@ -23,6 +23,8 @@ const en = {
     pattern: "Please match the requested format.", date: "Please enter a valid date.", invalid: "Please check this value."
   },
   errors: {
+    loginLinked: "That login already belongs to another employee.", notAnEmployee: "You are not set up as an employee.", alreadyClockedIn: "You are already clocked in.", notClockedIn: "You are not clocked in.",
+    payrollPaid: "This payroll is already paid.", moreThanPay: "Deductions can't be more than the pay.",
     menuClosed: "Online ordering is closed right now.", belowMinOrder: "The minimum order is {min}.",
     tableBooked: "That table is already booked at that time.", tooManyGuests: "That table has only {seats} seats.", reservationClosed: "This reservation can't be changed any more.",
     discountTooHigh: "A discount can't be more than {max}% of the bill.", discountNeedsApproval: "A discount above {limit}% needs a manager's approval.", cannotApprove: "This user can't approve discounts.", tooManyAttempts: "Too many attempts. Try again later.",
@@ -296,6 +298,22 @@ const en = {
     minOrder: "The minimum order is {amount}.", refreshes: "This page updates by itself.",
     steps: { received: "Received", sent: "Confirmed", preparing: "Preparing", ready: "Ready", on_the_way: "On the way", delivered: "Delivered" }
   },
+  hr: {
+    attendance: "Attendance", schedule: "Work shifts", performance: "Performance", employees: "Employees", payroll: "Payroll",
+    inSince: "Clocked in since {at}", notIn: "You are not clocked in", todayShift: "Today's shift {from}–{to}", clockIn: "Clock in", clockOut: "Clock out",
+    employee: "Employee", allEmployees: "All employees", addEntry: "Add attendance", correctEntry: "Correct attendance", totalHours: "Total worked: {h}", noAttendance: "No attendance in this period.",
+    in: "Clock in", out: "Clock out", worked: "Worked (h)", stillIn: "still in", enteredBy: "entered by {name}", correctedBy: "corrected by {name}", why: "Reason", whyPh: "e.g. Forgot to clock in",
+    noEmployees: "No employees yet. Add them under Employees.", addShift: "Add shift", start: "Start", end: "End", overnight: "An end before the start ends the next day.", days: "Days",
+    scheduled: "Scheduled (h)", daysWorked: "Days", late: "Late", absent: "Absent", salesCol: "Sales", ordersCol: "Orders",
+    performanceHelp: "Late = clocked in more than 10 minutes after the shift start. Sales and orders count for employees linked to a login.",
+    addEmployee: "Add employee", editEmployee: "Edit employee", position: "Position", positionPh: "e.g. Cook, Waiter, Cashier", pay: "Pay", login: "Login",
+    loginHint: "With a login the employee clocks in and out themselves.", hiredOn: "Hired on", payType: "Paid", payRate: "Rate", stillWorks: "Still working here",
+    payTypes: { monthly: "Monthly salary", daily: "Per day worked", hourly: "Per hour worked" }, per: { monthly: "/ month", daily: "/ day", hourly: "/ hour" },
+    newPayroll: "Make payroll", payrollHelp: "Monthly salaries are paid in full for a whole month (a shorter period pays its share of 30 days); daily and hourly pay comes from attendance.",
+    noPayroll: "No payroll yet.", period: "Period", runStatus: { draft: "Draft", paid: "Paid" }, basis: "Based on", base: "Pay", additions: "Additions", deductions: "Deductions", net: "Net",
+    basisMonthly: "{rate} a month", basisDaily: "{n} days × {rate}", basisHourly: "{n} h × {rate}", notePh: "Bonus, advance…", payTotal: "Pay {amount}",
+    payHint: "Recorded as one Salaries expense, so it shows in profit and the cashbook.", discard: "Discard draft", payNow: "Pay payroll", paidOn: "Paid {at} · {method}"
+  },
   products: {
     fabricCategory: "Fabric category", colorShade: "Colour / shade", colorShadePh: "Colour / shade", pattern: "Pattern", patternPh: "Pattern",
     qualityGrade: "Quality / grade", composition: "Composition", compositionPh: "e.g. 65% polyester, 35% cotton", fabricSection: "Fabric details", itemType: "Item type",
@@ -536,6 +554,7 @@ const en = {
     noRoles: "There are no roles yet.", manageRoles: "Manage roles"
   },
   perms: {
+    "hr.view": "See attendance, schedules and staff performance", "hr.manage": "Manage employees, schedules and attendance", "hr.payroll": "Run and pay payroll",
     "discounts.approve": "Approve discounts above the approval level", "promotions.manage": "Set up promotions",
     "kitchen.view": "See the kitchen display and kitchen reports", "kitchen.update": "Update preparation status and mark items sold out", "tables.manage": "Set up tables",
     "dashboard.finance": "See money totals (sales, profit, cash)",
@@ -604,6 +623,8 @@ const so = {
     pattern: "Fadlan raac qaabka la rabo.", date: "Fadlan geli taariikh sax ah.", invalid: "Fadlan hubi qiimahan."
   },
   errors: {
+    loginLinked: "Galitaankaas wuxuu u yaal shaqaale kale.", notAnEmployee: "Looma diyaarin shaqaale ahaan.", alreadyClockedIn: "Horay ayaad u gashay.", notClockedIn: "Ma aadan gelin.",
+    payrollPaid: "Mushaharkan horay ayaa loo bixiyay.", moreThanPay: "Jaritaanku kama badnaan karo mushaharka.",
     menuClosed: "Dalabka online hadda waa xiran yahay.", belowMinOrder: "Dalabka ugu yar waa {min}.",
     tableBooked: "Miiskaas horay ayaa loo qabsaday waqtigaas.", tooManyGuests: "Miiskaas wuxuu leeyahay {seats} kursi oo keliya.", reservationClosed: "Ballantan lama beddeli karo.",
     discountTooHigh: "Dhimistu kama badnaan karto {max}% biilka.", discountNeedsApproval: "Dhimis ka badan {limit}% waxay u baahan tahay ansixinta maamule.", cannotApprove: "Isticmaalahan ma ansixin karo dhimista.", tooManyAttempts: "Isku day badan. Mar dambe isku day.",
@@ -877,6 +898,22 @@ const so = {
     minOrder: "Dalabka ugu yar waa {amount}.", refreshes: "Boggani iskiis ayuu isu cusbooneysiiyaa.",
     steps: { received: "La helay", sent: "La xaqiijiyay", preparing: "La diyaarinayaa", ready: "Diyaar", on_the_way: "Waddada ayuu ku jiraa", delivered: "La gaarsiiyay" }
   },
+  hr: {
+    attendance: "Imaanshaha", schedule: "Jadwalka shaqada", performance: "Waxqabadka", employees: "Shaqaalaha", payroll: "Mushaharka",
+    inSince: "Waxaad gashay {at}", notIn: "Ma aadan gelin", todayShift: "Wareegga maanta {from}–{to}", clockIn: "Gal", clockOut: "Bax",
+    employee: "Shaqaale", allEmployees: "Shaqaale kasta", addEntry: "Ku dar imaansho", correctEntry: "Sax imaanshaha", totalHours: "Wadarta la shaqeeyay: {h}", noAttendance: "Imaansho muddadan ma jiro.",
+    in: "Gal", out: "Bax", worked: "La shaqeeyay (s)", stillIn: "weli gudaha", enteredBy: "waxaa geliyay {name}", correctedBy: "waxaa saxay {name}", why: "Sabab", whyPh: "tusaale Wuu ilaaway inuu galo",
+    noEmployees: "Weli shaqaale ma jiro. Ku dar qaybta Shaqaalaha.", addShift: "Ku dar wareeg", start: "Bilow", end: "Dhammaad", overnight: "Dhammaad ka horreeya bilowga wuxuu dhammaadaa maalinta xigta.", days: "Maalmaha",
+    scheduled: "Jadwalaysan (s)", daysWorked: "Maalmo", late: "Daahay", absent: "Maqan", salesCol: "Iib", ordersCol: "Dalabaad",
+    performanceHelp: "Daahay = wuxuu galay in ka badan 10 daqiiqo kadib bilowga wareegga. Iibka iyo dalabaadka waxaa lagu xisaabiyaa shaqaalaha galitaan leh.",
+    addEmployee: "Ku dar shaqaale", editEmployee: "Wax ka beddel shaqaale", position: "Jagada", positionPh: "tusaale Karinaha, Adeegaha, Khasnajiga", pay: "Mushahar", login: "Galitaan",
+    loginHint: "Haddii uu galitaan leeyahay, shaqaaluhu isaga ayaa gala oo baxa.", hiredOn: "La shaqaaleysiiyay", payType: "Lacag-bixin", payRate: "Qiimaha", stillWorks: "Weli halkan ayuu ka shaqeeyaa",
+    payTypes: { monthly: "Mushahar bille ah", daily: "Maalintii la shaqeeyay", hourly: "Saacaddii la shaqeeyay" }, per: { monthly: "/ bishii", daily: "/ maalintii", hourly: "/ saacaddii" },
+    newPayroll: "Samee mushahar", payrollHelp: "Mushaharka bille ah waxaa si buuxda loo bixiyaa bil dhan (muddo ka gaaban waxay bixisaa qaybteeda 30 maalmood); mushaharka maalinlaha iyo saacadlaha waxaa laga xisaabiyaa imaanshaha.",
+    noPayroll: "Weli mushahar ma jiro.", period: "Muddada", runStatus: { draft: "Qabyo", paid: "La bixiyay" }, basis: "Ku salaysan", base: "Mushahar", additions: "Dheeri", deductions: "Jaritaan", net: "Saafi",
+    basisMonthly: "{rate} bishii", basisDaily: "{n} maalmood × {rate}", basisHourly: "{n} s × {rate}", notePh: "Gunno, horudhac…", payTotal: "Bixi {amount}",
+    payHint: "Waxaa loo diiwaangeliyaa hal kharash Mushaharaad, sidaa darteed wuxuu ka muuqdaa faa'iidada iyo buugga lacagta.", discard: "Tirtir qabyada", payNow: "Bixi mushaharka", paidOn: "La bixiyay {at} · {method}"
+  },
   products: {
     fabricCategory: "Qaybta marada", colorShade: "Midab / hadh", colorShadePh: "Midab / hadh", pattern: "Naqshad", patternPh: "Naqshad",
     qualityGrade: "Tayada / heerka", composition: "Ka-sameysanka", compositionPh: "tusaale 65% polyester, 35% cudbi", fabricSection: "Faahfaahinta marada", itemType: "Nooca shayga",
@@ -1117,6 +1154,7 @@ const so = {
     noRoles: "Weli door ma jiro.", manageRoles: "Maamul doorarka"
   },
   perms: {
+    "hr.view": "Arag imaanshaha, jadwalka iyo waxqabadka shaqaalaha", "hr.manage": "Maamul shaqaalaha, jadwalka iyo imaanshaha", "hr.payroll": "Samee oo bixi mushaharka",
     "discounts.approve": "Ansixi dhimista ka badan heerka ansixinta", "promotions.manage": "Diyaari dalacsiinta",
     "kitchen.view": "Arag shaashadda jikada iyo warbixinnada jikada", "kitchen.update": "Cusbooneysii xaaladda diyaarinta oo calaamadee waxa dhammaaday", "tables.manage": "Diyaari miisaska",
     "dashboard.finance": "Arag wadarta lacagta (iib, faa'iido, caddaan)",

@@ -630,6 +630,94 @@ const TABLES = [
       INDEX idx_reservations_table (business_id, table_id, status),
       CONSTRAINT fk_resv_business FOREIGN KEY (business_id) REFERENCES businesses(id)
     ) ENGINE=InnoDB`
+  },
+  {
+    table: "employees",
+    ddl: `CREATE TABLE IF NOT EXISTS employees (
+      id          INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id INT UNSIGNED NOT NULL,
+      user_id     INT UNSIGNED NULL,                  -- their staff login (clocks in themselves)
+      full_name   VARCHAR(150) NOT NULL,
+      phone       VARCHAR(30) NULL,
+      position    VARCHAR(80) NULL,                   -- e.g. Cook, Waiter, Cashier
+      pay_type    VARCHAR(10) NOT NULL,               -- monthly, daily, hourly
+      pay_rate    DECIMAL(14,4) NOT NULL DEFAULT 0,
+      hired_on    DATE NULL,
+      notes       VARCHAR(255) NULL,
+      is_active   TINYINT(1) NOT NULL DEFAULT 1,
+      created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_employee_user (business_id, user_id),
+      CONSTRAINT fk_emp_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+    ) ENGINE=InnoDB`
+  },
+  {
+    table: "work_shifts",
+    ddl: `CREATE TABLE IF NOT EXISTS work_shifts (
+      id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id INT UNSIGNED NOT NULL,
+      employee_id INT UNSIGNED NOT NULL,
+      shift_date  DATE NOT NULL,
+      start_time  TIME NOT NULL,
+      end_time    TIME NOT NULL,                      -- before start_time = ends the next day
+      note        VARCHAR(120) NULL,
+      user_id     INT UNSIGNED NULL,
+      INDEX idx_work_shifts (business_id, shift_date),
+      CONSTRAINT fk_ws_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+    ) ENGINE=InnoDB`
+  },
+  {
+    table: "attendance",
+    ddl: `CREATE TABLE IF NOT EXISTS attendance (
+      id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id INT UNSIGNED NOT NULL,
+      employee_id INT UNSIGNED NOT NULL,
+      clock_in    DATETIME NOT NULL,
+      clock_out   DATETIME NULL,
+      minutes     INT NULL,
+      source      VARCHAR(10) NOT NULL DEFAULT 'self', -- self (clocked in) | manager (entered)
+      note        VARCHAR(200) NULL,
+      user_id     INT UNSIGNED NULL,                  -- who recorded it
+      edited_by   INT UNSIGNED NULL,                  -- a manager who corrected it
+      INDEX idx_attendance (business_id, clock_in),
+      INDEX idx_attendance_emp (employee_id, clock_out),
+      CONSTRAINT fk_att_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+    ) ENGINE=InnoDB`
+  },
+  {
+    table: "payroll_runs",
+    ddl: `CREATE TABLE IF NOT EXISTS payroll_runs (
+      id           INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id  INT UNSIGNED NOT NULL,
+      period_start DATE NOT NULL,
+      period_end   DATE NOT NULL,
+      status       VARCHAR(8) NOT NULL DEFAULT 'draft', -- draft, paid
+      total        DECIMAL(14,4) NOT NULL DEFAULT 0,
+      paid_at      DATETIME NULL,
+      method       VARCHAR(20) NULL,
+      expense_id   BIGINT UNSIGNED NULL,               -- the Salaries expense it recorded
+      user_id      INT UNSIGNED NULL,
+      created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_payroll (business_id, period_end),
+      CONSTRAINT fk_pr_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+    ) ENGINE=InnoDB`
+  },
+  {
+    table: "payroll_lines",
+    ddl: `CREATE TABLE IF NOT EXISTS payroll_lines (
+      id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      run_id      INT UNSIGNED NOT NULL,
+      employee_id INT UNSIGNED NOT NULL,
+      pay_type    VARCHAR(10) NOT NULL,
+      rate        DECIMAL(14,4) NOT NULL,
+      days        DECIMAL(10,2) NOT NULL DEFAULT 0,
+      hours       DECIMAL(10,2) NOT NULL DEFAULT 0,
+      base        DECIMAL(14,4) NOT NULL,
+      additions   DECIMAL(14,4) NOT NULL DEFAULT 0,  -- bonus, overtime…
+      deductions  DECIMAL(14,4) NOT NULL DEFAULT 0,  -- advances, shortages…
+      net         DECIMAL(14,4) NOT NULL,
+      note        VARCHAR(200) NULL,
+      INDEX idx_payroll_lines (run_id)
+    ) ENGINE=InnoDB`
   }
 ];
 

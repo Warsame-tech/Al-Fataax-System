@@ -1363,3 +1363,13 @@ tr.is-muted td { opacity: .6; }
 .om__steps { margin: 14px 0; }
 .online-link .barcode-row { display: flex; gap: 8px; flex-wrap: wrap; }
 .online-link .barcode-row .input { flex: 1; min-width: 220px; }
+
+/* ---------- Employees & payroll ---------- */
+.clock-card { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; padding: 12px 16px; border-radius: 16px; background: #fff; border: 1px solid #e8ebf3; }
+.clock-card > div { flex: 1; display: grid; gap: 2px; }
+.clock-card small { color: var(--muted); }
+.hr-open { color: #146c43; font-weight: 700; }
+.schedule td { vertical-align: top; min-width: 96px; }
+.shift-chip { display: inline-flex; align-items: center; gap: 4px; margin: 2px 0; padding: 2px 8px; border-radius: 999px; background: #eef1ff; color: #2c3494; font-size: .78rem; font-weight: 700; }
+.shift-chip button { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 2px; }
+.shift-add { display: block; width: 100%; margin-top: 2px; border: 1px dashed #c9d2e6; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }

@@ -27,6 +27,7 @@ export const MODULES = [
   { id: "expenses",     icon: "wallet",      color: "#dc2626", perm: "expenses.view" },
   { id: "cashbook",     icon: "book-open",   color: "#2373f4", perm: "cash.view" },
   { id: "reports",      icon: "file-chart",  color: "#0f9488", perm: "reports.view" },
+  { id: "hr",           icon: "users",       color: "#0f766e", perm: ["hr.view", "hr.payroll"] },
   { id: "staff",        icon: "user-key",    color: "#475569", perm: "staff.manage" },
   { id: "business",     icon: "briefcase",   color: "#2c3494", perm: null },
   { id: "profile",      icon: "user",        color: "#f2712f", perm: null },

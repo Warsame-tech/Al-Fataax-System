@@ -5,6 +5,7 @@ import usePageTitle from "../hooks/usePageTitle.js";
 import { MODULES, QUICK_ACTIONS } from "./modules.js";
 import { usePerm } from "./ui.jsx";
 import { useProfile } from "./profile.js";
+import { ClockCard } from "./Hr.jsx";
 
 /*
  * Business dashboard: quick actions, then large module buttons (5 per row).
@@ -20,6 +21,7 @@ export default function Dashboard() {
 
   return (
     <div className="dash">
+      <ClockCard />
       {quick.length > 0 && (
         <section className="dash-block" aria-labelledby="qa-title">
           <h2 id="qa-title" className="dash-title">{t("app.quick.title")}</h2>
