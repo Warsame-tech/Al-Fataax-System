@@ -24,7 +24,8 @@ export function useApi(path) {
 
 export function usePerm() {
   const { permissions = [] } = useAuth();
-  return (perm) => permissions.includes(perm);
+  // a list means any of them (e.g. a module open to kitchen staff or stock staff)
+  return (perm) => (Array.isArray(perm) ? perm.some((p) => permissions.includes(p)) : permissions.includes(perm));
 }
 
 export function useMoney() {

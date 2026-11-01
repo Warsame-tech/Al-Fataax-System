@@ -23,6 +23,7 @@ const en = {
     pattern: "Please match the requested format.", date: "Please enter a valid date.", invalid: "Please check this value."
   },
   errors: {
+    wasteDecided: "This waste record was already approved or rejected.",
     shiftNotOpen: "Open your cashier shift before selling.", shiftAlreadyOpen: "You already have an open shift.", shiftClosed: "This shift is already closed.",
     shiftNotClosed: "Only a closed shift can be approved.", approveOwnShift: "Another manager must approve your own shift.", explainDifference: "Explain the difference between counted and expected cash.",
     soldOut: "This item is sold out.", ingredientShort: "Not enough {ingredient} for {dish} ({available} {unit} left).", noStockForMenu: "{product} is a menu item: it has no stock of its own (its recipe's ingredients are used).",
@@ -242,6 +243,15 @@ const en = {
     awaitingN: "{n} awaiting review", shortages: "Shortages", overages: "Overages", cashier: "Cashier", opened: "Opened", closed: "Closed", counted: "Counted", difference: "Difference",
     status: { open: "Open", closed: "Awaiting review", approved: "Approved" }, approvedBy: "Approved by {name} · {at}", reviewNote: "Review note", approve: "Approve closing", moves: "Money moved during the shift"
   },
+  waste: {
+    record: "Record waste", help: "Burnt food, expired or spilled ingredients, wrong orders, unsold food and damaged packaging. Approved waste leaves stock as waste — kept apart from what recipes use for sales — and appears in the waste report.",
+    allReasons: "All reasons", totalCost: "Approved waste: {amount}", pendingN: "{n} waiting for approval", byItem: "Waste by item", none: "No waste recorded in this period.",
+    responsible: "Responsible employee", responsiblePh: "Who was responsible", cost: "Cost", estimate: "estimate", approve: "Approve", reject: "Reject", chooseItem: "Choose the item",
+    reasons: { burnt: "Burnt food", expired: "Expired", spilled: "Spilled", wrong_order: "Incorrectly prepared order", unsold: "Unsold prepared food", damaged_packaging: "Damaged packaging", other: "Other" },
+    status: { pending: "Waiting for approval", approved: "Approved", rejected: "Rejected" },
+    willApprove: "Approved now: it leaves stock immediately.", willWait: "A manager approves it before it leaves stock.",
+    savedApproved: "Recorded and approved (about {amount}).", savedPending: "Recorded (about {amount}). A manager will approve it."
+  },
   products: {
     fabricCategory: "Fabric category", colorShade: "Colour / shade", colorShadePh: "Colour / shade", pattern: "Pattern", patternPh: "Pattern",
     qualityGrade: "Quality / grade", composition: "Composition", compositionPh: "e.g. 65% polyester, 35% cotton", fabricSection: "Fabric details", itemType: "Item type",
@@ -354,7 +364,7 @@ const en = {
     tabs: { current: "Current stock", add: "Add stock", opening: "Opening stock", adjust: "Adjust", transfer: "Transfer", movements: "Movements", low: "Low stock", valuation: "Valuation", reports: "Reports", locations: "Locations" },
     types: { opening: "Opening stock", purchase: "Purchase received", stock_in: "Other stock in", return_in: "Customer return", sale: "POS sale", invoice: "Invoice",
       return_out: "Returned out", purchase_return: "Supplier return", transfer_out: "Transfer out", transfer_in: "Transfer in", damaged: "Damaged stock",
-      adjustment: "Stock adjustment", count: "Physical count correction", reversal: "Reversal", consumption: "Used by recipe", production: "Batch prepared" },
+      adjustment: "Stock adjustment", count: "Physical count correction", reversal: "Reversal", waste: "Food waste", consumption: "Used by recipe", production: "Batch prepared" },
     reasons: { damaged: "Damaged", expired: "Expired", lost: "Lost / stolen", found: "Found", correction: "Count correction", other: "Other", opening: "Opening stock",
       purchase: "Purchase received", return_in: "Customer return", stock_in: "Other stock in", transfer: "Transfer" },
     status: { in: "In stock", low: "Low stock", out: "Out of stock", negative: "Negative stock" },
@@ -549,6 +559,7 @@ const so = {
     pattern: "Fadlan raac qaabka la rabo.", date: "Fadlan geli taariikh sax ah.", invalid: "Fadlan hubi qiimahan."
   },
   errors: {
+    wasteDecided: "Diiwaankan khasaaraha horay ayaa loo ansixiyay ama loo diiday.",
     shiftNotOpen: "Fur wareeggaaga khasnajiga ka hor intaadan iibin.", shiftAlreadyOpen: "Horay ayaad wareeg furan u leedahay.", shiftClosed: "Wareeggan horay ayaa loo xiray.",
     shiftNotClosed: "Kaliya wareeg la xiray ayaa la ansixin karaa.", approveOwnShift: "Maamule kale ayaa ansixinaya wareeggaaga.", explainDifference: "Sharax farqiga u dhexeeya lacagta la tiriyay iyo tan la filayay.",
     soldOut: "Shaygan waa dhammaaday.", ingredientShort: "{ingredient} kuguma filna {dish} ({available} {unit} ayaa haray).", noStockForMenu: "{product} waa shay liiska cuntada: kayd u gaar ah ma leh (agabka cunto-karinta ayaa la isticmaalaa).",
@@ -768,6 +779,15 @@ const so = {
     awaitingN: "{n} sugaya dib-u-eegis", shortages: "Yaraan", overages: "Korodh", cashier: "Khasnaji", opened: "La furay", closed: "La xiray", counted: "La tiriyay", difference: "Farqi",
     status: { open: "Furan", closed: "Sugaya dib-u-eegis", approved: "La ansixiyay" }, approvedBy: "Waxaa ansixiyay {name} · {at}", reviewNote: "Qoraalka dib-u-eegista", approve: "Ansixi xiritaanka", moves: "Lacagta dhaqaaqday inta wareeggu socday"
   },
+  waste: {
+    record: "Diiwaangeli khasaare", help: "Cunto gubatay, agab dhacay ama daatay, dalab si khaldan loo diyaariyay, cunto aan la iibin iyo baakado jaban. Khasaaraha la ansixiyay wuxuu kaydka uga baxaa khasaare — kana duwan waxa cunto-karintu u isticmaasho iibka — wuxuuna ka muuqdaa warbixinta khasaaraha.",
+    allReasons: "Sabab kasta", totalCost: "Khasaaraha la ansixiyay: {amount}", pendingN: "{n} sugaya ansixin", byItem: "Khasaaraha shay kasta", none: "Khasaare muddadan lama diiwaangelin.",
+    responsible: "Shaqaalaha mas'uulka ah", responsiblePh: "Cidda mas'uulka ahayd", cost: "Kharash", estimate: "qiyaas", approve: "Ansixi", reject: "Diid", chooseItem: "Dooro shayga",
+    reasons: { burnt: "Cunto gubatay", expired: "Waqtigiisii dhacay", spilled: "Daatay", wrong_order: "Dalab si khaldan loo diyaariyay", unsold: "Cunto la diyaariyay oo aan la iibin", damaged_packaging: "Baakad jaban", other: "Kale" },
+    status: { pending: "Sugaya ansixin", approved: "La ansixiyay", rejected: "La diiday" },
+    willApprove: "Hadda ayaa la ansixiyay: isla markiiba kaydka ayuu ka baxayaa.", willWait: "Maamule ayaa ansixinaya ka hor inta uusan kaydka ka bixin.",
+    savedApproved: "Waa la diiwaangeliyay lana ansixiyay (qiyaastii {amount}).", savedPending: "Waa la diiwaangeliyay (qiyaastii {amount}). Maamule ayaa ansixin doona."
+  },
   products: {
     fabricCategory: "Qaybta marada", colorShade: "Midab / hadh", colorShadePh: "Midab / hadh", pattern: "Naqshad", patternPh: "Naqshad",
     qualityGrade: "Tayada / heerka", composition: "Ka-sameysanka", compositionPh: "tusaale 65% polyester, 35% cudbi", fabricSection: "Faahfaahinta marada", itemType: "Nooca shayga",
@@ -880,7 +900,7 @@ const so = {
     tabs: { current: "Kaydka hadda", add: "Ku dar kayd", opening: "Kayd furitaan", adjust: "Hagaaji", transfer: "Wareeji", movements: "Dhaqdhaqaaqa", low: "Kayd yar", valuation: "Qiimaynta", reports: "Warbixinno", locations: "Goobaha" },
     types: { opening: "Kayd furitaan", purchase: "Iibsi la helay", stock_in: "Kayd kale oo soo galay", return_in: "Celin macmiil", sale: "Iib POS", invoice: "Qaansheeg",
       return_out: "La celiyay", purchase_return: "Celin alaab-qeybiye", transfer_out: "Wareejin bax", transfer_in: "Wareejin gal", damaged: "Kayd khasaaray",
-      adjustment: "Hagaajin kayd", count: "Sixitaan tirin", reversal: "Celin", consumption: "Cunto-karin ayaa isticmaashay", production: "Dufcad la diyaariyay" },
+      adjustment: "Hagaajin kayd", count: "Sixitaan tirin", reversal: "Celin", waste: "Khasaare cunto", consumption: "Cunto-karin ayaa isticmaashay", production: "Dufcad la diyaariyay" },
     reasons: { damaged: "Khasaaray", expired: "Dhacay", lost: "Lumay / la xaday", found: "La helay", correction: "Sixitaan tirin", other: "Kale", opening: "Kayd furitaan",
       purchase: "Iibsi la helay", return_in: "Celin macmiil", stock_in: "Kayd kale oo soo galay", transfer: "Wareejin" },
     status: { in: "Kayd jira", low: "Kayd yar", out: "Kayd dhammaaday", negative: "Kayd taban" },

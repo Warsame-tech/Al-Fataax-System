@@ -553,6 +553,33 @@ const TABLES = [
       INDEX idx_cash_sessions (business_id, user_id, status),
       CONSTRAINT fk_cs_business FOREIGN KEY (business_id) REFERENCES businesses(id)
     ) ENGINE=InnoDB`
+  },
+  {
+    table: "waste_records",
+    ddl: `CREATE TABLE IF NOT EXISTS waste_records (
+      id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id  INT UNSIGNED NOT NULL,
+      product_id   INT UNSIGNED NOT NULL,
+      qty          DECIMAL(14,4) NOT NULL,              -- as entered, in unit
+      unit         VARCHAR(20) NOT NULL,
+      base_qty     DECIMAL(14,4) NOT NULL,              -- in the product's own unit
+      est_cost     DECIMAL(14,4) NOT NULL DEFAULT 0,    -- estimated when recorded
+      actual_cost  DECIMAL(14,4) NULL,                  -- cost of what left stock when approved
+      reason       VARCHAR(20) NOT NULL,                -- burnt, expired, spilled, wrong_order, unsold, damaged_packaging, other
+      note         VARCHAR(255) NULL,
+      responsible  VARCHAR(120) NULL,                   -- the employee responsible
+      waste_date   DATE NOT NULL,
+      location_id  INT UNSIGNED NULL,
+      status       VARCHAR(10) NOT NULL DEFAULT 'pending', -- pending, approved, rejected
+      user_id      INT UNSIGNED NOT NULL,
+      approved_by  INT UNSIGNED NULL,
+      approved_at  DATETIME NULL,
+      reject_reason VARCHAR(200) NULL,
+      created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_waste (business_id, waste_date, status),
+      CONSTRAINT fk_waste_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+      CONSTRAINT fk_waste_product FOREIGN KEY (product_id) REFERENCES products(id)
+    ) ENGINE=InnoDB`
   }
 ];
 

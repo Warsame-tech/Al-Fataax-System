@@ -1315,3 +1315,8 @@ tr.is-muted td { opacity: .6; }
 .shift-status.is-open { background: #e7f6ee; color: #146c43; }
 .shift-status.is-closed { background: #fff4e0; color: #9a5b00; }
 .shift-status.is-approved { background: #e8f1fe; color: #1d4ed8; }
+
+.waste-status { display: inline-block; padding: 2px 8px; border-radius: 999px; background: #eef1f7; font-size: .76rem; font-weight: 700; }
+.waste-status.is-pending { background: #fff4e0; color: #9a5b00; }
+.waste-status.is-approved { background: #fde8e8; color: #b42318; }
+.waste-status.is-rejected { background: #eef1f7; color: var(--muted); }

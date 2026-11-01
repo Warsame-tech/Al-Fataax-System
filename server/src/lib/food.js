@@ -147,10 +147,11 @@ export async function recipeCost(db, businessId, productId, opts = {}) {
 
 /*
  * Selling `qty` of a menu item / extra (plus its chosen extras): the ingredients leave stock now.
+ * (Waste of a prepared dish uses the same path with type "waste" — routes/waste.js — so it is never mixed with sales.)
  * menu: { factor, removed: [lineId], extras: [{ id, name, price }], service } (from a food order; absent = plain sale)
  * Returns { unitCost, detail } to keep on the sale line, or null when the product is an ordinary stock item.
  */
-export async function consumeForSale(conn, { businessId, userId, product, qty, menu = null, locationId, refType, refId, note }) {
+export async function consumeForSale(conn, { businessId, userId, product, qty, menu = null, locationId, refType, refId, note, type = "consumption", reason = "recipe" }) {
   if (!viaRecipe(product)) return null;
   const takeaway = TAKEAWAY.has(menu?.service);
   const acc = await needsOf(conn, businessId, product.id, qty, { factor: menu?.factor || 1, removed: new Set(menu?.removed || []), takeaway });
@@ -167,7 +168,7 @@ export async function consumeForSale(conn, { businessId, userId, product, qty, m
       const cost = q4(need * num(p.cost_price));
       total += cost;
       try {
-        await moveStock(conn, { businessId, userId, product: p, qtyChange: -need, type: "consumption", refType, refId, locationId, reason: "recipe", note: note || productName(product), devices: true });
+        await moveStock(conn, { businessId, userId, product: p, qtyChange: -need, type, refType, refId, locationId, reason, note: note || productName(product), devices: true });
       } catch (err) {
         if (err.code === "insufficientStock") throw new HttpError(409, "ingredientShort", null, { ingredient: productName(p), dish: productName(product), available: err.extra?.available, needed: need, unit: p.unit });
         throw err;
