@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { pool } from "../config/db.js";
+import { branchSql } from "../lib/branches.js";
 import { requireAuth } from "../middleware/auth.js";
 import { can } from "../lib/permissions.js";
 
@@ -50,6 +51,7 @@ router.get("/", async (req, res, next) => {
     const range = periodRange(req.query);
     if (!range) return res.status(400).json({ code: "invalidRange" });
     const bid = req.business.id;
+    const B = branchSql(req);   // one branch, or all of them
     const start = `${range.from} 00:00:00`;
     const end = `${range.to} 23:59:59`;
 
@@ -58,19 +60,19 @@ router.get("/", async (req, res, next) => {
 
     const [posSales, invSales, received, posCogs, invCogs, expenses, income, money, recv, pay, lowStock, recent, best, counts] = await Promise.all([
       one(`SELECT COALESCE(SUM(total - vat_amount),0) v, COUNT(*) n, COALESCE(SUM(discount),0) disc FROM sales
-            WHERE business_id = ? AND status <> 'cancelled' AND sold_at BETWEEN ? AND ?`, [bid, start, end]),
+            WHERE business_id = ?${B()} AND status <> 'cancelled' AND sold_at BETWEEN ? AND ?`, [bid, start, end]),
       one(`SELECT COALESCE(SUM(total - vat_amount),0) v, COUNT(*) n, COALESCE(SUM(discount),0) disc FROM invoices
-            WHERE business_id = ? AND status NOT IN ('draft','cancelled') AND issue_date BETWEEN ? AND ?`, [bid, range.from, range.to]),
+            WHERE business_id = ?${B()} AND status NOT IN ('draft','cancelled') AND issue_date BETWEEN ? AND ?`, [bid, range.from, range.to]),
       one(`SELECT COALESCE(SUM(amount),0) v FROM customer_payments
             WHERE business_id = ? AND paid_at BETWEEN ? AND ?`, [bid, start, end]),
       one(`SELECT COALESCE(SUM(si.line_total),0) rev, COALESCE(SUM(si.qty * si.unit_cost),0) cogs
              FROM sale_items si JOIN sales s ON s.id = si.sale_id AND s.business_id = si.business_id
-            WHERE si.business_id = ? AND s.status <> 'cancelled' AND s.sold_at BETWEEN ? AND ?`, [bid, start, end]),
+            WHERE si.business_id = ?${B("s")} AND s.status <> 'cancelled' AND s.sold_at BETWEEN ? AND ?`, [bid, start, end]),
       one(`SELECT COALESCE(SUM(ii.line_total),0) rev, COALESCE(SUM(ii.qty * ii.unit_cost),0) cogs
              FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id AND i.business_id = ii.business_id
-            WHERE ii.business_id = ? AND i.status NOT IN ('draft','cancelled') AND i.issue_date BETWEEN ? AND ?`, [bid, range.from, range.to]),
-      one(`SELECT COALESCE(SUM(amount),0) v FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?`, [bid, range.from, range.to]),
-      one(`SELECT COALESCE(SUM(amount),0) v FROM other_income WHERE business_id = ? AND income_date BETWEEN ? AND ?`, [bid, range.from, range.to]),
+            WHERE ii.business_id = ?${B("i")} AND i.status NOT IN ('draft','cancelled') AND i.issue_date BETWEEN ? AND ?`, [bid, range.from, range.to]),
+      one(`SELECT COALESCE(SUM(amount),0) v FROM expenses WHERE business_id = ?${B()} AND expense_date BETWEEN ? AND ?`, [bid, range.from, range.to]),
+      one(`SELECT COALESCE(SUM(amount),0) v FROM other_income WHERE business_id = ?${B()} AND income_date BETWEEN ? AND ?`, [bid, range.from, range.to]),
       one(`SELECT
              COALESCE(SUM(CASE WHEN cash_account_id IS NOT NULL THEN IF(direction='in', amount, -amount) END),0) cash,
              COALESCE(SUM(CASE WHEN bank_account_id IS NOT NULL THEN IF(direction='in', amount, -amount) END),0) bank
@@ -85,20 +87,20 @@ router.get("/", async (req, res, next) => {
       many(`SELECT id, CONCAT_WS(' ', name, NULLIF(size, '')) name, stock_qty, min_stock, unit FROM products
              WHERE business_id = ? AND is_active = 1 AND stock_qty <= min_stock
              ORDER BY (stock_qty <= 0) DESC, stock_qty ASC LIMIT 8`, [bid]),
-      many(`(SELECT 'sale' kind, receipt_no ref, total amount, sold_at at FROM sales WHERE business_id = ?)
-            UNION ALL (SELECT 'invoice', invoice_no, total, CAST(issue_date AS DATETIME) FROM invoices WHERE business_id = ? AND status <> 'draft')
-            UNION ALL (SELECT 'purchase', purchase_no, total, purchased_at FROM purchases WHERE business_id = ?)
-            UNION ALL (SELECT 'expense', category, amount, CAST(expense_date AS DATETIME) FROM expenses WHERE business_id = ?)
+      many(`(SELECT 'sale' kind, receipt_no ref, total amount, sold_at at FROM sales WHERE business_id = ?${B()})
+            UNION ALL (SELECT 'invoice', invoice_no, total, CAST(issue_date AS DATETIME) FROM invoices WHERE business_id = ?${B()} AND status <> 'draft')
+            UNION ALL (SELECT 'purchase', purchase_no, total, purchased_at FROM purchases WHERE business_id = ?${B()})
+            UNION ALL (SELECT 'expense', category, amount, CAST(expense_date AS DATETIME) FROM expenses WHERE business_id = ?${B()})
             UNION ALL (SELECT 'payment', COALESCE(reference, ''), amount, paid_at FROM customer_payments WHERE business_id = ?)
             ORDER BY at DESC LIMIT 8`, [bid, bid, bid, bid, bid]),
       many(`SELECT p.id, CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, SUM(x.qty) qty, SUM(x.line_total) revenue FROM (
               SELECT si.product_id, si.qty, si.line_total FROM sale_items si
                 JOIN sales s ON s.id = si.sale_id AND s.business_id = si.business_id
-               WHERE si.business_id = ? AND s.status <> 'cancelled' AND s.sold_at BETWEEN ? AND ?
+               WHERE si.business_id = ?${B("s")} AND s.status <> 'cancelled' AND s.sold_at BETWEEN ? AND ?
               UNION ALL
               SELECT ii.product_id, ii.qty, ii.line_total FROM invoice_items ii
                 JOIN invoices i ON i.id = ii.invoice_id AND i.business_id = ii.business_id
-               WHERE ii.business_id = ? AND i.status NOT IN ('draft','cancelled') AND i.issue_date BETWEEN ? AND ?
+               WHERE ii.business_id = ?${B("i")} AND i.status NOT IN ('draft','cancelled') AND i.issue_date BETWEEN ? AND ?
             ) x JOIN products p ON p.id = x.product_id AND p.business_id = ?
             GROUP BY p.id ORDER BY qty DESC LIMIT 5`, [bid, start, end, bid, range.from, range.to, bid]),
       one(`SELECT (SELECT COUNT(*) FROM products WHERE business_id = ?) products,

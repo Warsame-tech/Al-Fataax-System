@@ -14,6 +14,7 @@ import { currentRates, weightPrice, unsellable } from "../lib/jewelry.js";
 import { isRoll, toMeters, YARD, attachRolls, cutFromRoll, returnCuts, cutsByItem } from "../lib/rolls.js";
 import { viaRecipe, consumeForSale, restoreConsumption } from "../lib/food.js";
 import { activePromotions, applyPromotions, checkDiscount } from "../lib/promotions.js";
+import { branchSql, branchLocation } from "../lib/branches.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -217,7 +218,9 @@ export async function createSale(conn, ctx, body) {
     [businessId, receiptNo, customerId, userId, subtotal, discount, approvedBy, promoDetail ? JSON.stringify(promoDetail) : null, vat.rate, vat.amount, fee, fee ? ctx.fee.label || null : null, total, paid, change, method, ctx.at || null]
   );
   const saleId = s.insertId;
-  const loc = await defaultLocationId(conn, businessId);       // the POS sells from the default location
+  // the branch's own stock (ctx.branch, lib/branches.js), or the default location
+  const loc = ctx.branch?.locationId || await defaultLocationId(conn, businessId);
+  if (ctx.branch) await conn.query("UPDATE sales SET branch_id = ? WHERE id = ?", [ctx.branch.id, saleId]);
   for (const [i, l] of lines.entries()) {
     // menu items / extras: the recipe's ingredients leave stock; the cost of what was used stays on the line
     const food = await consumeForSale(conn, { businessId, userId, product: l.product, qty: l.qty, menu: l.menu, locationId: loc, refType: "sale", refId: saleId, note: receiptNo });
@@ -245,7 +248,7 @@ export async function createSale(conn, ctx, body) {
 }
 
 router.post("/", requirePerm("sales.create"), ah(async (req, res) => {
-  const result = await withTx((conn) => createSale(conn, { businessId: req.business.id, userId: req.user.id, role: req.user }, req.body || {}));
+  const result = await withTx((conn) => createSale(conn, { businessId: req.business.id, userId: req.user.id, role: req.user, branch: req.branch }, req.body || {}));
   res.status(201).json(result);
 }));
 
@@ -257,7 +260,7 @@ router.get("/", requirePerm("sales.view"), ah(async (req, res) => {
     `SELECT s.id, s.receipt_no, s.total, s.amount_paid, s.payment_method, s.status, s.sold_at, c.name customer, u.full_name cashier,
             (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) lines_count
        FROM sales s LEFT JOIN customers c ON c.id = s.customer_id JOIN users u ON u.id = s.user_id
-      WHERE s.business_id = ? AND s.sold_at BETWEEN ? AND ? ${q ? "AND (s.receipt_no LIKE ? OR c.name LIKE ?)" : ""}
+      WHERE s.business_id = ?${branchSql(req)("s")} AND s.sold_at BETWEEN ? AND ? ${q ? "AND (s.receipt_no LIKE ? OR c.name LIKE ?)" : ""}
       ORDER BY s.sold_at DESC, s.id DESC LIMIT 500`,
     q ? [req.business.id, r.start, r.end, `%${q}%`, `%${q}%`] : [req.business.id, r.start, r.end]
   );
@@ -303,6 +306,7 @@ router.post("/:id/cancel", requirePerm("sales.cancel"), ah(async (req, res) => {
   await withTx(async (conn) => {
     const s = await ensureOwned(conn, "sales", id(req.params.id), bid, true);
     if (s.status !== "completed") throw conflict("alreadyCancelled");
+    const loc = await branchLocation(conn, bid, s.branch_id);   // back into the stock it was sold from
     const [items] = await conn.query("SELECT product_id, qty, unit_price, unit_cost, line_total, price_detail FROM sale_items WHERE sale_id = ? AND business_id = ?", [s.id, bid]);
     const products = await lockProducts(conn, bid, items.map((i) => i.product_id));
     const [ret] = await conn.query(
@@ -313,14 +317,14 @@ router.post("/:id/cancel", requirePerm("sales.cancel"), ah(async (req, res) => {
       await conn.query("INSERT INTO return_items (business_id, return_id, product_id, qty, unit_price, unit_cost, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)",
         [bid, ret.insertId, i.product_id, i.qty, i.unit_price, i.unit_cost, i.line_total]);
       // dishes: the ingredients they used come back; other products come back themselves
-      if (viaRecipe(products.get(i.product_id))) await restoreConsumption(conn, { businessId: bid, userId: uid, detail: JSON.parse(i.price_detail || "{}"), refType: "sale", refId: s.id, note: reason });
-      else await moveStock(conn, { businessId: bid, userId: uid, product: products.get(i.product_id), qtyChange: num(i.qty), type: "return_in", refType: "sale", refId: s.id, note: reason, devices: true });
+      if (viaRecipe(products.get(i.product_id))) await restoreConsumption(conn, { businessId: bid, userId: uid, detail: JSON.parse(i.price_detail || "{}"), refType: "sale", refId: s.id, locationId: loc, note: reason });
+      else await moveStock(conn, { businessId: bid, userId: uid, product: products.get(i.product_id), qtyChange: num(i.qty), type: "return_in", refType: "sale", refId: s.id, locationId: loc, note: reason, devices: true });
       if (Number(products.get(i.product_id).unique_item)) await conn.query("UPDATE products SET item_status = 'returned' WHERE id = ?", [i.product_id]);
     }
     // sold devices come back to stock; the sale's warranties become void
-    await returnSoldDevices(conn, { businessId: bid, userId: uid, refType: "sale", refId: s.id, locationId: await defaultLocationId(conn, bid), note: reason });
+    await returnSoldDevices(conn, { businessId: bid, userId: uid, refType: "sale", refId: s.id, locationId: loc, note: reason });
     // cut fabric comes back as a piece waiting for inspection before it can be sold again
-    await returnCuts(conn, { businessId: bid, refType: "sale", refId: s.id, locationId: await defaultLocationId(conn, bid), userId: uid, note: reason });
+    await returnCuts(conn, { businessId: bid, refType: "sale", refId: s.id, locationId: loc, userId: uid, note: reason });
     await voidWarranties(conn, { businessId: bid, refType: "sale", refId: s.id, userId: uid, reason });
     // Refund each payment through the same method and account (negative payment keeps "money received" accurate).
     const [payments] = await conn.query("SELECT id, method, payment_method_id, amount FROM customer_payments WHERE sale_id = ? AND business_id = ? AND amount > 0 ORDER BY id", [s.id, bid]);

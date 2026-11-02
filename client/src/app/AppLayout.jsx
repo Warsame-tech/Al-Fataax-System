@@ -6,6 +6,7 @@ import { useAuth } from "../auth/AuthContext.jsx";
 import { saveLanguage } from "../services/authService.js";
 import { apiRequest, fileUrl } from "../services/api.js";
 import { fill } from "./format.js";
+import { BranchSwitch } from "./Branches.jsx";
 import logo from "../assets/faatix-logo.png";
 
 /** Frame for the signed-in business application. */
@@ -52,6 +53,7 @@ export default function AppLayout() {
                 </button>
               ))}
             </div>
+            <BranchSwitch />
             <Bell />
             <Link className="app-user" to="/app/m/profile" title={user?.username}>
               <span className="app-user__avatar" aria-hidden="true"><Icon name="user" /></span>

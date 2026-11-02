@@ -20,6 +20,8 @@ export async function apiRequest(path, { method = "GET", body } = {}) {
   const isForm = typeof FormData !== "undefined" && body instanceof FormData;
   const headers = { "X-Requested-With": "faatix" }; // required by the API for non-GET requests (CSRF)
   if (body && !isForm) headers["Content-Type"] = "application/json";
+  // the branch chosen in the header (owners / head office); the API ignores it for staff tied to one branch
+  try { const branch = localStorage.getItem("faatix.branch"); if (branch) headers["X-Branch"] = branch; } catch { /* storage blocked */ }
 
   let res;
   try {

@@ -46,12 +46,12 @@ router.get("/locations", canSee, ah(async (req, res) => {
   const bid = req.business.id;
   await defaultLocationId(pool, bid);
   const [rows] = await pool.query(
-    `SELECT l.*, (SELECT COALESCE(SUM(ps.qty),0) FROM product_stock ps WHERE ps.location_id = l.id) units,
+    `SELECT l.*, br.name branch_name, (SELECT COALESCE(SUM(ps.qty),0) FROM product_stock ps WHERE ps.location_id = l.id) units,
             (SELECT COUNT(*) FROM product_stock ps WHERE ps.location_id = l.id AND ps.qty <> 0) products
-       FROM stock_locations l WHERE l.business_id = ? ORDER BY l.is_default DESC, l.is_active DESC, l.name`, [bid]);
+       FROM stock_locations l LEFT JOIN branches br ON br.id = l.branch_id WHERE l.business_id = ? ORDER BY l.is_default DESC, l.is_active DESC, l.name`, [bid]);
   res.json({ locations: rows.map((l) => ({
     id: l.id, name: l.name, kind: l.kind, address: l.address || "", isDefault: Boolean(l.is_default), isActive: Boolean(l.is_active),
-    units: num(l.units), products: num(l.products)
+    units: num(l.units), products: num(l.products), branchId: l.branch_id, branch: l.branch_name || null
   })) });
 }));
 
@@ -66,7 +66,7 @@ router.post("/locations", requirePerm("stock.locations"), ah(async (req, res) =>
   const d = readLocation(req.body || {});
   const bid = req.business.id;
   try {
-    const [r] = await pool.query("INSERT INTO stock_locations (business_id, name, kind, address) VALUES (?, ?, ?, ?)", [bid, d.name, d.kind, d.address]);
+    const [r] = await pool.query("INSERT INTO stock_locations (business_id, name, kind, address, branch_id) VALUES (?, ?, ?, ?, ?)", [bid, d.name, d.kind, d.address, id(req.body?.branchId) || req.branch.id]);
     await audit(null, { businessId: bid, userId: req.user.id, action: "location.created", entity: "location", entityId: r.insertId, meta: d, ip: req.ip });
     res.status(201).json({ id: r.insertId });
   } catch (err) { throw dupName(err); }
@@ -328,6 +328,8 @@ router.post("/transfer", requirePerm("stock.transfer"), ah(async (req, res) => {
     const to = await activeLocation(conn, bid, id(b.toLocationId));
     if (!from) throw badRequest({ fromLocationId: "required" });
     if (!to) throw badRequest({ toLocationId: "required" });
+    // between branches: only staff allowed to (branches.transfer); the transfer stays in both branches' history
+    if (from.branch_id && to.branch_id && from.branch_id !== to.branch_id && !can(req.user, "branches.transfer")) throw conflict("branchTransferNotAllowed");
     const ref = `TR-${crypto.randomBytes(4).toString("hex").toUpperCase()}`;
     const products = await lockProducts(conn, bid, items.map((x) => x.productId));
     for (const [i, x] of items.entries()) {

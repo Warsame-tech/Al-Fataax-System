@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { pool } from "../config/db.js";
+import { branchSql } from "../lib/branches.js";
 import { requireAuth } from "../middleware/auth.js";
 import { requirePerm } from "../lib/permissions.js";
 import { ah, num, round2, range } from "../lib/http.js";
@@ -19,11 +20,11 @@ router.use(requireAuth, requirePerm("reports.view"));
  *   Receivables    = what customers still owe; Payables = what we still owe suppliers
  */
 const REPORTS = {
-  async sales(bid, r) {
+  async sales(bid, r, B = () => "") {
     const [rows] = await pool.query(
       `SELECT d, SUM(n) n, SUM(total) total, SUM(discount) discount, SUM(vat) vat FROM (
-         SELECT DATE(sold_at) d, 1 n, total, discount, vat_amount vat FROM sales WHERE business_id = ? AND status <> 'cancelled' AND sold_at BETWEEN ? AND ?
-         UNION ALL SELECT issue_date, 1, total, discount, vat_amount FROM invoices WHERE business_id = ? AND status NOT IN ('draft','cancelled') AND issue_date BETWEEN ? AND ?
+         SELECT DATE(sold_at) d, 1 n, total, discount, vat_amount vat FROM sales WHERE business_id = ?${B()} AND status <> 'cancelled' AND sold_at BETWEEN ? AND ?
+         UNION ALL SELECT issue_date, 1, total, discount, vat_amount FROM invoices WHERE business_id = ?${B()} AND status NOT IN ('draft','cancelled') AND issue_date BETWEEN ? AND ?
        ) x GROUP BY d ORDER BY d`, [bid, r.start, r.end, bid, r.from, r.to]);
     const [[rec]] = await pool.query("SELECT COALESCE(SUM(amount),0) v FROM customer_payments WHERE business_id = ? AND paid_at BETWEEN ? AND ?", [bid, r.start, r.end]);
     const total = rows.reduce((s, x) => s + num(x.total), 0);
@@ -34,19 +35,19 @@ const REPORTS = {
     };
   },
 
-  async profit(bid, r) {
+  async profit(bid, r, B = () => "") {
     const [[s]] = await pool.query(
       `SELECT COALESCE(SUM(si.line_total),0) rev, COALESCE(SUM(si.qty*si.unit_cost),0) cogs FROM sale_items si JOIN sales x ON x.id = si.sale_id
-        WHERE si.business_id = ? AND x.status <> 'cancelled' AND x.sold_at BETWEEN ? AND ?`, [bid, r.start, r.end]);
+        WHERE si.business_id = ?${B("x")} AND x.status <> 'cancelled' AND x.sold_at BETWEEN ? AND ?`, [bid, r.start, r.end]);
     const [[i]] = await pool.query(
       `SELECT COALESCE(SUM(ii.line_total),0) rev, COALESCE(SUM(ii.qty*ii.unit_cost),0) cogs FROM invoice_items ii JOIN invoices x ON x.id = ii.invoice_id
-        WHERE ii.business_id = ? AND x.status NOT IN ('draft','cancelled') AND x.issue_date BETWEEN ? AND ?`, [bid, r.from, r.to]);
+        WHERE ii.business_id = ?${B("x")} AND x.status NOT IN ('draft','cancelled') AND x.issue_date BETWEEN ? AND ?`, [bid, r.from, r.to]);
     const [[disc]] = await pool.query(
-      `SELECT (SELECT COALESCE(SUM(discount),0) FROM sales WHERE business_id = ? AND status <> 'cancelled' AND sold_at BETWEEN ? AND ?)
-            + (SELECT COALESCE(SUM(discount),0) FROM invoices WHERE business_id = ? AND status NOT IN ('draft','cancelled') AND issue_date BETWEEN ? AND ?) v`,
+      `SELECT (SELECT COALESCE(SUM(discount),0) FROM sales WHERE business_id = ?${B()} AND status <> 'cancelled' AND sold_at BETWEEN ? AND ?)
+            + (SELECT COALESCE(SUM(discount),0) FROM invoices WHERE business_id = ?${B()} AND status NOT IN ('draft','cancelled') AND issue_date BETWEEN ? AND ?) v`,
       [bid, r.start, r.end, bid, r.from, r.to]);
-    const [[exp]] = await pool.query("SELECT COALESCE(SUM(amount),0) v FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ?", [bid, r.from, r.to]);
-    const [[inc]] = await pool.query("SELECT COALESCE(SUM(amount),0) v FROM other_income WHERE business_id = ? AND income_date BETWEEN ? AND ?", [bid, r.from, r.to]);
+    const [[exp]] = await pool.query(`SELECT COALESCE(SUM(amount),0) v FROM expenses WHERE business_id = ?${B()} AND expense_date BETWEEN ? AND ?`, [bid, r.from, r.to]);
+    const [[inc]] = await pool.query(`SELECT COALESCE(SUM(amount),0) v FROM other_income WHERE business_id = ?${B()} AND income_date BETWEEN ? AND ?`, [bid, r.from, r.to]);
     const gross = num(s.rev) + num(i.rev);
     const netSales = round2(gross - num(disc.v));
     const cogs = round2(num(s.cogs) + num(i.cogs));
@@ -111,7 +112,7 @@ const REPORTS = {
     };
   },
 
-  async purchases(bid, r) {
+  async purchases(bid, r, B = () => "") {
     const [rows] = await pool.query(
       `SELECT p.purchase_no, DATE(p.purchased_at) d, s.name supplier, p.total, p.amount_paid FROM purchases p JOIN suppliers s ON s.id = p.supplier_id
         WHERE p.business_id = ? AND p.status IN ('received', 'partial') AND p.purchased_at BETWEEN ? AND ? ORDER BY p.purchased_at`, [bid, r.start, r.end]);
@@ -122,9 +123,9 @@ const REPORTS = {
     };
   },
 
-  async expenses(bid, r) {
-    const [rows] = await pool.query("SELECT category, COUNT(*) n, SUM(amount) total FROM expenses WHERE business_id = ? AND expense_date BETWEEN ? AND ? GROUP BY category ORDER BY total DESC", [bid, r.from, r.to]);
-    const [inc] = await pool.query("SELECT COALESCE(SUM(amount),0) v FROM other_income WHERE business_id = ? AND income_date BETWEEN ? AND ?", [bid, r.from, r.to]);
+  async expenses(bid, r, B = () => "") {
+    const [rows] = await pool.query(`SELECT category, COUNT(*) n, SUM(amount) total FROM expenses WHERE business_id = ?${B()} AND expense_date BETWEEN ? AND ? GROUP BY category ORDER BY total DESC`, [bid, r.from, r.to]);
+    const [inc] = await pool.query(`SELECT COALESCE(SUM(amount),0) v FROM other_income WHERE business_id = ?${B()} AND income_date BETWEEN ? AND ?`, [bid, r.from, r.to]);
     return {
       columns: [["category", "category"], ["count", "number"], ["total", "money"]],
       rows: rows.map((x) => ({ category: x.category, count: num(x.n), total: num(x.total) })),
@@ -132,7 +133,7 @@ const REPORTS = {
     };
   },
 
-  async cashflow(bid, r) {
+  async cashflow(bid, r, B = () => "") {
     const [rows] = await pool.query(
       `SELECT DATE(occurred_at) d, SUM(IF(direction='in', amount, 0)) money_in, SUM(IF(direction='out', amount, 0)) money_out
          FROM cash_transactions WHERE business_id = ? AND occurred_at BETWEEN ? AND ? AND ref_type <> 'transfer' GROUP BY d ORDER BY d`, [bid, r.start, r.end]);
@@ -146,13 +147,13 @@ const REPORTS = {
     };
   },
 
-  async bestSellers(bid, r) {
+  async bestSellers(bid, r, B = () => "") {
     const [rows] = await pool.query(
       `SELECT CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, '')) name, p.sku, SUM(x.qty) qty, SUM(x.line_total) revenue, SUM(x.line_total - x.qty * x.unit_cost) profit FROM (
          SELECT si.product_id, si.qty, si.line_total, si.unit_cost FROM sale_items si JOIN sales s ON s.id = si.sale_id
-          WHERE si.business_id = ? AND s.status <> 'cancelled' AND s.sold_at BETWEEN ? AND ?
+          WHERE si.business_id = ?${B("s")} AND s.status <> 'cancelled' AND s.sold_at BETWEEN ? AND ?
          UNION ALL SELECT ii.product_id, ii.qty, ii.line_total, ii.unit_cost FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id
-          WHERE ii.business_id = ? AND i.status NOT IN ('draft','cancelled') AND i.issue_date BETWEEN ? AND ?
+          WHERE ii.business_id = ?${B("i")} AND i.status NOT IN ('draft','cancelled') AND i.issue_date BETWEEN ? AND ?
        ) x JOIN products p ON p.id = x.product_id AND p.business_id = ? GROUP BY p.id ORDER BY qty DESC LIMIT 50`,
       [bid, r.start, r.end, bid, r.from, r.to, bid]);
     return {
@@ -169,7 +170,7 @@ router.get("/:type", ah(async (req, res) => {
   const fn = REPORTS[req.params.type];
   if (!fn) return res.status(404).json({ code: "notFound" });
   const r = range(req.query, 30);
-  const data = await fn(req.business.id, r);
+  const data = await fn(req.business.id, r, branchSql(req));   // one branch, or all of them (lib/branches.js)
   res.json({ type: req.params.type, range: { from: r.from, to: r.to }, currency: req.business.currency, ...data });
 }));
 

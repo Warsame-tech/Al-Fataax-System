@@ -53,7 +53,7 @@ router.post("/", canRecord, ah(async (req, res) => {
     const unit = typeof b.unit === "string" && b.unit ? b.unit.slice(0, 20) : p.unit;
     const base = convert(qty, unit, p.unit);
     if (base === null) throw badRequest({ unit: "unitMismatch" });
-    const loc = b.locationId ? await activeLocation(conn, req.business.id, id(b.locationId)) : { id: await defaultLocationId(conn, req.business.id) };
+    const loc = b.locationId ? await activeLocation(conn, req.business.id, id(b.locationId)) : { id: req.branch.locationId || await defaultLocationId(conn, req.business.id) };
     if (!loc) throw badRequest({ locationId: "required" });
     // estimated cost now: the dish's recipe cost, or the item's cost price
     const per = viaRecipe(p) ? (await recipeCost(conn, req.business.id, p.id)) ?? num(p.cost_price) : num(p.cost_price);
@@ -64,6 +64,7 @@ router.post("/", canRecord, ah(async (req, res) => {
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${approved ? "UTC_TIMESTAMP()" : "NULL"})`,
       [req.business.id, p.id, q4(qty), unit, q4(base), estimate, b.reason, optText(b.note, 255), optText(b.responsible, 120) || req.user.fullName || null,
         b.date || today(), loc.id, approved ? "approved" : "pending", req.user.id, approved ? req.user.id : null]);
+    await conn.query("UPDATE waste_records SET branch_id = ? WHERE id = ?", [req.branch.id, x.insertId]);
     const w = { id: x.insertId, product_id: p.id, base_qty: q4(base), reason: b.reason, note: optText(b.note, 255), location_id: loc.id };
     if (approved) {
       const cost = await applyWaste(conn, req, w);
@@ -109,6 +110,7 @@ router.get("/", canRecord, ah(async (req, res) => {
   if (["pending", "approved", "rejected"].includes(req.query.status)) { where.push("w.status = ?"); params.push(req.query.status); }
   if (WASTE_REASONS.includes(req.query.reason)) { where.push("w.reason = ?"); params.push(req.query.reason); }
   if (id(req.query.productId)) { where.push("w.product_id = ?"); params.push(id(req.query.productId)); }
+  if (req.branch.filterId) { where.push("w.branch_id = ?"); params.push(req.branch.filterId); }
   const NAME = "CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, ''))";
   const [rows] = await pool.query(
     `SELECT w.*, ${NAME} product_name, p.item_kind, u.full_name user_name, a.full_name approver_name, l.name location_name FROM waste_records w

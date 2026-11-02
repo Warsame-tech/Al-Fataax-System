@@ -4,6 +4,7 @@ import { requireAuth, audit } from "../middleware/auth.js";
 import { requirePerm } from "../lib/permissions.js";
 import { ah, id, money, withTx, ensureOwned, badRequest, conflict, num, METHODS, text, optText, isDate, today, range } from "../lib/http.js";
 import { moneyMove, resolveAccount } from "../lib/ledger.js";
+import { branchSql, branchLocation } from "../lib/branches.js";
 
 export const EXPENSE_CATEGORIES = ["rent", "salaries", "electricity", "water", "gas", "internet", "transport", "repairs", "maintenance", "cleaning", "marketing", "taxes", "other"];
 export const INCOME_CATEGORIES = ["service", "commission", "rental", "interest", "other"];
@@ -37,6 +38,7 @@ export async function recordEntry(conn, ctx, kind, body) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [ctx.businessId, d.category, d.amount, d.date, d.method, acc.cash_account_id, acc.bank_account_id, d.description, ctx.userId]
   );
+  if (ctx.branchId) await conn.query(`UPDATE ${isExpense ? "expenses" : "other_income"} SET branch_id = ? WHERE id = ?`, [ctx.branchId, r.insertId]);
   await moneyMove(conn, { businessId: ctx.businessId, userId: ctx.userId, direction: isExpense ? "out" : "in", account: acc, amount: d.amount,
     refType: isExpense ? "expense" : "other_income", refId: r.insertId, description: d.description || d.category, at: d.date === today() ? null : `${d.date} 12:00:00` });   // today: the real time (cashier shifts)
   await audit(conn, { businessId: ctx.businessId, userId: ctx.userId, action: `${kind}.created`, entity: kind, entityId: r.insertId, meta: { amount: d.amount } });
@@ -51,6 +53,7 @@ for (const kind of ["expense", "income"]) {
   expensesRouter.get(path, requirePerm("expenses.view"), ah(async (req, res) => {
     const r = range(req.query, 30);
     const where = ["e.business_id = ?", `e.${dateCol} BETWEEN ? AND ?`];
+    if (req.branch.filterId) where.push(`e.branch_id = ${Number(req.branch.filterId)}`);
     const params = [req.business.id, r.from, r.to];
     if (req.query.category) { where.push("e.category = ?"); params.push(text(req.query.category, 60)); }
     const q = text(req.query.q, 60);
@@ -69,7 +72,7 @@ for (const kind of ["expense", "income"]) {
   }));
 
   expensesRouter.post(path, requirePerm("expenses.create"), ah(async (req, res) => {
-    const newId = await withTx((conn) => recordEntry(conn, { businessId: req.business.id, userId: req.user.id }, kind, req.body || {}));
+    const newId = await withTx((conn) => recordEntry(conn, { businessId: req.business.id, userId: req.user.id, branchId: req.branch.id }, kind, req.body || {}));
     res.status(201).json({ id: newId });
   }));
 

@@ -8,6 +8,7 @@ import { priceLines } from "./sales.js";
 import { sellDevices, returnSoldDevices, deviceLabel } from "../lib/devices.js";
 import { isRoll, attachRolls, cutFromRoll, returnCuts, cutsByItem } from "../lib/rolls.js";
 import { consumeForSale, restoreConsumption, viaRecipe } from "../lib/food.js";
+import { branchSql, branchLocation } from "../lib/branches.js";
 import { createWarranties, voidWarranties } from "../lib/warranties.js";
 import { defaultLocationId } from "../lib/stock.js";
 import { currentRates } from "../lib/jewelry.js";
@@ -78,7 +79,8 @@ export async function createInvoice(conn, ctx, body) {
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 'unpaid', ?)`,
     [businessId, number, customerId, optText(body.billPhone, 30), optText(body.billAddress, 255), userId, issueDate, dueDate, subtotal, discount, discountLabel, vat.rate, vat.amount, total, optText(body.notes, 255)]
   );
-  const loc = await defaultLocationId(conn, businessId);
+  const loc = ctx.branch?.locationId || await defaultLocationId(conn, businessId);
+  if (ctx.branch) await conn.query("UPDATE invoices SET branch_id = ? WHERE id = ?", [ctx.branch.id, r.insertId]);
   for (const [i, l] of lines.entries()) {
     const food = await consumeForSale(conn, { businessId, userId, product: l.product, qty: l.qty, locationId: loc, refType: "invoice", refId: r.insertId, note: number });
     if (food) { l.unitCost = food.unitCost; l.priceDetail = food.detail; }
@@ -100,7 +102,7 @@ export async function createInvoice(conn, ctx, body) {
 }
 
 router.post("/", requirePerm("invoices.create"), ah(async (req, res) => {
-  const result = await withTx((conn) => createInvoice(conn, { businessId: req.business.id, userId: req.user.id, role: req.user }, req.body || {}));
+  const result = await withTx((conn) => createInvoice(conn, { businessId: req.business.id, userId: req.user.id, role: req.user, branch: req.branch }, req.body || {}));
   res.status(201).json(result);
 }));
 
@@ -114,6 +116,7 @@ router.get("/", requirePerm("invoices.view"), ah(async (req, res) => {
   const status = req.query.status;
   if (["unpaid", "partially_paid", "paid", "cancelled", "overdue"].includes(status)) { where.push(`${STATUS_SQL} = ?`); params.push(status); }
   if (id(req.query.customerId)) { where.push("i.customer_id = ?"); params.push(id(req.query.customerId)); }
+  if (req.branch.filterId) { where.push("i.branch_id = ?"); params.push(req.branch.filterId); }
   const [rows] = await pool.query(
     `SELECT i.id, i.invoice_no, i.issue_date, i.due_date, i.total, i.amount_paid, ${STATUS_SQL} status, c.name customer
        FROM invoices i JOIN customers c ON c.id = i.customer_id AND c.business_id = i.business_id
@@ -179,15 +182,16 @@ router.post("/:id/cancel", requirePerm("invoices.cancel"), ah(async (req, res) =
     const inv = await ensureOwned(conn, "invoices", id(req.params.id), bid, true);
     if (inv.status === "cancelled") throw conflict("alreadyCancelled");
     if (num(inv.amount_paid) > 0) throw conflict("hasPayments");
+    const loc = await branchLocation(conn, bid, inv.branch_id);
     const [items] = await conn.query("SELECT product_id, qty, price_detail FROM invoice_items WHERE invoice_id = ? AND business_id = ?", [inv.id, bid]);
     const products = await lockProducts(conn, bid, items.map((i) => i.product_id));
     for (const i of items) {
-      if (viaRecipe(products.get(i.product_id))) await restoreConsumption(conn, { businessId: bid, userId: req.user.id, detail: JSON.parse(i.price_detail || "{}"), refType: "invoice", refId: inv.id, note: reason });
-      else await moveStock(conn, { businessId: bid, userId: req.user.id, product: products.get(i.product_id), qtyChange: num(i.qty), type: "return_in", refType: "invoice", refId: inv.id, note: reason, devices: true });
+      if (viaRecipe(products.get(i.product_id))) await restoreConsumption(conn, { businessId: bid, userId: req.user.id, detail: JSON.parse(i.price_detail || "{}"), refType: "invoice", refId: inv.id, locationId: loc, note: reason });
+      else await moveStock(conn, { businessId: bid, userId: req.user.id, product: products.get(i.product_id), qtyChange: num(i.qty), type: "return_in", refType: "invoice", refId: inv.id, locationId: loc, note: reason, devices: true });
       if (Number(products.get(i.product_id).unique_item)) await conn.query("UPDATE products SET item_status = 'returned' WHERE id = ?", [i.product_id]);
     }
-    await returnSoldDevices(conn, { businessId: bid, userId: req.user.id, refType: "invoice", refId: inv.id, locationId: await defaultLocationId(conn, bid), note: reason });
-    await returnCuts(conn, { businessId: bid, refType: "invoice", refId: inv.id, locationId: await defaultLocationId(conn, bid), userId: req.user.id, note: reason });
+    await returnSoldDevices(conn, { businessId: bid, userId: req.user.id, refType: "invoice", refId: inv.id, locationId: loc, note: reason });
+    await returnCuts(conn, { businessId: bid, refType: "invoice", refId: inv.id, locationId: loc, userId: req.user.id, note: reason });
     await voidWarranties(conn, { businessId: bid, refType: "invoice", refId: inv.id, userId: req.user.id, reason });
     await conn.query("UPDATE invoices SET status = 'cancelled', notes = CONCAT(COALESCE(notes,''), ?) WHERE id = ? AND business_id = ?", [` [Cancelled: ${reason}]`, inv.id, bid]);
     await audit(conn, { businessId: bid, userId: req.user.id, action: "invoice.cancelled", entity: "invoice", entityId: inv.id, meta: { reason }, ip: req.ip });

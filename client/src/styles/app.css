@@ -99,14 +99,30 @@ select.input {
 }
 .app-signout:hover { background: #b42318; color: #fff; border-color: #b42318; }
 .app-signout .icon { width: 18px; height: 18px; }
+.branch-switch {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 6px 0 10px;
+  border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink-2);
+}
+.branch-switch .icon { width: 18px; height: 18px; flex: none; }
+.branch-switch select { max-width: 170px; border: 0; background: transparent; font: inherit; font-weight: 500; color: var(--navy); cursor: pointer; text-overflow: ellipsis; }
 .app-main { max-width: 1360px; margin-inline: auto; padding: clamp(18px, 3vw, 32px) clamp(16px, 3vw, 32px) 64px; }
 
 @media (max-width: 860px) {
   .app-user__text, .app-signout > span:not(.icon) { display: none; }
   .app-signout { padding: 8px 10px; }
   .app-bar__business { display: none; }
+  .branch-switch select { max-width: 110px; }
 }
-@media (max-width: 480px) { .app-bar__brand img { height: 30px; } .app-bar .lang-switch__icon { display: none; } }
+@media (max-width: 480px) {
+  .app-bar__brand img { height: 30px; } .app-bar .lang-switch__icon { display: none; }
+  /* no room for the branch picker beside the actions: it gets its own row under them */
+  .app-bar .app-bar__inner { flex-wrap: wrap; gap: 8px; }
+  .app-bar .app-bar__brand img { height: 28px; width: auto; }
+  .app-bar__actions { display: contents; }
+  .app-bar__actions > :first-child { margin-left: auto; }
+  .branch-switch { order: 9; flex: 1 0 100%; min-height: 36px; margin-bottom: 4px; }
+  .branch-switch select { flex: 1; max-width: none; }
+}
 
 /* -------------------------------------------------------------------------
    Dashboard

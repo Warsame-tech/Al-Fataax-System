@@ -865,6 +865,7 @@ function Locations({ locationsApi }) {
               </div>
               {l.address && <p className="muted">{l.address}</p>}
               <div className="role-card__mods">
+                {l.branch && locs.some((x) => x.branchId !== l.branchId) && <span className="chip-mod"><Icon name="store" /> {l.branch}</span>}
                 {l.isDefault && <span className="chip-mod">{t("ui.stock.defaultLocation")}</span>}
                 {!l.isActive && <span className="chip-mod chip-mod--off">{t("ui.payMethods.off")}</span>}
               </div>

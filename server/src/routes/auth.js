@@ -145,7 +145,8 @@ router.get("/me", requireAuth, async (req, res, next) => {
       "SELECT start_date, end_date, status FROM trial_records WHERE business_id = ? ORDER BY id DESC LIMIT 1",
       [req.business.id]
     );
-    res.json({ user: req.user, business: req.business, trial: trial[0] || null, permissions: req.user.permissions });
+    res.json({ user: req.user, business: req.business, trial: trial[0] || null, permissions: req.user.permissions,
+      branches: { list: req.branch.list, current: req.branch.filterId, fixed: req.branch.fixed } });
   } catch (err) {
     next(err);
   }

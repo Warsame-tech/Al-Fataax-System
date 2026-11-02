@@ -23,6 +23,7 @@ export function AuthProvider({ children }) {
 
   const signOut = useCallback(async () => {
     await apiSignOut();
+    try { localStorage.removeItem("faatix.branch"); } catch { /* storage blocked */ }
     setState({ status: "signedOut", user: null, business: null, trial: null });
   }, []);
 

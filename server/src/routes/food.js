@@ -8,6 +8,7 @@ import { lockProducts } from "../lib/ledger.js";
 import { productName } from "../lib/productName.js";
 import { ITEM_KINDS, SERVICES, viaRecipe, optionsOf, recipeOf, saveRecipe, recipeCost, produce, unitsFor } from "../lib/food.js";
 import { createSale } from "./sales.js";
+import { branchSql, branchLocation } from "../lib/branches.js";
 
 /*
  * Restaurant & cafe (food business types, profile.food):
@@ -199,7 +200,7 @@ router.post("/production", requirePerm("stock.add"), ah(async (req, res) => {
 /* ===================== tables ===================== */
 router.get("/tables", any("sales.create", "kitchen.view", "tables.manage"), ah(async (req, res) => {
   const bid = req.business.id;
-  const [tables] = await pool.query("SELECT * FROM food_tables WHERE business_id = ? AND is_active = 1 ORDER BY sort, area, LENGTH(name), name", [bid]);
+  const [tables] = await pool.query(`SELECT * FROM food_tables WHERE business_id = ?${branchSql(req)()} AND is_active = 1 ORDER BY sort, area, LENGTH(name), name`, [bid]);
   const [orders] = await pool.query(
     `SELECT o.id, o.order_no, o.table_id, o.status, o.guests, o.created_at, o.sale_id,
             (SELECT COALESCE(SUM(i.line_total), 0) FROM food_order_items i WHERE i.order_id = o.id AND i.status <> 'cancelled') total
@@ -224,7 +225,7 @@ const tableTaken = (err) => (err.code === "ER_DUP_ENTRY" ? badRequest({ name: "t
 router.post("/tables", requirePerm("tables.manage"), ah(async (req, res) => {
   const d = readTable(req.body || {});
   try {
-    const [r] = await pool.query("INSERT INTO food_tables (business_id, name, area, capacity) VALUES (?, ?, ?, ?)", [req.business.id, d.name, d.area, d.capacity]);
+    const [r] = await pool.query("INSERT INTO food_tables (business_id, name, area, capacity, branch_id) VALUES (?, ?, ?, ?, ?)", [req.business.id, d.name, d.area, d.capacity, req.branch.id]);
     res.status(201).json({ id: r.insertId });
   } catch (err) { throw tableTaken(err); }
 }));
@@ -368,6 +369,7 @@ router.post("/orders", requirePerm("sales.create"), ah(async (req, res) => {
       `INSERT INTO food_orders (business_id, order_no, service_type, source, table_id, guests, customer_id, customer_name, customer_phone, delivery_address, delivery_fee, driver, notes, status, user_id, sent_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ${send ? "UTC_TIMESTAMP()" : "NULL"})`,
       [req.business.id, number, d.service, ["phone", "whatsapp"].includes(b.source) ? b.source : "pos", d.tableId, d.guests, d.customerId, d.customerName, d.customerPhone, d.address, d.fee, d.driver, d.notes, send ? "sent" : "received", req.user.id]);
+    await conn.query("UPDATE food_orders SET branch_id = ? WHERE id = ?", [req.branch.id, x.insertId]);
     await insertLines(conn, { businessId: req.business.id, orderId: x.insertId, lines, send, userId: req.user.id });
     await syncTable(conn, req.business.id, d.tableId);
     await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "food.order", entity: "food_order", entityId: x.insertId, meta: { number, service: d.service, items: lines.length }, ip: req.ip });
@@ -463,6 +465,7 @@ router.post("/orders/:id/split", requirePerm("sales.create"), ah(async (req, res
       `INSERT INTO food_orders (business_id, order_no, service_type, table_id, customer_id, customer_name, customer_phone, notes, status, user_id, sent_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [req.business.id, number, o.service_type, o.table_id, o.customer_id, o.customer_name, o.customer_phone, `Split from ${o.order_no}`, o.status, req.user.id, o.sent_at]);
+    await conn.query("UPDATE food_orders SET branch_id = ? WHERE id = ?", [o.branch_id, x.insertId]);
     for (const { it, qty } of moving) {
       if (qty >= num(it.qty) - 0.00005) { await conn.query("UPDATE food_order_items SET order_id = ? WHERE id = ?", [x.insertId, it.id]); continue; }
       // part of a line: the line is divided between the two bills
@@ -638,7 +641,10 @@ router.post("/orders/:id/pay", requirePerm("sales.create"), ah(async (req, res) 
         removed: removed.map((x) => x.lineId), removedNames: removed.map((x) => x.name), notes: it.notes, service: o.service_type } };
     });
     const customerId = b.customerId || o.customer_id;   // the order's customer unless another one is chosen at payment
+    // billed in the order's own branch (its stock)
+    const [[ob]] = await conn.query("SELECT id, sell_location_id FROM branches WHERE id = ?", [o.branch_id || req.branch.id]);
     const sale = await createSale(conn, { businessId: req.business.id, userId: req.user.id, role: req.user, items: ctxItems,
+      branch: ob ? { id: ob.id, locationId: ob.sell_location_id } : req.branch,
       fee: num(o.delivery_fee) > 0 ? { amount: num(o.delivery_fee), label: "Delivery" } : null }, { ...b, customerId });
     await conn.query("UPDATE food_orders SET sale_id = ?, customer_id = COALESCE(customer_id, ?) WHERE id = ?", [sale.id, id(customerId), o.id]);
     // nothing left to wait for: the order is done
@@ -679,6 +685,7 @@ function shapeOrder(o, items) {
 router.get("/orders", any("sales.create", "sales.view", "kitchen.view"), ah(async (req, res) => {
   const where = ["o.business_id = ?", "o.status <> 'merged'"];
   const params = [req.business.id];
+  if (req.branch.filterId) { where.push("o.branch_id = ?"); params.push(req.branch.filterId); }
   const st = req.query.status || "open";
   if (st === "open") { where.push("o.status IN (?)"); params.push(OPEN); }
   else if (st === "closed") where.push("o.status IN ('completed', 'cancelled')");
@@ -706,7 +713,7 @@ router.get("/kitchen", requirePerm("kitchen.view"), ah(async (req, res) => {
   const bid = req.business.id;
   const station = text(req.query.station, 60);
   const [items] = await pool.query(
-    `${ITEM_SELECT} JOIN food_orders o ON o.id = i.order_id WHERE i.business_id = ? AND o.status IN (?) AND i.status IN ('sent', 'preparing', 'ready')
+    `${ITEM_SELECT} JOIN food_orders o ON o.id = i.order_id WHERE i.business_id = ?${branchSql(req)("o")} AND o.status IN (?) AND i.status IN ('sent', 'preparing', 'ready')
        ${station ? "AND i.station = ?" : ""} ORDER BY i.sent_at, i.id`, station ? [bid, OPEN, station] : [bid, OPEN]);
   const ids = [...new Set(items.map((i) => i.order_id))];
   const [orders] = ids.length ? await pool.query(`${ORDER_SELECT} WHERE o.id IN (?)`, [ids]) : [[]];

@@ -4,6 +4,7 @@ import { parsePermissions } from "../lib/roles.js";
 import { pool } from "../config/db.js";
 import { env } from "../config/env.js";
 import { profileFor } from "../lib/businessProfiles.js";
+import { resolveBranch } from "../lib/branches.js";
 
 export const SESSION_COOKIE = "faatix_session";
 
@@ -44,7 +45,7 @@ export async function requireAuth(req, res, next) {
 
     const [rows] = await pool.query(
       `SELECT u.id, u.full_name, u.username, u.language, u.status AS user_status,
-              r.role, r.role_id, ro.name AS role_name, ro.permissions AS role_permissions,
+              r.role, r.role_id, r.branch_id AS user_branch_id, ro.name AS role_name, ro.permissions AS role_permissions,
               b.id AS business_id, b.name AS business_name, b.status AS business_status,
               b.logo_path, b.phone, b.email, b.address, b.business_type,
               s.currency, s.invoice_prefix, s.invoice_footer, s.allow_duplicate_codes, s.weight_decimals
@@ -83,6 +84,8 @@ export async function requireAuth(req, res, next) {
       weightDecimals: row.weight_decimals === null || row.weight_decimals === undefined ? 3 : Number(row.weight_decimals),
       profile: profileFor(row.business_type)        // this business type's own interface (lib/businessProfiles.js)
     };
+    // the branch this request works in (lib/branches.js): the staff member's own branch, or the one chosen in the app
+    req.branch = await resolveBranch(pool, row.business_id, row.user_branch_id, req.get("X-Branch"));
     next();
   } catch (err) {
     next(err);

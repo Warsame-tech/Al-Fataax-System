@@ -6,6 +6,7 @@ import { audit } from "../middleware/auth.js";
 import { ah, text, optText, withTx, badRequest, conflict, num, round2 } from "../lib/http.js";
 import { profileFor } from "../lib/businessProfiles.js";
 import { optionsOf } from "../lib/food.js";
+import { resolveBranch } from "../lib/branches.js";
 import { onlineSettings, readLines, insertLines, nextOrderNo } from "./food.js";
 
 /*
@@ -77,6 +78,8 @@ router.post("/orders/:code", orderLimit, ah(async (req, res) => {
       `INSERT INTO food_orders (business_id, order_no, service_type, source, payment_pref, tracking_code, customer_name, customer_phone, delivery_address, delivery_fee, notes, status)
        VALUES (?, ?, ?, 'online', ?, ?, ?, ?, ?, ?, ?, 'received')`,
       [shop.id, number, b.service, b.payment, tracking, text(b.name, 150), text(b.phone, 30), b.service === "delivery" ? text(b.address, 255) : null, fee, optText(b.notes, 500)]);
+    const main = await resolveBranch(conn, shop.id, null, null);   // online orders go to the main branch
+    await conn.query("UPDATE food_orders SET branch_id = ? WHERE id = ?", [main.id, x.insertId]);
     await insertLines(conn, { businessId: shop.id, orderId: x.insertId, lines, send: false, userId: null });
     await audit(conn, { businessId: shop.id, action: "food.online", entity: "food_order", entityId: x.insertId, meta: { number, total: round2(subtotal + fee) }, ip: req.ip });
     return { number, tracking, subtotal, deliveryFee: fee, total: round2(subtotal + fee) };

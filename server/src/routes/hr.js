@@ -49,8 +49,8 @@ router.post("/employees", requirePerm("hr.manage"), ah(async (req, res) => {
   try {
     const r = await withTx(async (conn) => {
       const d = await readEmployee(conn, req, req.body || {});
-      const [x] = await conn.query("INSERT INTO employees (business_id, user_id, full_name, phone, position, pay_type, pay_rate, hired_on, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-        [req.business.id, d.userId, d.name, d.phone, d.position, d.payType, d.payRate, d.hiredOn, d.notes]);
+      const [x] = await conn.query("INSERT INTO employees (business_id, user_id, full_name, phone, position, pay_type, pay_rate, hired_on, notes, branch_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        [req.business.id, d.userId, d.name, d.phone, d.position, d.payType, d.payRate, d.hiredOn, d.notes, id(req.body?.branchId) || req.branch.id]);
       await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "employee.created", entity: "employee", entityId: x.insertId, meta: { name: d.name, payType: d.payType, payRate: d.payRate }, ip: req.ip });
       return { id: x.insertId };
     });
@@ -291,7 +291,7 @@ router.post("/payroll/:id/pay", requirePerm("hr.payroll"), ah(async (req, res) =
     if (p.status !== "draft") throw conflict("payrollPaid");
     if (!(num(p.total) > 0)) throw badRequest({ total: "invalidAmount" });
     const fmt = (d) => (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
-    const expenseId = await recordEntry(conn, { businessId: req.business.id, userId: req.user.id }, "expense",
+    const expenseId = await recordEntry(conn, { businessId: req.business.id, userId: req.user.id, branchId: req.branch.id }, "expense",
       { category: "salaries", amount: num(p.total), method: req.body?.method, bankAccountId: req.body?.bankAccountId, description: `Payroll ${fmt(p.period_start)} – ${fmt(p.period_end)}` });
     await conn.query("UPDATE payroll_runs SET status = 'paid', paid_at = UTC_TIMESTAMP(), method = ?, expense_id = ? WHERE id = ?", [req.body?.method, expenseId, p.id]);
     await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "payroll.paid", entity: "payroll", entityId: p.id, meta: { total: num(p.total), method: req.body?.method }, ip: req.ip });

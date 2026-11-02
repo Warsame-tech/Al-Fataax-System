@@ -78,8 +78,8 @@ router.post("/open", canWork, ah(async (req, res) => {
   const r = await withTx(async (conn) => {
     const [[open]] = await conn.query("SELECT id FROM cash_sessions WHERE business_id = ? AND user_id = ? AND status = 'open' FOR UPDATE", [req.business.id, req.user.id]);
     if (open) throw conflict("shiftAlreadyOpen");
-    const [x] = await conn.query("INSERT INTO cash_sessions (business_id, user_id, opening_cash, opening_note, status, opened_at) VALUES (?, ?, ?, ?, 'open', UTC_TIMESTAMP())",
-      [req.business.id, req.user.id, opening, optText(req.body?.note, 255)]);
+    const [x] = await conn.query("INSERT INTO cash_sessions (business_id, user_id, opening_cash, opening_note, status, opened_at, branch_id) VALUES (?, ?, ?, ?, 'open', UTC_TIMESTAMP(), ?)",
+      [req.business.id, req.user.id, opening, optText(req.body?.note, 255), req.branch.id]);
     await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "shift.opened", entity: "cash_session", entityId: x.insertId, meta: { openingCash: opening }, ip: req.ip });
     return { id: x.insertId };
   });
@@ -129,6 +129,7 @@ router.get("/", canWork, ah(async (req, res) => {
   if (!all) { where.push("s.user_id = ?"); params.push(req.user.id); }
   else if (id(req.query.userId)) { where.push("s.user_id = ?"); params.push(id(req.query.userId)); }
   if (["open", "closed", "approved"].includes(req.query.status)) { where.push("s.status = ?"); params.push(req.query.status); }
+  if (req.branch.filterId) { where.push("s.branch_id = ?"); params.push(req.branch.filterId); }
   const r = range(req.query, 30);
   where.push("s.opened_at BETWEEN ? AND ?"); params.push(r.start, r.end);
   const [rows] = await pool.query(`${SELECT} WHERE ${where.join(" AND ")} ORDER BY s.status = 'open' DESC, s.status = 'closed' DESC, s.id DESC LIMIT 300`, params);

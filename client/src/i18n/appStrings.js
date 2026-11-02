@@ -23,6 +23,8 @@ const en = {
     pattern: "Please match the requested format.", date: "Please enter a valid date.", invalid: "Please check this value."
   },
   errors: {
+    branchNameTaken: "Another branch already has this name.", mainBranchActive: "The main branch can't be closed.", ownerAllBranches: "The owner always works in all branches.",
+    branchTransferNotAllowed: "You aren't allowed to move stock to another branch. Ask a manager.",
     loginLinked: "That login already belongs to another employee.", notAnEmployee: "You are not set up as an employee.", alreadyClockedIn: "You are already clocked in.", notClockedIn: "You are not clocked in.",
     payrollPaid: "This payroll is already paid.", moreThanPay: "Deductions can't be more than the pay.",
     menuClosed: "Online ordering is closed right now.", belowMinOrder: "The minimum order is {min}.",
@@ -314,6 +316,16 @@ const en = {
     basisMonthly: "{rate} a month", basisDaily: "{n} days × {rate}", basisHourly: "{n} h × {rate}", notePh: "Bonus, advance…", payTotal: "Pay {amount}",
     payHint: "Recorded as one Salaries expense, so it shows in profit and the cashbook.", discard: "Discard draft", payNow: "Pay payroll", paidOn: "Paid {at} · {method}"
   },
+  branches: {
+    help: "Each branch sells from its own stock location and keeps its own sales, orders, expenses, shifts and staff. Choose a branch at the top of the screen to work in it, or All branches to see everything together.",
+    compare: "Compare branches", list: "Branches", staff: "Staff by branch", branch: "Branch", main: "Main branch", consolidated: "All branches (total)",
+    cols: { sales: "Sales", revenue: "Revenue", cogs: "Cost of goods", grossProfit: "Gross profit", expenses: "Expenses", otherIncome: "Other income", netProfit: "Net profit" },
+    add: "Add branch", namePh: "e.g. Hodan branch", counts: "{staff} staff · {locations} stock locations", active: "Branch is open",
+    sellLocation: "Sells from stock location", sellLocationNew: "Leave empty to create a new shop location for this branch.", sellLocationHint: "Sales and orders in this branch take stock from here.",
+    newLocation: "New shop location", keepLocation: "Keep the current location",
+    staffHelp: "Staff tied to a branch only see and record that branch's work. Staff on All branches can switch between branches.",
+    worksIn: "Works in", allBranches: "All branches", switch: "Branch"
+  },
   products: {
     fabricCategory: "Fabric category", colorShade: "Colour / shade", colorShadePh: "Colour / shade", pattern: "Pattern", patternPh: "Pattern",
     qualityGrade: "Quality / grade", composition: "Composition", compositionPh: "e.g. 65% polyester, 35% cotton", fabricSection: "Fabric details", itemType: "Item type",
@@ -554,6 +566,7 @@ const en = {
     noRoles: "There are no roles yet.", manageRoles: "Manage roles"
   },
   perms: {
+    "branches.transfer": "Transfer stock between branches",
     "hr.view": "See attendance, schedules and staff performance", "hr.manage": "Manage employees, schedules and attendance", "hr.payroll": "Run and pay payroll",
     "discounts.approve": "Approve discounts above the approval level", "promotions.manage": "Set up promotions",
     "kitchen.view": "See the kitchen display and kitchen reports", "kitchen.update": "Update preparation status and mark items sold out", "tables.manage": "Set up tables",
@@ -623,6 +636,8 @@ const so = {
     pattern: "Fadlan raac qaabka la rabo.", date: "Fadlan geli taariikh sax ah.", invalid: "Fadlan hubi qiimahan."
   },
   errors: {
+    branchNameTaken: "Laan kale ayaa horay u leh magacan.", mainBranchActive: "Laanta ugu weyn lama xiri karo.", ownerAllBranches: "Milkiiluhu had iyo jeer wuxuu ka shaqeeyaa laamaha oo dhan.",
+    branchTransferNotAllowed: "Looma oggola inaad kayd u wareejiso laan kale. Weydii maamule.",
     loginLinked: "Galitaankaas wuxuu u yaal shaqaale kale.", notAnEmployee: "Looma diyaarin shaqaale ahaan.", alreadyClockedIn: "Horay ayaad u gashay.", notClockedIn: "Ma aadan gelin.",
     payrollPaid: "Mushaharkan horay ayaa loo bixiyay.", moreThanPay: "Jaritaanku kama badnaan karo mushaharka.",
     menuClosed: "Dalabka online hadda waa xiran yahay.", belowMinOrder: "Dalabka ugu yar waa {min}.",
@@ -914,6 +929,16 @@ const so = {
     basisMonthly: "{rate} bishii", basisDaily: "{n} maalmood × {rate}", basisHourly: "{n} s × {rate}", notePh: "Gunno, horudhac…", payTotal: "Bixi {amount}",
     payHint: "Waxaa loo diiwaangeliyaa hal kharash Mushaharaad, sidaa darteed wuxuu ka muuqdaa faa'iidada iyo buugga lacagta.", discard: "Tirtir qabyada", payNow: "Bixi mushaharka", paidOn: "La bixiyay {at} · {method}"
   },
+  branches: {
+    help: "Laan kastaa waxay ka iibisaa goobteeda kaydka, waxayna leedahay iibkeeda, dalabyadeeda, kharashyadeeda, wareegyada iyo shaqaalaheeda. Ka dooro laan korka shaashadda si aad uga shaqeyso, ama Laamaha oo dhan si aad wax walba hal mar u aragto.",
+    compare: "Isbarbardhig laamaha", list: "Laamaha", staff: "Shaqaalaha laan kasta", branch: "Laan", main: "Laanta ugu weyn", consolidated: "Laamaha oo dhan (wadarta)",
+    cols: { sales: "Iibka", revenue: "Dakhliga", cogs: "Qiimaha alaabta", grossProfit: "Faa'iidada guud", expenses: "Kharashyada", otherIncome: "Dakhli kale", netProfit: "Faa'iidada saafiga ah" },
+    add: "Ku dar laan", namePh: "tusaale Laanta Hodan", counts: "{staff} shaqaale · {locations} goobood oo kayd", active: "Laantu waa furan tahay",
+    sellLocation: "Waxay ka iibisaa goobta kaydka", sellLocationNew: "Banaan u daa si loogu sameeyo goob dukaan oo cusub laantan.", sellLocationHint: "Iibka iyo dalabyada laantan halkan ayay kaydka ka qaataan.",
+    newLocation: "Goob dukaan oo cusub", keepLocation: "Hay goobta hadda",
+    staffHelp: "Shaqaalaha laan ku xiran waxay arkaan oo diiwaangeliyaan shaqada laantaas oo keliya. Shaqaalaha Laamaha oo dhan way u kala gudbi karaan laamaha.",
+    worksIn: "Wuxuu ka shaqeeyaa", allBranches: "Laamaha oo dhan", switch: "Laan"
+  },
   products: {
     fabricCategory: "Qaybta marada", colorShade: "Midab / hadh", colorShadePh: "Midab / hadh", pattern: "Naqshad", patternPh: "Naqshad",
     qualityGrade: "Tayada / heerka", composition: "Ka-sameysanka", compositionPh: "tusaale 65% polyester, 35% cudbi", fabricSection: "Faahfaahinta marada", itemType: "Nooca shayga",
@@ -1154,6 +1179,7 @@ const so = {
     noRoles: "Weli door ma jiro.", manageRoles: "Maamul doorarka"
   },
   perms: {
+    "branches.transfer": "Kayd u kala wareeji laamaha",
     "hr.view": "Arag imaanshaha, jadwalka iyo waxqabadka shaqaalaha", "hr.manage": "Maamul shaqaalaha, jadwalka iyo imaanshaha", "hr.payroll": "Samee oo bixi mushaharka",
     "discounts.approve": "Ansixi dhimista ka badan heerka ansixinta", "promotions.manage": "Diyaari dalacsiinta",
     "kitchen.view": "Arag shaashadda jikada iyo warbixinnada jikada", "kitchen.update": "Cusbooneysii xaaladda diyaarinta oo calaamadee waxa dhammaaday", "tables.manage": "Diyaari miisaska",

@@ -1219,6 +1219,20 @@ CREATE TABLE IF NOT EXISTS payroll_lines (
   INDEX idx_payroll_lines (run_id)
 ) ENGINE=InnoDB;
 
+CREATE TABLE IF NOT EXISTS branches (
+  id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id      INT UNSIGNED NOT NULL,
+  name             VARCHAR(100) NOT NULL,
+  address          VARCHAR(200) NULL,
+  phone            VARCHAR(30) NULL,
+  sell_location_id INT UNSIGNED NULL,               -- the stock location this branch sells from
+  is_main          TINYINT(1) NOT NULL DEFAULT 0,
+  is_active        TINYINT(1) NOT NULL DEFAULT 1,
+  created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_branch_name (business_id, name),
+  CONSTRAINT fk_branch_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS audit_logs (
   id                BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   business_id       INT UNSIGNED NULL,

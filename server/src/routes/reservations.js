@@ -66,6 +66,7 @@ router.get("/", requirePerm("sales.create"), ah(async (req, res) => {
   const to = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to || "") ? req.query.to : from;
   where.push("r.reserved_for BETWEEN ? AND ?"); params.push(`${from} 00:00:00`, `${to} 23:59:59`);
   if (STATUSES.includes(req.query.status)) { where.push("r.status = ?"); params.push(req.query.status); }
+  if (req.branch.filterId) { where.push("r.branch_id = ?"); params.push(req.branch.filterId); }
   const q = text(req.query.q, 60);
   if (q) { where.push("(r.customer_name LIKE ? OR r.customer_phone LIKE ? OR c.name LIKE ?)"); params.push(`%${q}%`, `%${q}%`, `%${q}%`); }
   const [rows] = await pool.query(`${SELECT} WHERE ${where.join(" AND ")} ORDER BY r.reserved_for, r.id`, params);
@@ -90,9 +91,9 @@ router.post("/", requirePerm("sales.create"), ah(async (req, res) => {
     if (d.customerId) await ensureOwned(conn, "customers", d.customerId, req.business.id);
     await checkTable(conn, req, d);
     const [x] = await conn.query(
-      `INSERT INTO reservations (business_id, table_id, customer_id, customer_name, customer_phone, guests, reserved_for, duration_min, notes, deposit, deposit_method, status, user_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'booked', ?)`,
-      [req.business.id, d.tableId, d.customerId, d.name, d.phone, d.guests, d.at, d.durationMin, d.notes, deposit, deposit > 0 ? b.method : null, req.user.id]);
+      `INSERT INTO reservations (business_id, table_id, customer_id, customer_name, customer_phone, guests, reserved_for, duration_min, notes, deposit, deposit_method, status, user_id, branch_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'booked', ?, ?)`,
+      [req.business.id, d.tableId, d.customerId, d.name, d.phone, d.guests, d.at, d.durationMin, d.notes, deposit, deposit > 0 ? b.method : null, req.user.id, req.branch.id]);
     if (deposit > 0) await moneyMove(conn, { businessId: req.business.id, userId: req.user.id, direction: "in", method: b.method, bankAccountId: id(b.bankAccountId), amount: deposit, refType: "reservation", refId: x.insertId, description: `Reservation deposit · ${d.name || ""}`.trim() });
     await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "reservation.booked", entity: "reservation", entityId: x.insertId, meta: { at: d.at, guests: d.guests, table: d.tableId, deposit }, ip: req.ip });
     return { id: x.insertId };

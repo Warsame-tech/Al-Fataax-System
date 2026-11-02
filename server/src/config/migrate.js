@@ -718,6 +718,22 @@ const TABLES = [
       note        VARCHAR(200) NULL,
       INDEX idx_payroll_lines (run_id)
     ) ENGINE=InnoDB`
+  },
+  {
+    table: "branches",
+    ddl: `CREATE TABLE IF NOT EXISTS branches (
+      id               INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      business_id      INT UNSIGNED NOT NULL,
+      name             VARCHAR(100) NOT NULL,
+      address          VARCHAR(200) NULL,
+      phone            VARCHAR(30) NULL,
+      sell_location_id INT UNSIGNED NULL,               -- the stock location this branch sells from
+      is_main          TINYINT(1) NOT NULL DEFAULT 0,
+      is_active        TINYINT(1) NOT NULL DEFAULT 1,
+      created_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE KEY uq_branch_name (business_id, name),
+      CONSTRAINT fk_branch_business FOREIGN KEY (business_id) REFERENCES businesses(id)
+    ) ENGINE=InnoDB`
   }
 ];
 
@@ -836,6 +852,23 @@ COLUMNS.push(
 COLUMNS.push(
   { table: "food_orders", column: "source", ddl: "ALTER TABLE food_orders ADD COLUMN source VARCHAR(12) NOT NULL DEFAULT 'pos' AFTER service_type, ADD COLUMN payment_pref VARCHAR(30) NULL AFTER source, ADD COLUMN tracking_code VARCHAR(16) NULL AFTER payment_pref, ADD COLUMN dispatched_at DATETIME NULL AFTER ready_at, ADD COLUMN delivered_at DATETIME NULL AFTER dispatched_at, ADD COLUMN delivery_note VARCHAR(255) NULL AFTER driver" },
   { table: "business_settings", column: "online_settings", ddl: "ALTER TABLE business_settings ADD COLUMN online_settings TEXT NULL AFTER discount_rules" }
+);
+
+// Branches: the branch each record belongs to (business_user_roles.branch_id: staff working in one branch; null = all branches).
+COLUMNS.push(
+  { table: "stock_locations", column: "branch_id", ddl: "ALTER TABLE stock_locations ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_stock_locations_branch (business_id, branch_id)" },
+  { table: "sales", column: "branch_id", ddl: "ALTER TABLE sales ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_sales_branch (business_id, branch_id)" },
+  { table: "invoices", column: "branch_id", ddl: "ALTER TABLE invoices ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_invoices_branch (business_id, branch_id)" },
+  { table: "purchases", column: "branch_id", ddl: "ALTER TABLE purchases ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_purchases_branch (business_id, branch_id)" },
+  { table: "expenses", column: "branch_id", ddl: "ALTER TABLE expenses ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_expenses_branch (business_id, branch_id)" },
+  { table: "other_income", column: "branch_id", ddl: "ALTER TABLE other_income ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_other_income_branch (business_id, branch_id)" },
+  { table: "cash_sessions", column: "branch_id", ddl: "ALTER TABLE cash_sessions ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_cash_sessions_branch (business_id, branch_id)" },
+  { table: "food_orders", column: "branch_id", ddl: "ALTER TABLE food_orders ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_food_orders_branch (business_id, branch_id)" },
+  { table: "food_tables", column: "branch_id", ddl: "ALTER TABLE food_tables ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_food_tables_branch (business_id, branch_id)" },
+  { table: "reservations", column: "branch_id", ddl: "ALTER TABLE reservations ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_reservations_branch (business_id, branch_id)" },
+  { table: "employees", column: "branch_id", ddl: "ALTER TABLE employees ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_employees_branch (business_id, branch_id)" },
+  { table: "waste_records", column: "branch_id", ddl: "ALTER TABLE waste_records ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_waste_records_branch (business_id, branch_id)" },
+  { table: "business_user_roles", column: "branch_id", ddl: "ALTER TABLE business_user_roles ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_business_user_roles_branch (business_id, branch_id)" }
 );
 
 const INDEXES = [

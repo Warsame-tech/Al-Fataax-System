@@ -10,6 +10,7 @@ import { unitsPer } from "../lib/packaging.js";
 import { defaultLocationId } from "../lib/stock.js";
 import { isTracked, readNewDevices, addDevices, pickDevices, updateDevices, deviceLabel } from "../lib/devices.js";
 import { currentRates } from "../lib/jewelry.js";
+import { branchSql, branchLocation } from "../lib/branches.js";
 import { isRoll, readNewRolls, addRolls, sumMeters, lockRoll, rollEvent, toMeters, YARD } from "../lib/rolls.js";
 
 const router = Router();
@@ -94,7 +95,7 @@ export async function createPurchase(conn, ctx, body) {
   if (amountPaid > 0 && !receive) throw badRequest({ amountPaid: "notReceivedYet" });
   if (amountPaid > 0 && !can(role, "purchases.pay")) throw badRequest({ amountPaid: "forbidden" });
   if (amountPaid > 0 && !METHODS.includes(body.method)) throw badRequest({ method: "required" });
-  const locationId = id(body.locationId) || (await defaultLocationId(conn, businessId));
+  const locationId = id(body.locationId) || ctx.branch?.locationId || (await defaultLocationId(conn, businessId));
   const [[loc]] = await conn.query("SELECT id FROM stock_locations WHERE id = ? AND business_id = ? AND is_active = 1", [locationId, businessId]);
   if (!loc) throw badRequest({ locationId: "required" });
 
@@ -107,6 +108,7 @@ export async function createPurchase(conn, ctx, body) {
       ctx.at || null, receive ? ctx.at || null : null, isDate(body.expectedDate) ? body.expectedDate : null, optText(body.paymentTerms, 80),
       optText(body.notes, 255), locationId]
   );
+  if (ctx.branch) await conn.query("UPDATE purchases SET branch_id = ? WHERE id = ?", [ctx.branch.id, r.insertId]);
   for (const [i, l] of lines.entries()) {
     const [it] = await conn.query(
       `INSERT INTO purchase_items (business_id, purchase_id, product_id, qty, received_qty, unit_cost, line_total, buy_unit, buy_qty, buy_cost, batch_no, expiry_date, price_detail)
@@ -169,7 +171,7 @@ async function settle(conn, p) {
 }
 
 router.post("/", requirePerm("purchases.create"), ah(async (req, res) => {
-  const result = await withTx((conn) => createPurchase(conn, { businessId: req.business.id, userId: req.user.id, role: req.user }, req.body || {}));
+  const result = await withTx((conn) => createPurchase(conn, { businessId: req.business.id, userId: req.user.id, role: req.user, branch: req.branch }, req.body || {}));
   res.status(201).json(result);
 }));
 
@@ -179,7 +181,7 @@ router.get("/", requirePerm("purchases.view"), ah(async (req, res) => {
   const [rows] = await pool.query(
     `SELECT p.id, p.purchase_no, p.total, p.ordered_total, p.amount_paid, p.status, p.purchased_at, p.expected_date, s.name supplier
        FROM purchases p JOIN suppliers s ON s.id = p.supplier_id AND s.business_id = p.business_id
-      WHERE p.business_id = ? AND p.purchased_at BETWEEN ? AND ? ${q ? "AND (p.purchase_no LIKE ? OR s.name LIKE ?)" : ""}
+      WHERE p.business_id = ?${branchSql(req)("p")} AND p.purchased_at BETWEEN ? AND ? ${q ? "AND (p.purchase_no LIKE ? OR s.name LIKE ?)" : ""}
       ORDER BY p.purchased_at DESC, p.id DESC LIMIT 500`,
     q ? [req.business.id, r.start, r.end, `%${q}%`, `%${q}%`] : [req.business.id, r.start, r.end]);
   res.json({ range: r, purchases: rows.map((p) => ({ id: p.id, number: p.purchase_no, total: num(p.total), orderedTotal: num(p.ordered_total ?? p.total), paid: num(p.amount_paid),
