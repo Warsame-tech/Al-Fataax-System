@@ -159,6 +159,12 @@ const en = {
     events: { received: "Received for inspection", inspected: "Inspected and valued", approved: "Approved", paid: "Paid", rejected: "Rejected", scrap: "Kept as scrap", for_resale: "Released for resale" }
   },
   fabric: {
+    rollUnitHint: "Sold from rolls: each roll has its own ID, length and cost. Stock is counted in meters and yards.", rollUnitLocked: "This product has stock, so it can't be switched to or from Roll.",
+    rollSection: "Roll details (per yard)", costPerYard: "Cost per yard", costPerYardHint: "What one yard of this fabric costs you. Each roll can also have its own cost when it comes in.",
+    avgCostYardHint: "Average cost of the rolls in stock. Each roll keeps its own cost for sales.", pricePerYard: "Price per yard",
+    wholesalePerYard: "Wholesale price per yard", rollPerYard: "Whole-roll price per yard", rollPerYardHint: "Empty = the price per yard",
+    minCutYd: "Shortest cut (yards)", minCutYdHint: "Smallest length you sell; a whole roll is always allowed", remnantYd: "Remnant below (yards)",
+    remnantYdHint: "Rolls shorter than this are marked as remnants", perMeterLine: "Per meter: cost {cost} · price {price}",
     dyeLot: "Dye lot", rollCost: "Roll cost", rollCostHint: "Roll cost: what the whole roll cost you. Empty = the product's cost per meter.",
     paste: "Paste list", pastePh: "One roll per line: ID, length — or ID, declared, verified, dye lot", pasteUse: "Add {n} rolls",
     remnant: "Remnant", lotN: "Lot {lot}", reservedFor: "{m} m held for {who}", heldM: "{m} m held", rollPriceShort: "own price {price} / m",
@@ -803,6 +809,12 @@ const so = {
     events: { received: "Loo qaatay baaritaan", inspected: "La baaray lana qiimeeyay", approved: "La ansixiyay", paid: "La bixiyay", rejected: "La diiday", scrap: "Loo hayaa burbur", for_resale: "Loo sii daayay dib-u-iibin" }
   },
   fabric: {
+    rollUnitHint: "Waxaa laga iibiyaa duubab: duub kastaa wuxuu leeyahay ID, dherer iyo qiimo u gaar ah. Kaydka waxaa lagu tiriyaa mitir iyo yaard.", rollUnitLocked: "Alaabtan kayd ayay leedahay, sidaa darteed looma beddeli karo Duub ama Duub lagama beddeli karo.",
+    rollSection: "Faahfaahinta duubka (yaardkiiba)", costPerYard: "Qiimaha iibsiga yaardkiiba", costPerYardHint: "Inta hal yaard oo dharkan ah kugu kacdo. Duub kastaa sidoo kale wuxuu yeelan karaa qiimihiisa marka uu yimaado.",
+    avgCostYardHint: "Celceliska qiimaha duubabka kaydka ku jira. Duub kastaa iibka wuxuu ku isticmaalaa qiimihiisa.", pricePerYard: "Qiimaha iibka yaardkiiba",
+    wholesalePerYard: "Qiimaha jumladda yaardkiiba", rollPerYard: "Qiimaha duub dhan yaardkiiba", rollPerYardHint: "Banaan = qiimaha yaardkiiba",
+    minCutYd: "Jarista ugu gaaban (yaard)", minCutYdHint: "Dhererka ugu yar ee aad iibiso; duub dhan had iyo jeer waa la oggol yahay", remnantYd: "Haraa ka hooseeya (yaard)",
+    remnantYdHint: "Duubabka ka gaaban tan waxaa loo calaamadeeyaa haraa", perMeterLine: "Mitirkiiba: iibsi {cost} · iib {price}",
     dyeLot: "Dufcadda midabka", rollCost: "Qiimaha duubka", rollCostHint: "Qiimaha duubka: inta duubka oo dhan kugu kacay. Banaan = qiimaha mitirka ee alaabta.",
     paste: "Ku dheji liis", pastePh: "Duub kasta sadar: ID, dherer — ama ID, la sheegay, la hubiyay, dufcadda midabka", pasteUse: "Ku dar {n} duub",
     remnant: "Haraa", lotN: "Dufcad {lot}", reservedFor: "{m} m loo hayo {who}", heldM: "{m} m la hayo", rollPriceShort: "qiimihiisa {price} / m",

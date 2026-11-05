@@ -60,6 +60,9 @@ const DEFAULT = {
   categories: {}
 };
 
+/* fabric types (materials), offered under each fabric category */
+const FABRIC_TYPES = ["Cotton", "Silk", "Chiffon", "Linen", "Polyester", "Wool", "Lace", "Velvet", "Satin", "Denim", "Other"];
+
 /* Ready-made categories per business type: { category: [subcategories] } */
 const CATEGORIES = {
   supermarket: {
@@ -98,10 +101,10 @@ const CATEGORIES = {
     "Gold": ["Rings", "Necklaces", "Earrings", "Bracelets", "Bangles", "Sets"], "Silver": ["Rings", "Necklaces", "Earrings", "Bracelets"],
     "Fashion Jewelry": [], "Watches": [], "Gemstones": [], "Men's Jewelry": [], "Children's Jewelry": [], "Other": []
   },
+  // fabric category = who the fabric is for; fabric type (subcategory) = the material
   fabric: {
-    "Cotton": [], "Silk": [], "Chiffon": [], "Linen": [], "Polyester": [], "Wool": [], "Lace": [], "Velvet": [], "Satin": [], "Denim": [],
-    "Sewing Materials": ["Thread", "Buttons", "Zippers", "Needles", "Elastic"],
-    "Ready-made Clothing": ["Dirac", "Garbasaar", "Abayas", "Kamis / Thobe", "Macawis", "Shirts", "Dresses", "Children's Wear"], "Other": []
+    "Men's clothes": FABRIC_TYPES,
+    "Women's clothes": FABRIC_TYPES
   }
 };
 
@@ -169,10 +172,9 @@ const PROFILES = {
     fabric: true,                             // fabric details, products sold from rolls (lib/rolls.js), tailoring orders
     categories: CATEGORIES.fabric,
     sizeSystems: SIZE_SYSTEMS,
-    categorySizes: { "Ready-made Clothing": "Letter (XXS–4XL)" },
     colors: COLORS,
     defaultVariants: ["shade", "formula", "packSize"],
-    categoryVariants: { "Ready-made Clothing": ["size", "shade"], "Sewing Materials": ["shade"] }
+    categoryVariants: {}
   },
   cosmetics: {
     key: "cosmetics",
