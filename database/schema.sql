@@ -200,6 +200,8 @@ CREATE TABLE IF NOT EXISTS products (
   making_charge   DECIMAL(14,4) NULL,
   making_type     VARCHAR(10)  NOT NULL DEFAULT 'per_gram', -- per_gram | fixed
   extra_charge    DECIMAL(14,4) NULL,
+
+  cost_per_gram   DECIMAL(14,4) NULL,             -- jewelry: cost price = net weight × cost per gram
   unique_item     TINYINT(1)   NOT NULL DEFAULT 0, -- one individual piece (stock 0 or 1)
   item_status     VARCHAR(20)  NOT NULL DEFAULT 'active', -- active, sold, returned, damaged
   country_of_origin VARCHAR(60) NULL,

@@ -129,7 +129,7 @@ const en = {
   jewelry: {
     metals: { gold: "Gold", silver: "Silver" }, metal: "Metal", purity: "Purity / karat", metalPurity: "Metal / purity", section: "Metal, purity and weight",
     grossWeight: "Gross weight (g)", stoneWeight: "Stone / non-metal weight (g)", netWeight: "Net metal weight", netHint: "Gross weight − stone weight", grams: "Grams",
-    pricing: "Pricing", pricingModes: { fixed: "Fixed price", weight: "By weight" }, making: "Making charge", perGram: "per gram", fixedAmount: "fixed amount",
+    pricing: "Pricing", costPerGram: "Cost per gram", costPerGramHint: "What one gram cost you. The cost price is worked out from it.", costFormula: "{net} g × {rate} per gram", costFromGram: "Enter the cost per gram to work out the cost price.", pricingModes: { fixed: "Fixed price", weight: "By weight" }, making: "Making charge", perGram: "per gram", fixedAmount: "fixed amount",
     extra: "Additional charges", fallbackPrice: "Fixed price (used only if no rate is set)", byWeight: "priced by weight", noRateShort: "no rate set",
     pricePreview: "Today: {net} g × {rate} + making {making} + {extra} = {price}", noRateHint: "No rate is set for this purity yet: set it in Gold & silver rates.",
     pickPurity: "Choose the metal and purity to see today's price.", unique: "Individual piece (unique item)",
@@ -742,7 +742,7 @@ const so = {
   jewelry: {
     metals: { gold: "Dahab", silver: "Lacag (silver)" }, metal: "Macdanta", purity: "Saafinimada / karat", metalPurity: "Macdan / saafinimo", section: "Macdanta, saafinimada iyo miisaanka",
     grossWeight: "Miisaanka guud (g)", stoneWeight: "Miisaanka dhagxaanta (g)", netWeight: "Miisaanka macdanta saafiga ah", netHint: "Miisaanka guud − miisaanka dhagxaanta", grams: "Garaam",
-    pricing: "Qiimaynta", pricingModes: { fixed: "Qiimo go'an", weight: "Miisaan ahaan" }, making: "Kharashka samaynta", perGram: "garaamkiiba", fixedAmount: "lacag go'an",
+    pricing: "Qiimaynta", costPerGram: "Kharashka garaamkiiba", costPerGramHint: "Inta hal garaam kugu kacday. Qiimaha iibsiga ayaa laga xisaabiyaa.", costFormula: "{net} g × {rate} garaamkiiba", costFromGram: "Geli kharashka garaamkiiba si loo xisaabiyo qiimaha iibsiga.", pricingModes: { fixed: "Qiimo go'an", weight: "Miisaan ahaan" }, making: "Kharashka samaynta", perGram: "garaamkiiba", fixedAmount: "lacag go'an",
     extra: "Kharashyo dheeri ah", fallbackPrice: "Qiimo go'an (kaliya haddii qiime maalinle aan la dejin)", byWeight: "miisaan ahaan", noRateShort: "qiime maalinle ma jiro",
     pricePreview: "Maanta: {net} g × {rate} + samayn {making} + {extra} = {price}", noRateHint: "Saafinimadan weli qiime looma dejin: ka deji Qiimaha dahabka & lacagta.",
     pickPurity: "Dooro macdanta iyo saafinimada si aad u aragto qiimaha maanta.", unique: "Xabbad gaar ah (shay keli ah)",

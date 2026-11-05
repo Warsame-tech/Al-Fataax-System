@@ -32,7 +32,7 @@ export const EMPTY = {
   // clothing (profile.fashion)
   collection: "", season: "",
   // jewelry (profile.jewelry)
-  metal: "", purity: "", grossWeight: "", stoneWeight: "", pricingMode: "fixed", makingCharge: "", makingType: "per_gram", extraCharge: "", uniqueItem: false, itemStatus: "active",
+  metal: "", purity: "", grossWeight: "", stoneWeight: "", pricingMode: "fixed", makingCharge: "", makingType: "per_gram", extraCharge: "", costPerGram: "", uniqueItem: false, itemStatus: "active",
   // food (profile.itemKinds): menu item, goods, ingredient, packaging, extra, prepared; kitchen station
   itemKind: "", station: ""
 };
@@ -323,7 +323,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     collection: product.collection || "", season: product.season || "",
     metal: product.metal || "", purity: product.purity || "", grossWeight: product.grossWeight ?? "", stoneWeight: product.stoneWeight ?? "",
     pricingMode: product.pricingMode || "fixed", makingCharge: product.makingCharge ?? "", makingType: product.makingType || "per_gram",
-    extraCharge: product.extraCharge ?? "", uniqueItem: Boolean(product.uniqueItem), itemStatus: product.itemStatus || "active",
+    extraCharge: product.extraCharge ?? "", costPerGram: product.costPerGram ?? "", uniqueItem: Boolean(product.uniqueItem), itemStatus: product.itemStatus || "active",
     sellingPrice: product.fixedPrice ?? product.sellingPrice ?? ""
   });
   /* jewelry: purity options and today's rates (price preview) */
@@ -334,6 +334,8 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
   const jMaking = f.makingType === "fixed" ? Number(f.makingCharge) || 0 : jNet * (Number(f.makingCharge) || 0);
   const jPrice = jRate !== undefined ? Math.round((jNet * jRate + jMaking + (Number(f.extraCharge) || 0)) * 100) / 100 : null;
   const wStep = 1 / 10 ** (jRates.data?.weightDecimals ?? 3);
+  // cost price = net weight × cost per gram (the cost price field is locked for jewelry)
+  const jCost = profile.jewelry && f.costPerGram !== "" ? Math.round(jNet * (Number(f.costPerGram) || 0) * 10000) / 10000 : null;
   /* dropdown lists: ready-made for the business type + the business's own (Product lists) */
   const cat = useCatalog();
   const [matrix, setMatrix] = useState(false);
@@ -412,7 +414,8 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     const fd = new FormData();
     // clothing: attributes the category does not use are not kept (e.g. a bag has no size)
     const unused = (k) => (profile.fashion && ["size", "shade", "formula", "packSize"].includes(k) && !variantFields.includes(k)) || (!profile.itemKinds && ["itemKind", "station"].includes(k));
-    Object.keys(EMPTY).forEach((k) => fd.append(k, unused(k) || f[k] === null || f[k] === undefined ? "" : String(f[k])));
+    const values = jCost === null ? f : { ...f, costPrice: jCost };
+    Object.keys(EMPTY).forEach((k) => fd.append(k, unused(k) || values[k] === null || values[k] === undefined ? "" : String(values[k])));
     if (profile.extraBarcodes) fd.append("barcodes", JSON.stringify(barcodes.filter((b) => String(b.barcode).trim())));
     if (profile.electronics) fd.append("specs", JSON.stringify(Object.fromEntries(Object.entries(specs).filter(([k, v]) => specFields.includes(k) && String(v).trim()))));
     if (profile.packaging) fd.append("packaging", JSON.stringify(pack.filter((l) => String(l.name).trim()).map((l) => ({ ...l, price: l.sell && l.price !== "" ? l.price : null }))));
@@ -603,8 +606,8 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
             <Field label={t("ui.jewelry.grossWeight")} error={err.grossWeight}><input className="input" type="number" min="0" step={wStep} value={f.grossWeight} onChange={set("grossWeight")} placeholder={t("ui.jewelry.grams")} /></Field>
             <Field label={`${t("ui.jewelry.stoneWeight")} ${t("ui.common.optional")}`} error={err.stoneWeight}><input className="input" type="number" min="0" step={wStep} value={f.stoneWeight} onChange={set("stoneWeight")} placeholder={t("ui.jewelry.grams")} /></Field>
             <Field label={t("ui.jewelry.netWeight")} hint={t("ui.jewelry.netHint")}><input className="input packaging__total" readOnly tabIndex={-1} value={`${jNet.toFixed(jRates.data?.weightDecimals ?? 3)} g`} /></Field>
-            <Field label={t("ui.jewelry.pricing")} error={err.pricingMode}>
-              <div className="seg">{["fixed", "weight"].map((v) => <button key={v} type="button" aria-pressed={f.pricingMode === v} onClick={() => setF((x) => ({ ...x, pricingMode: v }))}>{t(`ui.jewelry.pricingModes.${v}`)}</button>)}</div>
+            <Field label={t("ui.jewelry.costPerGram")} error={err.costPerGram || err.pricingMode} hint={t("ui.jewelry.costPerGramHint")}>
+              <input className="input" type="number" min="0" step="any" value={f.costPerGram} onChange={set("costPerGram")} placeholder={t("ui.jewelry.costPerGram")} />
             </Field>
             {f.pricingMode === "weight" && (
               <>
@@ -653,7 +656,11 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
           </Field>
         )}
         {profile.packaging && <PackagingEditor pack={pack} setPack={setPack} unit={f.unit} sellingPrice={f.sellingPrice} errors={err} />}
-        <Field label={L("costPrice")} error={err.costPrice}><input className="input" type="number" min="0" step="any" value={f.costPrice} onChange={set("costPrice")} placeholder={L("costPrice")} /></Field>
+        {profile.jewelry
+          ? <Field label={L("costPrice")} error={err.costPrice} hint={jCost !== null ? fill(t("ui.jewelry.costFormula"), { net: jNet.toFixed(jRates.data?.weightDecimals ?? 3), rate: m(Number(f.costPerGram) || 0) }) : t("ui.jewelry.costFromGram")}>
+              <input className="input packaging__total" readOnly tabIndex={-1} value={jCost !== null ? m(jCost) : f.costPrice === "" ? "—" : m(Number(f.costPrice) || 0)} />
+            </Field>
+          : <Field label={L("costPrice")} error={err.costPrice}><input className="input" type="number" min="0" step="any" value={f.costPrice} onChange={set("costPrice")} placeholder={L("costPrice")} /></Field>}
         <Field label={profile.jewelry && f.pricingMode === "weight" ? t("ui.jewelry.fallbackPrice") : L("sellingPrice")} error={err.sellingPrice}><input className="input" type="number" min="0" step="any" value={f.sellingPrice} onChange={set("sellingPrice")} placeholder={L("sellingPrice")} /></Field>
         {!profile.hiddenFields?.includes("wholesalePrice") && <Field label={`${t("ui.products.wholesalePrice")} ${t("ui.common.optional")}`} error={err.wholesalePrice}><input className="input" type="number" min="0" step="any" value={f.wholesalePrice} onChange={set("wholesalePrice")} placeholder={t("ui.products.wholesalePrice")} /></Field>}
         {profile.electronics && <Field label={`${t("ui.products.minPrice")} ${t("ui.common.optional")}`} error={err.minPrice} hint={t("ui.products.minPriceHint")}><input className="input" type="number" min="0" step="any" value={f.minPrice} onChange={set("minPrice")} placeholder={t("ui.products.minPrice")} /></Field>}

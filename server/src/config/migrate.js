@@ -871,6 +871,11 @@ COLUMNS.push(
   { table: "business_user_roles", column: "branch_id", ddl: "ALTER TABLE business_user_roles ADD COLUMN branch_id INT UNSIGNED NULL, ADD INDEX idx_business_user_roles_branch (business_id, branch_id)" }
 );
 
+// jewelry: cost per gram (cost price = net weight × cost per gram)
+COLUMNS.push(
+  { table: "products", column: "cost_per_gram", ddl: "ALTER TABLE products ADD COLUMN cost_per_gram DECIMAL(14,4) NULL AFTER extra_charge" }
+);
+
 const INDEXES = [
   { table: "products", name: "idx_products_category", ddl: "ALTER TABLE products ADD INDEX idx_products_category (business_id, category_id)" },
   { table: "products", name: "idx_products_brand", ddl: "ALTER TABLE products ADD INDEX idx_products_brand (business_id, brand_id)" },

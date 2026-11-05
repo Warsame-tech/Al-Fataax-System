@@ -74,14 +74,14 @@ function readSpecs(raw) {
  * (net weight × current rate + making + extra — lib/jewelry.js), with the breakdown in priceDetail.
  */
 function withJewelry(p, rates, out) {
-  if (!p.metal && p.pricing_mode !== "weight" && !p.unique_item) return out;
+  if (!p.metal && p.pricing_mode !== "weight" && !p.unique_item && p.cost_per_gram == null) return out;
   const live = weightPrice(p, rates);
   return {
     ...out,
     metal: p.metal || "", purity: p.purity || "", grossWeight: p.gross_weight === null ? null : num(p.gross_weight),
     stoneWeight: p.stone_weight === null ? null : num(p.stone_weight), netWeight: netWeight(p.gross_weight, p.stone_weight),
     pricingMode: p.pricing_mode || "fixed", makingCharge: p.making_charge === null ? null : num(p.making_charge), makingType: p.making_type || "per_gram",
-    extraCharge: p.extra_charge === null ? null : num(p.extra_charge), uniqueItem: Boolean(p.unique_item), itemStatus: p.item_status || "active",
+    extraCharge: p.extra_charge === null ? null : num(p.extra_charge), costPerGram: p.cost_per_gram == null ? null : num(p.cost_per_gram), uniqueItem: Boolean(p.unique_item), itemStatus: p.item_status || "active",
     fixedPrice: num(p.selling_price),
     ...(live ? { sellingPrice: live.price, priceDetail: live.detail } : p.pricing_mode === "weight" ? { priceDetail: null, noRate: true } : {})
   };
@@ -315,6 +315,7 @@ function readProduct(body, { creating }) {
     makingCharge: body.makingCharge === "" || body.makingCharge == null ? null : money(body.makingCharge),
     makingType: body.makingType === "fixed" ? "fixed" : "per_gram",
     extraCharge: body.extraCharge === "" || body.extraCharge == null ? null : money(body.extraCharge),
+    costPerGram: body.costPerGram === undefined ? undefined : body.costPerGram === "" || body.costPerGram === null ? null : money(body.costPerGram),
     uniqueItem: body.uniqueItem === true || body.uniqueItem === "true",
     itemStatus: ["active", "returned", "damaged"].includes(body.itemStatus) ? body.itemStatus : null,
     productType: optText(body.productType, 60), modelNumber: optText(body.modelNumber, 80), countryOfOrigin: optText(body.countryOfOrigin, 60),
@@ -337,6 +338,7 @@ function readProduct(body, { creating }) {
   if (d.grossWeight !== null && d.stoneWeight !== null && d.stoneWeight > d.grossWeight) e.stoneWeight = "stoneAboveGross";
   if (d.makingCharge !== null && Number.isNaN(d.makingCharge)) e.makingCharge = "invalidAmount";
   if (d.extraCharge !== null && Number.isNaN(d.extraCharge)) e.extraCharge = "invalidAmount";
+  if (d.costPerGram != null && (Number.isNaN(d.costPerGram) || d.costPerGram < 0)) e.costPerGram = "invalidAmount";
   if (d.pricingMode === "weight" && (!d.metal || !d.purity || !(d.grossWeight > 0))) e.pricingMode = "weightNeedsMetal";
   if (d.minPrice !== null && !Number.isNaN(d.minPrice) && !Number.isNaN(d.sellingPrice) && d.minPrice > d.sellingPrice) e.minPrice = "minAboveSelling";
   if (d.warrantyMonths !== null && (!Number.isInteger(d.warrantyMonths) || d.warrantyMonths < 0 || d.warrantyMonths > 240)) e.warrantyMonths = "invalidAmount";
@@ -398,6 +400,14 @@ function rollRules(d, profile) {
   if (d.tracking === "roll" && d.unit !== "meter") throw badRequest({ unit: "rollNeedsMeter" });
 }
 
+/* Jewelry: with a cost per gram, the cost price is always net weight (gross − stone) × cost per gram. */
+function jewelryCost(d, profile) {
+  if (!profile.jewelry) { d.costPerGram = undefined; return; }
+  if (d.costPerGram == null || Number.isNaN(d.costPerGram)) return;
+  const net = Math.max(0, (d.grossWeight || 0) - (d.stoneWeight || 0));
+  d.costPrice = Math.round(net * d.costPerGram * 10000) / 10000;
+}
+
 /* Changes to costs, prices, reorder level and status are kept in the product's change history (audit log). */
 const TRACKED = [["costPrice", "cost_price"], ["sellingPrice", "selling_price"], ["wholesalePrice", "wholesale_price"], ["minStock", "min_stock"]];
 function changesOf(old, d) {
@@ -426,6 +436,7 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
   const d = readProduct(req.body || {}, { creating: true });
   if (req.business.profile.batches) d.trackBatches = true;     // e.g. cosmetics: every product tracks batches & expiry
   rollRules(d, req.business.profile);
+  jewelryCost(d, req.business.profile);
   const image = await imageFrom(req);
   const bid = req.business.id;
   try {
@@ -448,6 +459,7 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
           group, d.description, d.sku, d.barcode, image, d.unit, d.packaging ?? null, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0]
       );
       await saveBarcodes(conn, bid, r.insertId, d.barcodes || []);
+      if (d.costPerGram !== undefined) await conn.query("UPDATE products SET cost_per_gram = ? WHERE id = ?", [d.costPerGram, r.insertId]);
       if (d.itemKind || d.station) await conn.query("UPDATE products SET item_kind = ?, station = ? WHERE id = ?", [d.itemKind || "goods", d.station ?? null, r.insertId]);
       // A product can exist with zero stock. Opening stock is normally entered in Stock → Opening stock.
       if (d.openingStock > 0 && d.tracking === "qty") {
@@ -468,6 +480,7 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
   const d = readProduct(req.body || {}, { creating: false });
   if (req.business.profile.batches) d.trackBatches = true;
   rollRules(d, req.business.profile);
+  jewelryCost(d, req.business.profile);
   const image = await imageFrom(req);
   const bid = req.business.id;
   try {
@@ -498,6 +511,7 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
           d.description, d.sku, d.barcode, next, d.unit, d.packaging === undefined ? p.packaging : d.packaging, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0, p.id, bid]
       );
       await saveBarcodes(conn, bid, p.id, d.barcodes);
+      if (d.costPerGram !== undefined) await conn.query("UPDATE products SET cost_per_gram = ? WHERE id = ?", [d.costPerGram, p.id]);
       if (d.trackBatches && !p.track_batches) await startBatchTracking(conn, bid, p.id);
       const changes = changesOf(p, d);
       await audit(conn, { businessId: bid, userId: req.user.id, action: changes.length ? "product.changed" : "product.updated", entity: "product", entityId: p.id,
