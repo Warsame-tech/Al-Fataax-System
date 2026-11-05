@@ -11,7 +11,7 @@ import { isTracked, sellDevices, returnSoldDevices, deviceLabel } from "../lib/d
 import { createWarranties, voidWarranties } from "../lib/warranties.js";
 import { defaultLocationId } from "../lib/stock.js";
 import { currentRates, weightPrice, unsellable } from "../lib/jewelry.js";
-import { isRoll, toMeters, YARD, attachRolls, cutFromRoll, returnCuts, cutsByItem } from "../lib/rolls.js";
+import { isRoll, toMeters, YARD, attachRolls, cutFromRoll, returnCuts, cutsByItem, returnLength } from "../lib/rolls.js";
 import { viaRecipe, consumeForSale, restoreConsumption } from "../lib/food.js";
 import { activePromotions, applyPromotions, checkDiscount } from "../lib/promotions.js";
 import { branchSql, branchLocation } from "../lib/branches.js";
@@ -29,6 +29,24 @@ router.use(requireAuth);
  * Food: a line from a food order carries it.menu (priced by the server: size + extras, routes/food.js); menu items and
  * extras use their recipe's ingredients when sold (lib/food.js), and a sold-out item can't be sold.
  */
+/*
+ * Fabric price for one unit sold (a meter, a yard or the whole roll):
+ *   a roll's own price (remnant / second quality) wins; otherwise the product's meter / yard / whole-roll prices,
+ *   wholesale ones with the wholesale price list. An empty yard price = meter price × 0.9144; an empty whole-roll rate = meter price.
+ */
+export function fabricPrice(p, roll, unit, per, priceList) {
+  const opt = (v) => (v === null || v === undefined ? null : num(v));
+  const wholesale = priceList === "wholesale";
+  const override = opt(roll?.price_override);
+  const meter = override ?? (wholesale ? opt(p.wholesale_price) ?? num(p.selling_price) : num(p.selling_price));
+  if (unit === "roll") return round2((override ?? (wholesale ? meter : opt(p.roll_rate) ?? meter)) * per);
+  if (unit === "yard") {
+    const yard = override === null ? (wholesale ? opt(p.wholesale_yard_price) : opt(p.yard_price)) : null;
+    return yard ?? round2(meter * Number(YARD));
+  }
+  return meter;
+}
+
 export function priceLines(items, products, { allowCustomPrice, priceList = "retail", rates = null }) {
   const lines = [];
   const errors = {};
@@ -57,16 +75,19 @@ export function priceLines(items, products, { allowCustomPrice, priceList = "ret
         per = it.roll ? num(it.roll.remaining) : 0;
         if (!(per > 0)) { errors[`items.${i}.rollId`] = "rollNotFound"; return; }
         if (qty !== 1) { errors[`items.${i}.qty`] = "wholeRoll"; return; }
+        if (it.roll && num(it.roll.reserved) > 0) { errors[`items.${i}.rollId`] = "rollReserved"; return; }
         baseQty = per;
       } else if (unit === "yard") { per = Number(YARD); baseQty = toMeters(qty, "yard"); }
       else baseQty = Math.round(qty * 10000) / 10000;
+      // shortest length the shop cuts (a whole roll is always allowed)
+      if (unit !== "roll" && p.min_cut !== null && p.min_cut !== undefined && baseQty < num(p.min_cut) - 0.00005) { errors[`items.${i}.qty`] = "belowMinCut"; return; }
     } else {
       per = unit ? unitsPer(p, unit) : 1;
       if (!per || (unit && !packOf(p, unit)?.sell)) { errors[`items.${i}.unit`] = "required"; return; }
     }
     const basePrice = live ? live.price : priceList === "wholesale" && p.wholesale_price !== null ? num(p.wholesale_price) : num(p.selling_price);
     const pack = unit ? packOf(p, unit) : null;
-    const listPrice = pack && pack.price !== null && priceList !== "wholesale" ? num(pack.price) : round2(basePrice * per);
+    const listPrice = roll ? fabricPrice(p, it.roll, unit, per, priceList) : pack && pack.price !== null && priceList !== "wholesale" ? num(pack.price) : round2(basePrice * per);
     let unitPrice = listPrice;
     if (it.unitPrice !== undefined && it.unitPrice !== null && it.unitPrice !== "" && Number(it.unitPrice) !== listPrice) {
       if (!allowCustomPrice) { errors[`items.${i}.unitPrice`] = "forbidden"; return; }
@@ -288,7 +309,7 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
     sale: { id: s.id, number: s.receipt_no, at: s.sold_at, status: s.status, method: s.payment_method, subtotal: num(s.subtotal), discount: num(s.discount), vatRate: num(s.vat_rate || 0), vat: num(s.vat_amount || 0),
       fee: num(s.fee_amount || 0), feeLabel: s.fee_label || null, promo: s.promo_detail ? JSON.parse(s.promo_detail) : null, total: num(s.total), paid: num(s.amount_paid), change: num(s.change_amount || 0), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
     // sold in a pack: shown as e.g. 2 Strip × 1.50 (qty / unitPrice); baseQty is the stock that left
-    items: items.map((i) => ({ name: i.name, sku: i.sku, qty: i.sell_unit ? num(i.sell_qty) : num(i.qty), unitPrice: i.sell_unit ? num(i.sell_price) : num(i.unit_price),
+    items: items.map((i) => ({ id: i.id, productId: i.product_id, name: i.name, sku: i.sku, qty: i.sell_unit ? num(i.sell_qty) : num(i.qty), unitPrice: i.sell_unit ? num(i.sell_price) : num(i.unit_price),
       unit: i.sell_unit || null, baseQty: num(i.qty), baseUnit: i.base_unit, total: num(i.line_total),
       devices: devs.filter((d) => d.sold_item_id === i.id).map((d) => ({ id: d.id, label: deviceLabel(d) })), rolls: cuts.get(i.id) || [],
       priceDetail: i.price_detail ? JSON.parse(i.price_detail) : null,
@@ -328,8 +349,13 @@ router.post("/:id/cancel", requirePerm("sales.cancel"), ah(async (req, res) => {
     await voidWarranties(conn, { businessId: bid, refType: "sale", refId: s.id, userId: uid, reason });
     // Refund each payment through the same method and account (negative payment keeps "money received" accurate).
     const [payments] = await conn.query("SELECT id, method, payment_method_id, amount FROM customer_payments WHERE sale_id = ? AND business_id = ? AND amount > 0 ORDER BY id", [s.id, bid]);
+    // money already given back (partial fabric returns) is not refunded again
+    const [[before]] = await conn.query("SELECT COALESCE(-SUM(amount), 0) v FROM customer_payments WHERE sale_id = ? AND business_id = ? AND amount < 0", [s.id, bid]);
+    let skip = num(before.v);
     for (const p of payments) {
-      const amount = round2(num(p.amount));
+      const amount = round2(num(p.amount) - Math.min(skip, num(p.amount)));
+      skip = round2(Math.max(0, skip - num(p.amount)));
+      if (amount <= 0) continue;
       await conn.query("INSERT INTO customer_payments (business_id, customer_id, sale_id, amount, method, payment_method_id, reference, paid_at, user_id) VALUES (?, ?, ?, ?, ?, ?, 'REFUND', UTC_TIMESTAMP(), ?)",
         [bid, s.customer_id, s.id, -amount, p.method, p.payment_method_id, uid]);
       const [[orig]] = await conn.query("SELECT cash_account_id, bank_account_id FROM cash_transactions WHERE business_id = ? AND ref_type = 'customer_payment' AND ref_id = ? LIMIT 1", [bid, p.id]);
@@ -339,6 +365,65 @@ router.post("/:id/cancel", requirePerm("sales.cancel"), ah(async (req, res) => {
     await audit(conn, { businessId: bid, userId: uid, action: "sale.cancelled", entity: "sale", entityId: s.id, meta: { reason, refunded: num(s.amount_paid) }, ip: req.ip });
   });
   res.json({ code: "saved" });
+}));
+
+/*
+ * POST /api/sales/:id/return-length { itemId, length, lengthUnit: meter | yard, reason } — fabric: part of a cut comes back.
+ * The line and the receipt shrink by that share (with its share of discount and VAT, so reports stay right), the money is
+ * refunded through the receipt's payment method, and the length becomes a piece waiting for inspection.
+ */
+router.post("/:id/return-length", requirePerm("sales.cancel"), ah(async (req, res) => {
+  const b = req.body || {};
+  const reason = text(b.reason, 200);
+  const length = Number(b.length);
+  const e = {};
+  if (!reason) e.reason = "required";
+  if (!id(b.itemId)) e.itemId = "required";
+  if (!Number.isFinite(length) || length <= 0) e.length = "invalidAmount";
+  if (Object.keys(e).length) throw badRequest(e);
+  const meters = toMeters(length, b.lengthUnit === "yard" ? "yard" : "meter");
+  const bid = req.business.id;
+  const uid = req.user.id;
+  const result = await withTx(async (conn) => {
+    const s = await ensureOwned(conn, "sales", id(req.params.id), bid, true);
+    if (s.status !== "completed") throw conflict("alreadyCancelled");
+    const [[it]] = await conn.query("SELECT * FROM sale_items WHERE id = ? AND sale_id = ? AND business_id = ? FOR UPDATE", [id(b.itemId), s.id, bid]);
+    if (!it) throw badRequest({ itemId: "required" });
+    const product = (await lockProducts(conn, bid, [it.product_id])).get(it.product_id);
+    if (!isRoll(product)) throw badRequest({ itemId: "notFabric" });
+    const loc = await branchLocation(conn, bid, s.branch_id);
+    const back = await returnLength(conn, { businessId: bid, refType: "sale", refId: s.id, itemId: it.id, meters, locationId: loc, userId: uid, note: reason });
+    await moveStock(conn, { businessId: bid, userId: uid, product, qtyChange: meters, type: "return_in", refType: "sale", refId: s.id, locationId: loc, note: reason, devices: true });
+    // the share of the line, and of the receipt's discount and VAT, that comes back
+    const part = num(it.qty) > 0 ? meters / num(it.qty) : 1;
+    const lineValue = round2(num(it.line_total) * part);
+    const ratio = num(s.subtotal) > 0 ? lineValue / num(s.subtotal) : 0;
+    const dDisc = round2(num(s.discount) * ratio);
+    const dVat = round2(num(s.vat_amount) * ratio);
+    const refund = round2(lineValue - dDisc + dVat);
+    const q = (v) => Math.round(v * 10000) / 10000;
+    await conn.query("UPDATE sale_items SET qty = ?, line_total = ?, sell_qty = ? WHERE id = ?",
+      [q(num(it.qty) - meters), round2(num(it.line_total) - lineValue), it.sell_qty === null ? null : q(num(it.sell_qty) * (1 - part)), it.id]);
+    // money back: up to what was paid (the rest lowers what a credit customer owes)
+    const cash = round2(Math.min(refund, num(s.amount_paid)));
+    await conn.query("UPDATE sales SET subtotal = ?, discount = ?, vat_amount = ?, total = ?, amount_paid = ? WHERE id = ?",
+      [round2(num(s.subtotal) - lineValue), round2(num(s.discount) - dDisc), round2(num(s.vat_amount) - dVat), round2(num(s.total) - refund), round2(num(s.amount_paid) - cash), s.id]);
+    const [ret] = await conn.query(
+      "INSERT INTO returns (business_id, type, sale_id, total, refund_amount, reason, user_id, approved_by, returned_at) VALUES (?, 'sale', ?, ?, ?, ?, ?, ?, UTC_TIMESTAMP())",
+      [bid, s.id, refund, cash, reason, uid, uid]);
+    await conn.query("INSERT INTO return_items (business_id, return_id, product_id, qty, unit_price, unit_cost, line_total) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [bid, ret.insertId, it.product_id, meters, it.unit_price, it.unit_cost, lineValue]);
+    if (cash > 0) {
+      const [[p]] = await conn.query("SELECT id, method, payment_method_id FROM customer_payments WHERE sale_id = ? AND business_id = ? AND amount > 0 ORDER BY id DESC LIMIT 1", [s.id, bid]);
+      await conn.query("INSERT INTO customer_payments (business_id, customer_id, sale_id, amount, method, payment_method_id, reference, paid_at, user_id) VALUES (?, ?, ?, ?, ?, ?, 'REFUND', UTC_TIMESTAMP(), ?)",
+        [bid, s.customer_id, s.id, -cash, p?.method || "cash", p?.payment_method_id || null, uid]);
+      const [[orig]] = p ? await conn.query("SELECT cash_account_id, bank_account_id FROM cash_transactions WHERE business_id = ? AND ref_type = 'customer_payment' AND ref_id = ? LIMIT 1", [bid, p.id]) : [[null]];
+      await moneyMove(conn, { businessId: bid, userId: uid, direction: "out", method: p?.method || "cash", account: orig || undefined, amount: cash, refType: "refund", refId: ret.insertId, description: `${s.receipt_no} refund` });
+    }
+    await audit(conn, { businessId: bid, userId: uid, action: "sale.returned", entity: "sale", entityId: s.id, meta: { item: it.id, meters, refund, cash, reason }, ip: req.ip });
+    return { meters, refund, cashRefund: cash, pieceId: back.pieceId };
+  });
+  res.status(201).json(result);
 }));
 
 export default router;

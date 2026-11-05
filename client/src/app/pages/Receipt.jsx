@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest, fileUrl } from "../../services/api.js";
-import { useApi, usePerm, useMoney, Loading, EmptyState, ReasonModal, StatusBadge } from "../ui.jsx";
+import { useApi, usePerm, useMoney, useSubmit, Loading, EmptyState, ReasonModal, StatusBadge, Modal, Field, FormError } from "../ui.jsx";
 import { qty, date, fill } from "../format.js";
 import { savePdf } from "../pdf.js";
 import { PriceDetailLine } from "../Jewelry.jsx";
@@ -23,6 +23,7 @@ export default function Receipt() {
   const m = useMoney();
   const r = useApi(`/api/sales/${id}`);
   const [cancelling, setCancelling] = useState(false);
+  const [returning, setReturning] = useState(false);
   const [savingPdf, setSavingPdf] = useState(false);
   const sheetRef = useRef(null);
   const [paper, setPaper] = useState(() => { try { return localStorage.getItem(PAPER_KEY) === "58" ? "58" : "80"; } catch { return "80"; } });
@@ -63,6 +64,7 @@ export default function Receipt() {
           <div className="seg" role="group" aria-label={t("ui.receipt.paper")}>
             {["58", "80"].map((w) => <button key={w} type="button" aria-pressed={paper === w} onClick={() => choosePaper(w)}>{w} mm</button>)}
           </div>
+          {can("sales.cancel") && s.status === "completed" && items.some((i) => i.rolls?.length && i.baseQty > 0) && <button type="button" className="btn btn--outline" onClick={() => setReturning(true)}><Icon name="scissors" /><span>{t("ui.fabric.returnPart")}</span></button>}
           {can("sales.cancel") && s.status === "completed" && <button type="button" className="btn btn--danger" onClick={() => setCancelling(true)}><Icon name="x" /><span>{t("ui.pos.cancelSale")}</span></button>}
           <button type="button" className="btn btn--outline" onClick={() => window.print()}><Icon name="printer" /><span>{t("invoice.printOnly")}</span></button>
           <button type="button" className="btn btn--primary" onClick={exportPdf} disabled={savingPdf}><Icon name="download" /><span>{t(savingPdf ? "invoice.savingPdf" : "invoice.savePdf")}</span></button>
@@ -143,9 +145,57 @@ export default function Receipt() {
         </footer>
       </article>
 
+      {returning && <ReturnLength sale={s} items={items.filter((i) => i.rolls?.length && i.baseQty > 0)} onClose={() => setReturning(false)} onDone={() => { setReturning(false); r.reload(); }} />}
       {cancelling && <ReasonModal title={t("ui.pos.cancelSale")} help={t("ui.pos.cancelHelp")} confirmLabel={t("ui.pos.cancelSale")}
         onConfirm={(reason) => apiRequest(`/api/sales/${s.id}/cancel`, { method: "POST", body: { reason } }).then(() => r.reload())}
         onClose={() => setCancelling(false)} />}
     </div>
+  );
+}
+
+/* Fabric: part of a cut comes back (e.g. 2 m of 5 m). The receipt shrinks by that share and the money is refunded;
+   the length comes back as a piece waiting for inspection (routes/sales.js return-length). */
+function ReturnLength({ sale, items, onClose, onDone }) {
+  const { t } = useLanguage();
+  const m = useMoney();
+  const [f, setF] = useState({ itemId: String(items[0]?.id || ""), length: "", lengthUnit: "meter", reason: "" });
+  const [done, setDone] = useState(null);
+  const sub = useSubmit();
+  const item = items.find((i) => String(i.id) === f.itemId);
+  const save = async (e) => {
+    e.preventDefault();
+    const res = await sub.run(() => apiRequest(`/api/sales/${sale.id}/return-length`, { method: "POST", body: { ...f, itemId: Number(f.itemId) } }));
+    if (res) setDone(res);
+  };
+  return (
+    <Modal title={t("ui.fabric.returnPart")} onClose={done ? onDone : onClose}>
+      {done ? (
+        <div className="form-grid">
+          <p className="form-status form-status--success">{fill(t("ui.fabric.returnDone"), { m: qty(done.meters), refund: m(done.cashRefund) })}</p>
+          <div className="form-actions"><button type="button" className="btn btn--primary" onClick={onDone}>{t("ui.common.close")}</button></div>
+        </div>
+      ) : (
+        <form onSubmit={save} className="form-grid">
+          <p className="modal__help">{t("ui.fabric.returnHelp")}</p>
+          <Field label={t("ui.common.item")} error={sub.fieldErrors.itemId}>
+            <select className="input" value={f.itemId} onChange={(e) => setF({ ...f, itemId: e.target.value })}>
+              {items.map((i) => <option key={i.id} value={i.id}>{i.name} · {qty(i.baseQty)} m ({i.rolls.map((x) => x.code).join(", ")})</option>)}
+            </select>
+          </Field>
+          <Field label={t("ui.fabric.length")} error={sub.fieldErrors.length} hint={item ? fill(t("ui.fabric.upTo"), { m: qty(item.baseQty) }) : null}>
+            <div className="qty-unit">
+              <input className="input" type="number" min="0" step="any" value={f.length} onChange={(e) => setF({ ...f, length: e.target.value })} placeholder={t("ui.fabric.length")} />
+              <select className="input input--auto" value={f.lengthUnit} onChange={(e) => setF({ ...f, lengthUnit: e.target.value })} aria-label={t("ui.fabric.lengthUnit")}><option value="meter">m</option><option value="yard">yd</option></select>
+            </div>
+          </Field>
+          <Field label={t("ui.common.reason")} error={sub.fieldErrors.reason}><input className="input" value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} placeholder={t("ui.common.reasonPh")} /></Field>
+          <FormError error={sub.formError} />
+          <div className="form-actions sheet-actions">
+            <button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button>
+            <button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.fabric.returnPart")}</button>
+          </div>
+        </form>
+      )}
+    </Modal>
   );
 }

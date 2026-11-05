@@ -319,7 +319,7 @@ function AddStock({ locationsApi }) {
                 <button type="button" className="icon-btn" onClick={() => setLines((ls) => ls.filter((x) => x.product.id !== l.product.id))} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
                 {isRoll(l.product) && (
                   <div className="stock-lines__batch">
-                    <RollEntry value={l.rolls} errors={sub.fieldErrors} field={`items.${lines.indexOf(l)}.rolls`}
+                    <RollEntry value={l.rolls} withCost errors={sub.fieldErrors} field={`items.${lines.indexOf(l)}.rolls`}
                       onChange={(rolls) => setLines((ls) => ls.map((x) => (x.product.id === l.product.id ? { ...x, rolls } : x)))} />
                   </div>
                 )}
@@ -398,7 +398,7 @@ function OpeningStock({ locationsApi }) {
         {product && tracked(product) && Number.isInteger(Number(f.qty)) && Number(f.qty) > 0 && (
           <DeviceEntry tracking={product.tracking} qty={Number(f.qty)} value={f.devices || []} onChange={(devices) => setF((x) => ({ ...x, devices }))} errors={sub.fieldErrors} />
         )}
-        {product && isRoll(product) && <RollEntry value={f.rolls || NEW_ROLLS} onChange={(rolls) => setF((x) => ({ ...x, rolls }))} errors={sub.fieldErrors} />}
+        {product && isRoll(product) && <RollEntry withCost value={f.rolls || NEW_ROLLS} onChange={(rolls) => setF((x) => ({ ...x, rolls }))} errors={sub.fieldErrors} />}
         {here?.hasOpening && <p className="form-status form-status--error">{fill(t("ui.stock.openingExistsHere"), { location: here.location })}</p>}
         {sub.formError && <p className="form-status form-status--error" role="alert">{errText(sub.formError)}</p>}
         <Done text={done} />
@@ -593,7 +593,7 @@ function TransferStock({ locationsApi }) {
   const [pickFor, setPickFor] = useState(null);
   const save = async () => {
     const r = await sub.run(() => apiRequest("/api/stock/transfer", { method: "POST", body: { fromLocationId: from, toLocationId: to, reference: f.reference, notes: f.notes,
-      items: lines.map((l) => ({ productId: l.product.id, qty: Number(l.qty), ...(tracked(l.product) ? { deviceIds: l.deviceIds || [] } : {}), ...(isRoll(l.product) ? { rollIds: l.rollIds || [] } : {}) })) } }));
+      items: lines.map((l) => ({ productId: l.product.id, qty: Number(l.qty), ...(tracked(l.product) ? { deviceIds: l.deviceIds || [] } : {}), ...(isRoll(l.product) ? (l.part ? { cut: { rollId: l.cutRoll?.id, length: Number(l.qty) } } : { rollIds: l.rollIds || [] }) : {}) })) } }));
     setConfirming(false);
     if (r) { draft.finish(); setDone(fill(t("ui.stock.transferDone"), { n: r.count, from: nameOf(from), to: nameOf(to), ref: r.transferRef })); setLines([]); }
   };
@@ -623,7 +623,20 @@ function TransferStock({ locationsApi }) {
                 <span className="prod-thumb">{l.product.imagePath ? <img src={fileUrl(l.product.imagePath)} alt="" /> : <Icon name="package" />}</span>
                 <div className="stock-lines__name"><strong>{l.product.name}</strong><small>{l.available === null ? "…" : fill(t("ui.stock.availableAt"), { qty: qty(l.available), unit: l.product.unit, location: nameOf(from) })}</small></div>
                 {isRoll(l.product) ? (
-                  <button type="button" className="btn btn--outline btn--sm" onClick={() => setPickFor(l.product.id)}><Icon name="roll" /><span>{fill(t("ui.fabric.rollsChosen"), { n: (l.rollIds || []).length })}{Number(l.qty) > 0 ? ` · ${qty(l.qty)} m` : ""}</span></button>
+                  <div className="roll-move">
+                    <div className="seg seg--sm">{[false, true].map((part) => <button key={String(part)} type="button" aria-pressed={Boolean(l.part) === part}
+                      onClick={() => setLines((ls) => ls.map((x) => (x.product.id === l.product.id ? { ...x, part, qty: "", rollIds: [], cutRoll: null } : x)))}>{t(part ? "ui.fabric.partRoll" : "ui.fabric.wholeRolls")}</button>)}</div>
+                    {l.part ? (<>
+                      <button type="button" className="btn btn--outline btn--sm" onClick={() => setPickFor(l.product.id)}><Icon name="roll" /><span>{l.cutRoll ? `${l.cutRoll.code} · ${qty(l.cutRoll.remaining - (l.cutRoll.reserved || 0))} m` : t("ui.fabric.chooseRoll")}</span></button>
+                      <label className="stock-lines__qty">
+                        <input className={"input" + (l.qty !== "" && l.cutRoll && Number(l.qty) > l.cutRoll.remaining - (l.cutRoll.reserved || 0) ? " has-error" : "")} type="number" min="0" step="any" value={l.qty} disabled={!l.cutRoll}
+                          onChange={(e) => setLines((ls) => ls.map((x) => (x.product.id === l.product.id ? { ...x, qty: e.target.value } : x)))} placeholder="0" aria-label={t("ui.fabric.length")} />
+                        <span>m</span>
+                      </label>
+                    </>) : (
+                      <button type="button" className="btn btn--outline btn--sm" onClick={() => setPickFor(l.product.id)}><Icon name="roll" /><span>{fill(t("ui.fabric.rollsChosen"), { n: (l.rollIds || []).length })}{Number(l.qty) > 0 ? ` · ${qty(l.qty)} m` : ""}</span></button>
+                    )}
+                  </div>
                 ) : tracked(l.product) ? (
                   <button type="button" className="btn btn--outline btn--sm" onClick={() => setPickFor(l.product.id)}><Icon name="smartphone" /><span>{fill(t("ui.devices.count"), { n: (l.deviceIds || []).length })}</span></button>
                 ) : (
@@ -639,6 +652,10 @@ function TransferStock({ locationsApi }) {
         )}
         {pickFor && (() => {
           const l = lines.find((x) => x.product.id === pickFor);
+          if (l && isRoll(l.product) && l.part) {
+            return <RollPicker product={l.product} sellable={false} locationId={from} title={fill(t("ui.fabric.chooseMove"), { name: l.product.name })} onClose={() => setPickFor(null)} filter={(r) => r.status === "available"}
+              onDone={(ids, rolls) => { setLines((ls) => ls.map((x) => (x.product.id === pickFor ? { ...x, cutRoll: rolls[0] } : x))); setPickFor(null); }} />;
+          }
           if (l && isRoll(l.product)) {
             return <RollPicker product={l.product} multi sellable={false} locationId={from} value={l.rollIds || []} title={fill(t("ui.fabric.chooseMove"), { name: l.product.name })} onClose={() => setPickFor(null)}
               onDone={(ids, rolls) => { setLines((ls) => ls.map((x) => (x.product.id === pickFor ? { ...x, rollIds: ids, qty: String(r4(rolls.reduce((s, r) => s + r.remaining, 0))) } : x))); setPickFor(null); }} />;

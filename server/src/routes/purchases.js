@@ -11,7 +11,7 @@ import { defaultLocationId } from "../lib/stock.js";
 import { isTracked, readNewDevices, addDevices, pickDevices, updateDevices, deviceLabel } from "../lib/devices.js";
 import { currentRates } from "../lib/jewelry.js";
 import { branchSql, branchLocation } from "../lib/branches.js";
-import { isRoll, readNewRolls, addRolls, sumMeters, lockRoll, rollEvent, toMeters, YARD } from "../lib/rolls.js";
+import { isRoll, readNewRolls, addRolls, sumMeters, lockRoll, rollEvent, toMeters, YARD, averageRollCost } from "../lib/rolls.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -117,7 +117,7 @@ export async function createPurchase(conn, ctx, body) {
         l.detail ? JSON.stringify(l.detail) : null]);
     if (receive) {
       const devices = isTracked(l.product) ? readNewDevices(l.product, l.devices, l.qty, `items.${i}.devices`) : null;
-      await receiveLine(conn, { businessId, userId, purchaseId: r.insertId, number, supplierId, locationId }, { ...l, itemId: it.insertId, devices });
+      await receiveLine(conn, { businessId, userId, purchaseId: r.insertId, number, supplierId, locationId, landed: landedFactor(ordered, discount, extra) }, { ...l, itemId: it.insertId, devices });
     }
   }
   if (amountPaid > 0) {
@@ -127,13 +127,16 @@ export async function createPurchase(conn, ctx, body) {
   return { id: r.insertId, number, total, status: receive ? "received" : mode === "draft" ? "draft" : "ordered" };
 }
 
+/* Rolls carry their share of the purchase's discount and extra costs (transport, customs…), spread by value. */
+const landedFactor = (ordered, discount, extra) => (ordered > 0 ? (ordered - discount + extra) / ordered : 1);
+
 /* Goods received for one line: stock in (base units, with batch / expiry and devices), the product cost updated. */
-async function receiveLine(conn, { businessId, userId, purchaseId, number, supplierId, locationId }, l) {
+async function receiveLine(conn, { businessId, userId, purchaseId, number, supplierId, locationId, landed = 1 }, l) {
   const batches = l.batchNo || l.expiryDate ? [{ batchNo: l.batchNo || "", expiryDate: l.expiryDate || null, qty: l.qty }] : [];
-  // rolls: l.qty is the declared (billed) length; the verified length is stocked at the billed value
+  // rolls: l.qty is the declared (billed) length; the verified length is stocked at the billed value (plus its share of extra costs)
   if (l.rolls) {
     const verified = sumMeters(l.rolls, "verified");
-    l.unitCost = q4((l.qty * l.unitCost) / verified);
+    l.unitCost = q4((l.qty * l.unitCost * landed) / verified);
     l.qty = verified;
   }
   const m = await moveStock(conn, { businessId, userId, product: l.product, qtyChange: l.qty, type: "purchase", refType: "purchase", refId: purchaseId,
@@ -146,13 +149,15 @@ async function receiveLine(conn, { businessId, userId, purchaseId, number, suppl
     await addDevices(conn, { businessId, product: l.product, locationId, devices: l.devices, purchaseId, supplierId, cost: l.unitCost, userId,
       event: "received", refType: "purchase", refId: purchaseId });
   }
-  if (num(l.product.cost_price) !== l.unitCost) {
+  // rolls: the product's cost is the average of the rolls on hand (each roll keeps its own cost for sales)
+  const cost = l.rolls ? (await averageRollCost(conn, businessId, l.product.id)) ?? l.unitCost : l.unitCost;
+  if (num(l.product.cost_price) !== cost) {
     // purchase cost changes are part of the product's change history
     await audit(conn, { businessId, userId, action: "product.changed", entity: "product", entityId: l.product.id,
-      meta: { changes: [{ field: "costPrice", from: num(l.product.cost_price), to: l.unitCost }], source: number } });
-    l.product.cost_price = l.unitCost;
+      meta: { changes: [{ field: "costPrice", from: num(l.product.cost_price), to: cost }], source: number } });
+    l.product.cost_price = cost;
   }
-  await conn.query("UPDATE products SET cost_price = ? WHERE id = ? AND business_id = ?", [l.unitCost, l.product.id, businessId]);
+  await conn.query("UPDATE products SET cost_price = ? WHERE id = ? AND business_id = ?", [cost, l.product.id, businessId]);
   return m;
 }
 
@@ -262,6 +267,7 @@ router.post("/:id/receive", requirePerm("purchases.create"), ah(async (req, res)
     const [items] = await conn.query("SELECT * FROM purchase_items WHERE purchase_id = ? AND business_id = ? ORDER BY id FOR UPDATE", [p.id, bid]);
     const products = await lockProducts(conn, bid, items.map((i) => i.product_id));
     let units = 0;
+    const landed = landedFactor(items.reduce((s, i) => s + num(i.line_total), 0), num(p.discount), num(p.extra_costs));
     for (const [k, i] of items.entries()) {
       const g = given.get(i.id) || (given.size ? null : {});
       if (!g) continue;
@@ -290,7 +296,7 @@ router.post("/:id/receive", requirePerm("purchases.create"), ah(async (req, res)
       const expiryDate = batch ? batch.expiryDate || null : g.expiryDate !== undefined ? null : i.expiry_date;
       if (qty > 0) {
         const devices = isTracked(product) ? readNewDevices(product, g.devices, qty, `items.${k}.devices`) : null;
-        await receiveLine(conn, { businessId: bid, userId: req.user.id, purchaseId: p.id, number: p.purchase_no, supplierId: p.supplier_id, locationId },
+        await receiveLine(conn, { businessId: bid, userId: req.user.id, purchaseId: p.id, number: p.purchase_no, supplierId: p.supplier_id, locationId, landed },
           { product, qty, unitCost: num(i.unit_cost), batchNo, expiryDate, devices, rolls });
       }
       await conn.query("UPDATE purchase_items SET received_qty = received_qty + ?, damaged_qty = damaged_qty + ?, batch_no = ?, expiry_date = ? WHERE id = ?",

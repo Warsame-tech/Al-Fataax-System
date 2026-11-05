@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { apiRequest } from "../services/api.js";
-import { PageHeader, useApi, usePerm, useSubmit, useMoney, useErrorText, Modal, Field, FormError, EmptyState, Loading, SearchBox, PaymentFields } from "./ui.jsx";
+import JsBarcode from "jsbarcode";
+import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, Modal, Field, FormError, EmptyState, Loading, SearchBox, PaymentFields, DateRange, daysAgo, isoDate } from "./ui.jsx";
 import { date, fill, qty } from "./format.js";
 import { useAuth } from "../auth/AuthContext.jsx";
 
@@ -22,25 +23,46 @@ export const toMeters = (v, unit) => (unit === "yard" ? q4(Number(v) * YARD) : q
 export const toYards = (m) => q4(Number(m) / YARD);
 /** "45 m · 49.2126 yd" */
 export const lengthText = (m) => `${qty(m)} m · ${qty(toYards(m))} yd`;
+/** what can be cut from a roll: its length less what is held for an order */
+export const rollAvailable = (r) => q4((r?.remaining || 0) - (r?.reserved || 0));
+/**
+ * Price of one unit sold (a meter, a yard or the whole roll) — the same rules as the server (routes/sales.js fabricPrice):
+ * a roll's own price wins; otherwise the meter / yard / whole-roll prices (wholesale ones on the wholesale price list).
+ */
+export function fabricPrice(p, roll, unit, priceList = "retail") {
+  const wholesale = priceList === "wholesale";
+  const override = roll?.priceOverride ?? null;
+  const meter = override ?? (wholesale ? p.wholesalePrice ?? p.sellingPrice : p.sellingPrice);
+  if (unit === "roll") return q4((override ?? (wholesale ? meter : p.rollRate ?? meter)) * (roll?.remaining || 0));
+  if (unit === "yard") return (override === null ? (wholesale ? p.wholesaleYardPrice : p.yardPrice) : null) ?? q4(meter * YARD);
+  return meter;
+}
 
 /* ===================== Rolls coming in ===================== */
 /**
- * value: { unit: "meter" | "yard", rolls: [{ code, declared, verified }] }. unitFixed: the unit comes from the line (purchases).
- * Quick fill: the same declared / verified length for n rolls (e.g. 10 rolls, 50 declared, 48.5 verified).
+ * value: { unit: "meter" | "yard", rolls: [{ code, declared, verified, dyeLot, cost }] }. unitFixed: the unit comes from the line (purchases).
+ * withCost: each roll's own cost (opening stock, stock in; purchases take the line's price instead).
+ * Quick fill: the same declared / verified length (and dye lot) for n rolls (e.g. 10 rolls, 50 declared, 48.5 verified).
+ * Paste: a packing list, one roll per line — "ID length" or "ID, declared, verified" (tabs, commas or spaces).
  */
-export function RollEntry({ value, onChange, unitFixed = null, errors = {}, field = "rolls" }) {
+export function RollEntry({ value, onChange, unitFixed = null, errors = {}, field = "rolls", withCost = false }) {
   const { t } = useLanguage();
   const unit = unitFixed || value.unit || "meter";
   const rows = value.rolls || [];
-  const [quick, setQuick] = useState({ n: "", declared: "", verified: "" });
+  const [quick, setQuick] = useState({ n: "", declared: "", verified: "", dyeLot: "" });
+  const [pasting, setPasting] = useState(null);
   const boxRef = useRef(null);
   const set = (patch) => onChange({ unit, rolls: rows, ...patch });
   const setRow = (i, k, v) => set({ rolls: rows.map((r, j) => (j === i ? { ...r, [k]: v } : r)) });
+  const kept = () => rows.filter((r) => String(r.code || r.declared || r.verified).trim());
   const fillRows = () => {
     const n = Math.min(200, Math.max(0, Math.floor(Number(quick.n) || 0)));
     if (!n) return;
-    set({ rolls: [...rows.filter((r) => String(r.code || r.declared || r.verified).trim()), ...Array.from({ length: n }, () => ({ code: "", declared: quick.declared, verified: quick.verified || quick.declared }))] });
+    set({ rolls: [...kept(), ...Array.from({ length: n }, () => ({ code: "", declared: quick.declared, verified: quick.verified || quick.declared, dyeLot: quick.dyeLot, cost: "" }))] });
   };
+  const pasted = (pasting || "").split(/\r?\n/).map((line) => line.trim().split(/[\t,;]+|\s+/).filter(Boolean)).filter((x) => x.length >= 2 && Number(x[1]) > 0)
+    .map((x) => ({ code: x[0], declared: x[1], verified: Number(x[2]) > 0 ? x[2] : x[1], dyeLot: x[3] || "", cost: "" }));
+  const usePaste = () => { set({ rolls: [...kept(), ...pasted].slice(0, 200) }); setPasting(null); };
   const next = (e) => {
     if (e.key !== "Enter") return;
     e.preventDefault();
@@ -61,12 +83,21 @@ export function RollEntry({ value, onChange, unitFixed = null, errors = {}, fiel
         <input className="input input--sm" type="number" min="1" step="1" value={quick.n} onChange={(e) => setQuick({ ...quick, n: e.target.value })} placeholder={t("ui.fabric.count")} aria-label={t("ui.fabric.count")} />
         <input className="input input--sm" type="number" min="0" step="any" value={quick.declared} onChange={(e) => setQuick({ ...quick, declared: e.target.value })} placeholder={`${t("ui.fabric.declared")} (${u})`} aria-label={t("ui.fabric.declared")} />
         <input className="input input--sm" type="number" min="0" step="any" value={quick.verified} onChange={(e) => setQuick({ ...quick, verified: e.target.value })} placeholder={`${t("ui.fabric.verified")} (${u})`} aria-label={t("ui.fabric.verified")} />
+        <input className="input input--sm" value={quick.dyeLot} onChange={(e) => setQuick({ ...quick, dyeLot: e.target.value })} placeholder={t("ui.fabric.dyeLot")} aria-label={t("ui.fabric.dyeLot")} maxLength={40} />
         <button type="button" className="btn btn--outline btn--sm" onClick={fillRows} disabled={!(Number(quick.n) > 0) || !(Number(quick.declared || quick.verified) > 0)}><Icon name="copy" /><span>{fill(t("ui.fabric.fillN"), { n: Number(quick.n) || 0 })}</span></button>
+        <button type="button" className="btn btn--outline btn--sm" onClick={() => setPasting(pasting === null ? "" : null)} aria-expanded={pasting !== null}><Icon name="download" /><span>{t("ui.fabric.paste")}</span></button>
       </div>
+      {pasting !== null && (
+        <div className="roll-entry__paste">
+          <textarea className="input" rows={4} value={pasting} onChange={(e) => setPasting(e.target.value)} placeholder={t("ui.fabric.pastePh")} aria-label={t("ui.fabric.paste")} />
+          <button type="button" className="btn btn--primary btn--sm" onClick={usePaste} disabled={!pasted.length}>{fill(t("ui.fabric.pasteUse"), { n: pasted.length })}</button>
+        </div>
+      )}
       {errors[field] && <span className="ff__error">{t(`ui.errors.${errors[field]}`)}</span>}
       {rows.length > 0 && (
-        <div className="roll-entry__rows">
-          <div className="roll-entry__row roll-entry__row--head" aria-hidden="true"><span>#</span><span>{t("ui.fabric.rollId")}</span><span>{t("ui.fabric.declared")} ({u})</span><span>{t("ui.fabric.verified")} ({u})</span><span /></div>
+        <div className={"roll-entry__rows" + (withCost ? " has-cost" : "")}>
+          <div className="roll-entry__row roll-entry__row--head" aria-hidden="true"><span>#</span><span>{t("ui.fabric.rollId")}</span><span>{t("ui.fabric.declared")} ({u})</span><span>{t("ui.fabric.verified")} ({u})</span>
+            <span>{t("ui.fabric.dyeLot")}</span>{withCost && <span>{t("ui.fabric.rollCost")}</span>}<span /></div>
           {rows.map((r, i) => {
             const short = Number(r.declared) > 0 && Number(r.verified) > 0 ? q4(Number(r.declared) - Number(r.verified)) : 0;
             return (
@@ -78,14 +109,17 @@ export function RollEntry({ value, onChange, unitFixed = null, errors = {}, fiel
                   <input className={"input input--sm" + (errors[`${field}.${i}.verified`] ? " has-error" : "")} type="number" min="0" step="any" value={r.verified} onChange={(e) => setRow(i, "verified", e.target.value)} onKeyDown={next} placeholder={t("ui.fabric.verified")} aria-label={t("ui.fabric.verified")} />
                   {short !== 0 && <small className={short > 0 ? "is-neg" : "is-pos"}>{short > 0 ? "−" : "+"}{qty(Math.abs(short))}</small>}
                 </span>
+                <input className="input input--sm" value={r.dyeLot || ""} onChange={(e) => setRow(i, "dyeLot", e.target.value)} onKeyDown={next} placeholder={t("ui.fabric.dyeLot")} aria-label={t("ui.fabric.dyeLot")} maxLength={40} />
+                {withCost && <input className={"input input--sm" + (errors[`${field}.${i}.cost`] ? " has-error" : "")} type="number" min="0" step="any" value={r.cost || ""} onChange={(e) => setRow(i, "cost", e.target.value)} onKeyDown={next} placeholder={t("ui.fabric.rollCost")} aria-label={t("ui.fabric.rollCost")} />}
                 <button type="button" className="icon-btn" onClick={() => set({ rolls: rows.filter((_, j) => j !== i) })} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
               </div>
             );
           })}
         </div>
       )}
+      {withCost && rows.length > 0 && <small className="ff__hint">{t("ui.fabric.rollCostHint")}</small>}
       <div className="roll-entry__foot">
-        <button type="button" className="btn btn--outline btn--sm" onClick={() => set({ rolls: [...rows, { code: "", declared: "", verified: "" }] })}><Icon name="plus" /><span>{t("ui.fabric.addRoll")}</span></button>
+        <button type="button" className="btn btn--outline btn--sm" onClick={() => set({ rolls: [...rows, { code: "", declared: "", verified: "", dyeLot: rows.at(-1)?.dyeLot || "", cost: "" }] })}><Icon name="plus" /><span>{t("ui.fabric.addRoll")}</span></button>
         {rows.length > 0 && <span className="muted">{fill(t("ui.fabric.entryTotals"), { n: rows.length, declared: `${qty(sum("declared"))} ${u}`, verified: `${qty(sum("verified"))} ${u}` })}
           {unit === "yard" && ` = ${qty(toMeters(sum("verified"), "yard"))} m`}</span>}
       </div>
@@ -95,7 +129,8 @@ export function RollEntry({ value, onChange, unitFixed = null, errors = {}, fiel
 }
 /** RollEntry value → what the API takes */
 export const rollsPayload = (v) => (v?.rolls || []).filter((r) => String(r.code || "").trim() || String(r.declared || "").trim() || String(r.verified || "").trim())
-  .map((r) => ({ code: String(r.code || "").trim(), declared: r.declared === "" ? null : r.declared, verified: r.verified === "" ? r.declared : r.verified }));
+  .map((r) => ({ code: String(r.code || "").trim(), declared: r.declared === "" ? null : r.declared, verified: r.verified === "" ? r.declared : r.verified,
+    dyeLot: String(r.dyeLot || "").trim(), ...(String(r.cost ?? "").trim() !== "" ? { cost: r.cost } : {}) }));
 /** verified meters in a RollEntry value */
 export const rollsVerified = (v) => q4((v?.rolls || []).reduce((s, r) => s + toMeters(Number(r.verified || r.declared) || 0, v.unit), 0));
 export const rollsDeclared = (v) => q4((v?.rolls || []).reduce((s, r) => s + (Number(r.declared || r.verified) || 0), 0));
@@ -105,8 +140,9 @@ export const rollsDeclared = (v) => q4((v?.rolls || []).reduce((s, r) => s + (Nu
  * Lists a product's rolls: sellable (available at the POS location) by default, or { locationId, statuses } for transfers;
  * filter(r) narrows (e.g. rolls of one purchase). multi: tick several; otherwise a click picks one.
  */
-export function RollPicker({ product, multi = false, value = [], locationId = null, sellable = true, filter, onDone, onClose, title, list: given }) {
+export function RollPicker({ product, multi = false, value = [], locationId = null, sellable = true, filter, onDone, onClose, title, list: given, lots = [] }) {
   const { t, lang } = useLanguage();
+  const m = useMoney();
   const params = new URLSearchParams({ productId: product.id, ...(sellable ? { sellable: "1" } : { status: "in_stock" }), ...(locationId ? { locationId } : {}) });
   const res = useApi(given ? null : `/api/rolls?${params}`);
   const [chosen, setChosen] = useState(value);
@@ -137,9 +173,16 @@ export function RollPicker({ product, multi = false, value = [], locationId = nu
               <li key={r.id}>
                 <label className={"device-picker__item" + (chosen.includes(r.id) ? " is-on" : "")} onClick={multi ? undefined : (e) => { e.preventDefault(); pick(r); }}>
                   {multi ? <input type="checkbox" checked={chosen.includes(r.id)} onChange={() => pick(r)} /> : <Icon name="roll" />}
-                  <span><strong>{r.code}</strong> · {lengthText(r.remaining)}
-                    {r.status !== "available" && <> · <span className={`roll-status is-${r.status}`}>{t(`ui.fabric.status.${r.status}`)}</span></>}</span>
-                  <small className="muted">{[r.location, r.verified !== r.remaining ? fill(t("ui.fabric.ofVerified"), { m: qty(r.verified) }) : null, r.receivedAt ? date(r.receivedAt, lang) : null].filter(Boolean).join(" · ")}</small>
+                  <span><strong>{r.code}</strong> · {lengthText(sellable ? rollAvailable(r) : r.remaining)}
+                    {r.status !== "available" && <> · <span className={`roll-status is-${r.status}`}>{t(`ui.fabric.status.${r.status}`)}</span></>}
+                    {r.remnant && <> <span className="roll-badge is-remnant">{t("ui.fabric.remnant")}</span></>}
+                    {r.dyeLot && <> <span className={"roll-badge" + (lots.length && !lots.includes(r.dyeLot) ? " is-warn" : "")}>{fill(t("ui.fabric.lotN"), { lot: r.dyeLot })}</span></>}</span>
+                  <span className="roll-bar" aria-hidden="true"><span style={{ width: `${Math.max(2, Math.min(100, (r.remaining / (r.verified || r.remaining || 1)) * 100))}%` }} /></span>
+                  <small className="muted">{[r.location, r.verified !== r.remaining ? fill(t("ui.fabric.ofVerified"), { m: qty(r.verified) }) : null,
+                    r.reserved > 0 ? fill(t("ui.fabric.reservedFor"), { m: qty(r.reserved), who: r.reservedFor || "" }) : null,
+                    r.priceOverride !== null && r.priceOverride !== undefined ? fill(t("ui.fabric.rollPriceShort"), { price: m(r.priceOverride) }) : null,
+                    r.receivedAt ? date(r.receivedAt, lang) : null].filter(Boolean).join(" · ")}</small>
+                  {lots.length > 0 && r.dyeLot && !lots.includes(r.dyeLot) && <small className="roll-warn"><Icon name="alert" /> {fill(t("ui.fabric.otherLot"), { lots: lots.join(", ") })}</small>}
                 </label>
               </li>
             ))}
@@ -157,21 +200,67 @@ export function RollPicker({ product, multi = false, value = [], locationId = nu
 /* ===================== Rolls page ===================== */
 const STATUSES = ["available", "pending_inspection", "finished", "damaged", "returned_supplier"];
 
+/** Printable roll labels (60 × 40 mm): roll ID barcode (Code 128), fabric, length, dye lot. */
+export function printRollLabels(rolls, shop) {
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+  const labels = rolls.map((r) => {
+    const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+    JsBarcode(svg, r.code, { format: "CODE128", height: 42, width: 1.6, fontSize: 13, margin: 0 });
+    return `<div class="label"><div class="shop">${esc(shop)}</div><div class="name">${esc(r.product)}</div>${svg.outerHTML}
+      <div class="meta">${esc(lengthText(r.remaining))}${r.dyeLot ? ` · Lot ${esc(r.dyeLot)}` : ""}</div></div>`;
+  }).join("");
+  const w = window.open("", "_blank", "width=720,height=640");
+  if (!w) return false;
+  w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Roll labels</title><style>
+    @page { margin: 6mm; } body { margin: 0; font-family: system-ui, sans-serif; }
+    .sheet { display: flex; flex-wrap: wrap; gap: 3mm; } .label { width: 60mm; height: 40mm; box-sizing: border-box; padding: 2.5mm; border: 1px dashed #bbb; display: flex; flex-direction: column; align-items: center; justify-content: space-between; overflow: hidden; page-break-inside: avoid; }
+    .shop { font-size: 8pt; color: #555; } .name { font-size: 9.5pt; font-weight: 600; text-align: center; } .label svg { max-width: 100%; height: auto; } .meta { font-size: 8pt; }
+  </style></head><body><div class="sheet">${labels}</div><script>window.onload = () => { window.print(); };</script></body></html>`);
+  w.document.close();
+  return true;
+}
+
 export function RollsPage() {
-  const { t, lang } = useLanguage();
-  const m = useMoney();
+  const { t } = useLanguage();
   const can = usePerm();
-  const [q, setQ] = useState("");
-  const [status, setStatus] = useState("in_stock");
-  const [productId, setProductId] = useState("");
-  const list = useApi(`/api/rolls?${new URLSearchParams({ q, status, productId })}`);
-  const [open, setOpen] = useState(null);
-  const rows = list.data?.rolls || [];
-  const totals = list.data?.products || [];
+  const tabs = [
+    { id: "rolls", icon: "roll", label: t("ui.fabric.tabRolls") },
+    can("stock.adjust") && { id: "count", icon: "ruler", label: t("ui.fabric.tabCount") },
+    can("reports.view") && { id: "report", icon: "file-chart", label: t("ui.fabric.tabReport") }
+  ].filter(Boolean);
+  const [tab, setTab] = useState("rolls");
   return (
     <div className="page">
       <PageHeader icon="roll" title={t("app.modules.rolls")} actions={can("stock.add") && <Link className="btn btn--primary" to="/app/m/stock?tab=add"><Icon name="plus" /><span>{t("ui.fabric.receiveRolls")}</span></Link>} />
       <p className="page-help"><Icon name="info" /> {t("ui.fabric.help")}</p>
+      {tabs.length > 1 && <Tabs tabs={tabs} value={tab} onChange={setTab} />}
+      {tab === "rolls" && <RollList />}
+      {tab === "count" && <CountSheet />}
+      {tab === "report" && <FabricReport />}
+    </div>
+  );
+}
+
+const VIEWS = ["in_stock", "remnant", "reserved", "short"];
+
+function RollList() {
+  const { t, lang } = useLanguage();
+  const m = useMoney();
+  const { business } = useAuth();
+  const [q, setQ] = useState("");
+  const [view, setView] = useState("in_stock");
+  const [dyeLot, setDyeLot] = useState("");
+  const [productId, setProductId] = useState("");
+  const query = VIEWS.includes(view) && view !== "in_stock" ? { [view]: "1", status: "in_stock" } : { status: view };
+  const list = useApi(`/api/rolls?${new URLSearchParams({ q, productId, dyeLot: dyeLot.trim(), ...query })}`);
+  const [open, setOpen] = useState(null);
+  const [picked, setPicked] = useState([]);
+  const rows = list.data?.rolls || [];
+  const totals = list.data?.products || [];
+  const toggle = (id) => setPicked((p) => (p.includes(id) ? p.filter((x) => x !== id) : [...p, id]));
+  const labelRolls = rows.filter((r) => picked.includes(r.id));
+  return (
+    <>
       {totals.length > 0 && (
         <div className="roll-totals">
           {totals.map((x) => (
@@ -185,24 +274,32 @@ export function RollsPage() {
       )}
       <div className="toolbar">
         <SearchBox value={q} onChange={setQ} placeholder={t("ui.fabric.searchPh")} />
-        <select className="input input--auto" value={status} onChange={(e) => setStatus(e.target.value)} aria-label={t("ui.common.status")}>
-          <option value="in_stock">{t("ui.fabric.inStock")}</option>
+        <select className="input input--auto" value={view} onChange={(e) => setView(e.target.value)} aria-label={t("ui.common.status")}>
+          {VIEWS.map((v) => <option key={v} value={v}>{t(`ui.fabric.views.${v}`)}</option>)}
           <option value="">{t("ui.common.all")}</option>
           {STATUSES.map((s) => <option key={s} value={s}>{t(`ui.fabric.status.${s}`)}</option>)}
         </select>
+        <input className="input input--auto" value={dyeLot} onChange={(e) => setDyeLot(e.target.value)} placeholder={t("ui.fabric.dyeLot")} aria-label={t("ui.fabric.dyeLot")} maxLength={40} />
+        <button type="button" className="btn btn--outline" disabled={!labelRolls.length} onClick={() => printRollLabels(labelRolls, business?.name)}>
+          <Icon name="printer" /><span>{fill(t("ui.fabric.printLabels"), { n: labelRolls.length })}</span></button>
       </div>
       {list.loading && !list.data ? <Loading /> : rows.length === 0 ? <EmptyState icon="roll" text={t("ui.fabric.noRolls")} /> : (
         <div className="table-wrap"><table className="table">
-          <thead><tr><th>{t("ui.fabric.rollId")}</th><th>{t("ui.common.product")}</th><th className="num">{t("ui.fabric.remaining")}</th><th className="num">{t("ui.fabric.verified")}</th><th className="num">{t("ui.fabric.declared")}</th>
-            <th className="num">{t("ui.fabric.costPerMeter")}</th><th>{t("ui.stock.location")}</th><th>{t("ui.common.status")}</th><th>{t("ui.fabric.receivedOn")}</th></tr></thead>
+          <thead><tr><th><input type="checkbox" aria-label={t("ui.fabric.pickAll")} checked={picked.length > 0 && rows.every((r) => picked.includes(r.id))} onChange={(e) => setPicked(e.target.checked ? rows.map((r) => r.id) : [])} /></th>
+            <th>{t("ui.fabric.rollId")}</th><th>{t("ui.common.product")}</th><th className="num">{t("ui.fabric.remaining")}</th><th className="num">{t("ui.fabric.verified")}</th><th className="num">{t("ui.fabric.declared")}</th>
+            <th>{t("ui.fabric.dyeLot")}</th><th className="num">{t("ui.fabric.costPerMeter")}</th><th>{t("ui.stock.location")}</th><th>{t("ui.common.status")}</th><th>{t("ui.fabric.receivedOn")}</th></tr></thead>
           <tbody>{rows.map((r) => (
             <tr key={r.id} className="is-clickable" onClick={() => setOpen(r.id)}>
-              <td><strong>{r.code}</strong>{r.supplier && <small className="cell-sub">{r.supplier}{r.purchaseNo ? ` · ${r.purchaseNo}` : ""}</small>}</td>
+              <td onClick={(e) => e.stopPropagation()}><input type="checkbox" checked={picked.includes(r.id)} onChange={() => toggle(r.id)} aria-label={r.code} /></td>
+              <td><strong>{r.code}</strong>{r.parentRoll && <small className="cell-sub">{fill(t("ui.fabric.fromRoll"), { roll: r.parentRoll })}</small>}{r.supplier && <small className="cell-sub">{r.supplier}{r.purchaseNo ? ` · ${r.purchaseNo}` : ""}</small>}</td>
               <td>{r.product}</td>
-              <td className="num"><strong>{qty(r.remaining)} m</strong><small className="cell-sub">{qty(r.remainingYards)} yd</small></td>
+              <td className="num"><strong>{qty(r.remaining)} m</strong><small className="cell-sub">{qty(r.remainingYards)} yd</small>
+                {r.reserved > 0 && <small className="cell-sub roll-badge">{fill(t("ui.fabric.heldM"), { m: qty(r.reserved) })}</small>}
+                {r.remnant && <small className="cell-sub"><span className="roll-badge is-remnant">{t("ui.fabric.remnant")}</span></small>}</td>
               <td className="num">{qty(r.verified)} m</td>
               <td className="num">{r.declared === null ? "—" : `${qty(r.declared)} m`}{r.shortage > 0 && <small className="cell-sub is-neg">−{qty(r.shortage)} m</small>}</td>
-              <td className="num">{r.costPerMeter === null ? "—" : m(r.costPerMeter)}</td>
+              <td>{r.dyeLot || "—"}</td>
+              <td className="num">{r.costPerMeter === null ? "—" : m(r.costPerMeter)}{r.priceOverride !== null && <small className="cell-sub">{fill(t("ui.fabric.rollPriceShort"), { price: m(r.priceOverride) })}</small>}</td>
               <td>{r.location || "—"}</td>
               <td><span className={`roll-status is-${r.status}`}>{t(`ui.fabric.status.${r.status}`)}</span></td>
               <td>{date(r.receivedAt, lang)}</td>
@@ -211,7 +308,99 @@ export function RollsPage() {
         </table></div>
       )}
       {open && <RollDetail id={open} onClose={() => setOpen(null)} onChanged={() => list.reload()} />}
-    </div>
+    </>
+  );
+}
+
+/* Stocktaking a location: every roll there, measured length typed in; only differences are saved (count corrections). */
+function CountSheet() {
+  const { t } = useLanguage();
+  const locations = useApi("/api/stock/locations");
+  const [locationId, setLocationId] = useState("");
+  const [unit, setUnit] = useState("meter");
+  const list = useApi(locationId ? `/api/rolls?${new URLSearchParams({ locationId, status: "available" })}` : null);
+  const [counts, setCounts] = useState({});
+  const [done, setDone] = useState(null);
+  const sub = useSubmit();
+  const rows = list.data?.rolls || [];
+  const diffs = rows.filter((r) => counts[r.id] !== undefined && counts[r.id] !== "" && Math.abs(toMeters(counts[r.id], unit) - r.remaining) > 0.00005);
+  const save = async () => {
+    const r = await sub.run(() => apiRequest("/api/rolls/count", { method: "POST", body: { locationId: Number(locationId), lengthUnit: unit, counts: diffs.map((x) => ({ rollId: x.id, length: counts[x.id] })) } }));
+    if (r) { setDone(r); setCounts({}); list.reload(); }
+  };
+  return (
+    <section className="form-grid">
+      <p className="muted">{t("ui.fabric.countHelp")}</p>
+      <div className="toolbar">
+        <select className="input input--auto" value={locationId} onChange={(e) => { setLocationId(e.target.value); setCounts({}); setDone(null); }} aria-label={t("ui.stock.location")}>
+          <option value="">{t("ui.fabric.chooseLocation")}</option>
+          {(locations.data?.locations || []).filter((l) => l.isActive).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}
+        </select>
+        <div className="seg seg--sm">{["meter", "yard"].map((x) => <button key={x} type="button" aria-pressed={unit === x} onClick={() => setUnit(x)}>{t(`ui.fabric.unitsLong.${x}`)}</button>)}</div>
+      </div>
+      {done && <p className="form-status form-status--success">{fill(t("ui.fabric.countSaved"), { n: done.changed, m: qty(done.difference) })}</p>}
+      {locationId && (list.loading && !list.data ? <Loading /> : rows.length === 0 ? <EmptyState icon="roll" text={t("ui.fabric.noRolls")} /> : (
+        <div className="table-wrap"><table className="table">
+          <thead><tr><th>{t("ui.fabric.rollId")}</th><th>{t("ui.common.product")}</th><th className="num">{t("ui.fabric.onRecord")}</th><th className="num">{t("ui.fabric.measuredLength")} ({unit === "yard" ? "yd" : "m"})</th><th className="num">{t("ui.fabric.difference")}</th></tr></thead>
+          <tbody>{rows.map((r) => {
+            const v = counts[r.id];
+            const diff = v === undefined || v === "" ? null : q4(toMeters(v, unit) - r.remaining);
+            return (
+              <tr key={r.id}>
+                <td><strong>{r.code}</strong>{r.dyeLot && <small className="cell-sub">{fill(t("ui.fabric.lotN"), { lot: r.dyeLot })}</small>}</td>
+                <td>{r.product}</td>
+                <td className="num">{qty(unit === "yard" ? r.remainingYards : r.remaining)}</td>
+                <td className="num"><input className="input input--sm input--num" type="number" min="0" step="any" value={v ?? ""} onChange={(e) => setCounts({ ...counts, [r.id]: e.target.value })} aria-label={`${t("ui.fabric.measuredLength")} ${r.code}`} /></td>
+                <td className={"num" + (diff < 0 ? " is-neg" : diff > 0 ? " is-pos" : "")}>{diff === null ? "—" : `${diff > 0 ? "+" : ""}${qty(diff)} m`}</td>
+              </tr>
+            );
+          })}</tbody>
+        </table></div>
+      ))}
+      <FormError error={sub.formError} />
+      {locationId && rows.length > 0 && <div className="form-actions"><button type="button" className="btn btn--primary" disabled={!diffs.length || sub.busy} onClick={save}>{fill(t("ui.fabric.saveCount"), { n: diffs.length })}</button></div>}
+    </section>
+  );
+}
+
+/* Profit by supplier and by roll (each roll's own cost), and supplier shortages against declared lengths. */
+function FabricReport() {
+  const { t } = useLanguage();
+  const m = useMoney();
+  const [range, setRange] = useState({ from: daysAgo(29), to: isoDate(new Date()) });
+  const r = useApi(`/api/rolls/report?${new URLSearchParams(range)}`);
+  const d = r.data;
+  const pct = (x) => (x === null ? "—" : `${x}%`);
+  return (
+    <section className="form-grid">
+      <div className="toolbar"><DateRange value={range} onChange={setRange} /></div>
+      {!d ? <Loading /> : (
+        <>
+          <h3 className="panel-card__title"><Icon name="store" />{t("ui.fabric.bySupplier")}</h3>
+          {!d.bySupplier.length ? <p className="muted">{t("ui.fabric.noSales")}</p> : (
+            <div className="table-wrap"><table className="table table--compact">
+              <thead><tr><th>{t("ui.common.supplier")}</th><th className="num">{t("ui.fabric.metersSold")}</th><th className="num">{t("ui.fabric.revenue")}</th><th className="num">{t("ui.fabric.cost")}</th><th className="num">{t("ui.fabric.profit")}</th><th className="num">{t("ui.fabric.margin")}</th></tr></thead>
+              <tbody>{d.bySupplier.map((x) => <tr key={x.supplierId || 0}><td>{x.supplier || t("ui.fabric.noSupplier")}</td><td className="num">{qty(x.meters)} m</td><td className="num">{m(x.revenue)}</td><td className="num">{m(x.cost)}</td><td className="num"><strong>{m(x.profit)}</strong></td><td className="num">{pct(x.margin)}</td></tr>)}</tbody>
+            </table></div>
+          )}
+          <h3 className="panel-card__title"><Icon name="roll" />{t("ui.fabric.byRoll")}</h3>
+          {!d.byRoll.length ? <p className="muted">{t("ui.fabric.noSales")}</p> : (
+            <div className="table-wrap"><table className="table table--compact">
+              <thead><tr><th>{t("ui.fabric.rollId")}</th><th>{t("ui.common.product")}</th><th className="num">{t("ui.fabric.metersSold")}</th><th className="num">{t("ui.fabric.revenue")}</th><th className="num">{t("ui.fabric.cost")}</th><th className="num">{t("ui.fabric.profit")}</th><th className="num">{t("ui.fabric.margin")}</th></tr></thead>
+              <tbody>{d.byRoll.map((x) => <tr key={x.rollId}><td><strong>{x.roll}</strong>{x.supplier && <small className="cell-sub">{x.supplier}</small>}</td><td>{x.product}</td><td className="num">{qty(x.meters)} m</td><td className="num">{m(x.revenue)}</td><td className="num">{m(x.cost)}</td><td className="num"><strong>{m(x.profit)}</strong></td><td className="num">{pct(x.margin)}</td></tr>)}</tbody>
+            </table></div>
+          )}
+          <h3 className="panel-card__title"><Icon name="alert" />{t("ui.fabric.shortages")}</h3>
+          <p className="muted">{t("ui.fabric.shortagesHelp")}</p>
+          {!d.shortages.length ? <p className="muted">{t("ui.fabric.noShortages")}</p> : (
+            <div className="table-wrap"><table className="table table--compact">
+              <thead><tr><th>{t("ui.common.supplier")}</th><th className="num">{t("ui.fabric.rollsShort")}</th><th className="num">{t("ui.fabric.declared")}</th><th className="num">{t("ui.fabric.verified")}</th><th className="num">{t("ui.fabric.shortage")}</th><th className="num">{t("ui.fabric.claimValue")}</th></tr></thead>
+              <tbody>{d.shortages.map((x) => <tr key={x.supplierId || 0}><td>{x.supplier || t("ui.fabric.noSupplier")}</td><td className="num">{x.rolls}</td><td className="num">{qty(x.declared)} m</td><td className="num">{qty(x.verified)} m</td><td className="num is-neg">{qty(x.shortage)} m<small className="cell-sub">{qty(toYards(x.shortage))} yd</small></td><td className="num"><strong>{m(x.value)}</strong></td></tr>)}</tbody>
+            </table></div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -227,7 +416,13 @@ function RollDetail({ id, onClose, onChanged }) {
   const [f, setF] = useState({ kind: "waste", length: "", lengthUnit: "meter", reason: "", notes: "" });
   const [note, setNote] = useState("");
   const sub = useSubmit();
-  const after = (ok) => { if (ok) { d.reload(); onChanged(); setF((x) => ({ ...x, length: "", reason: "", notes: "" })); setNote(""); } return ok; };
+  const { business } = useAuth();
+  const [info, setInfo] = useState(null);          // { dyeLot, priceOverride } being edited
+  const [hold, setHold] = useState({ length: "", lengthUnit: "meter", for: "" });
+  const after = (ok) => { if (ok) { d.reload(); onChanged(); setF((x) => ({ ...x, length: "", reason: "", notes: "" })); setNote(""); setInfo(null); setHold({ length: "", lengthUnit: "meter", for: "" }); } return ok; };
+  const saveInfo = (e) => { e.preventDefault(); sub.run(() => apiRequest(`/api/rolls/${id}/details`, { method: "PUT", body: { ...(can("stock.adjust") ? { dyeLot: info.dyeLot } : {}), ...(can("products.edit") ? { priceOverride: info.priceOverride } : {}) } })).then(after); };
+  const reserve = (e) => { e.preventDefault(); sub.run(() => apiRequest(`/api/rolls/${id}/reserve`, { method: "POST", body: hold })).then(after); };
+  const release = () => sub.run(() => apiRequest(`/api/rolls/${id}/release`, { method: "POST", body: {} })).then(after);
   const adjust = (e) => { e.preventDefault(); sub.run(() => apiRequest(`/api/rolls/${id}/adjust`, { method: "POST", body: f })).then(after); };
   const inspect = (result) => sub.run(() => apiRequest(`/api/rolls/${id}/inspect`, { method: "POST", body: { result, notes: note } })).then(after);
   const preview = r && f.length !== "" && Number(f.length) >= 0 ? (() => {
@@ -247,6 +442,44 @@ function RollDetail({ id, onClose, onChanged }) {
             <div><dt>{t("ui.common.status")}</dt><dd><span className={`roll-status is-${r.status}`}>{t(`ui.fabric.status.${r.status}`)}</span></dd></div>
           </dl>
           {(r.supplier || r.purchaseNo) && <p className="muted">{[r.supplier, r.purchaseNo, date(r.receivedAt, lang)].filter(Boolean).join(" · ")}</p>}
+          <div className="roll-facts">
+            <span>{t("ui.fabric.dyeLot")}: <strong>{r.dyeLot || "—"}</strong></span>
+            <span>{t("ui.fabric.rollPrice")}: <strong>{r.priceOverride === null ? t("ui.fabric.productPrice") : `${m(r.priceOverride)} / m`}</strong></span>
+            {r.remnant && <span className="roll-badge is-remnant">{t("ui.fabric.remnant")}</span>}
+            {r.parentRoll && <span>{fill(t("ui.fabric.fromRoll"), { roll: r.parentRoll })}</span>}
+            {r.reserved > 0 && <span className="roll-badge">{fill(t("ui.fabric.reservedFor"), { m: qty(r.reserved), who: r.reservedFor || "" })}</span>}
+          </div>
+          <div className="form-actions form-actions--start">
+            <button type="button" className="btn btn--outline btn--sm" onClick={() => printRollLabels([r], business?.name)}><Icon name="printer" /><span>{t("ui.fabric.printLabel")}</span></button>
+            {(can("stock.adjust") || can("products.edit")) && !info && <button type="button" className="btn btn--outline btn--sm" onClick={() => setInfo({ dyeLot: r.dyeLot || "", priceOverride: r.priceOverride ?? "" })}><Icon name="pencil" /><span>{t("ui.fabric.editDetails")}</span></button>}
+            {r.reserved > 0 && (can("stock.adjust") || can("sales.create")) && <button type="button" className="btn btn--outline btn--sm" disabled={sub.busy} onClick={release}><Icon name="x" /><span>{t("ui.fabric.release")}</span></button>}
+          </div>
+          {info && (
+            <form onSubmit={saveInfo} className="panel-card form-grid form-grid--2">
+              <h3 className="panel-card__title ff--full"><Icon name="pencil" />{t("ui.fabric.editDetails")}</h3>
+              {can("stock.adjust") && <Field label={t("ui.fabric.dyeLot")}><input className="input" value={info.dyeLot} onChange={(e) => setInfo({ ...info, dyeLot: e.target.value })} maxLength={40} /></Field>}
+              {can("products.edit") && <Field label={`${t("ui.fabric.rollPrice")} ${t("ui.common.optional")}`} error={sub.fieldErrors.priceOverride} hint={t("ui.fabric.rollPriceHint")}>
+                <input className="input" type="number" min="0" step="any" value={info.priceOverride} onChange={(e) => setInfo({ ...info, priceOverride: e.target.value })} placeholder={t("ui.fabric.productPrice")} /></Field>}
+              <div className="form-actions ff--full">
+                <button type="button" className="btn btn--outline" onClick={() => setInfo(null)}>{t("ui.common.cancel")}</button>
+                <button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.common.save")}</button>
+              </div>
+            </form>
+          )}
+          {r.status === "available" && rollAvailable(r) > 0 && (can("stock.adjust") || can("sales.create")) && (
+            <form onSubmit={reserve} className="panel-card form-grid form-grid--2">
+              <h3 className="panel-card__title ff--full"><Icon name="lock" />{t("ui.fabric.reserveTitle")}</h3>
+              <p className="modal__help ff--full">{fill(t("ui.fabric.reserveHelp"), { m: qty(rollAvailable(r)) })}</p>
+              <Field label={t("ui.fabric.length")} error={sub.fieldErrors.length}>
+                <div className="qty-unit">
+                  <input className="input" type="number" min="0" step="any" value={hold.length} onChange={(e) => setHold({ ...hold, length: e.target.value })} placeholder={t("ui.fabric.length")} />
+                  <select className="input input--auto" value={hold.lengthUnit} onChange={(e) => setHold({ ...hold, lengthUnit: e.target.value })} aria-label={t("ui.fabric.lengthUnit")}><option value="meter">m</option><option value="yard">yd</option></select>
+                </div>
+              </Field>
+              <Field label={t("ui.fabric.reserveFor")} error={sub.fieldErrors.for}><input className="input" value={hold.for} onChange={(e) => setHold({ ...hold, for: e.target.value })} placeholder={t("ui.fabric.reserveForPh")} maxLength={80} /></Field>
+              <div className="form-actions ff--full"><button type="submit" className="btn btn--primary" disabled={sub.busy}><Icon name="lock" /><span>{t("ui.fabric.reserve")}</span></button></div>
+            </form>
+          )}
 
           {r.status === "pending_inspection" && can("stock.adjust") && (
             <section className="panel-card form-grid">

@@ -9,7 +9,7 @@ import { defaultLocationId, activeLocation } from "../lib/stock.js";
 import { productName } from "../lib/productName.js";
 import { readBatch } from "../lib/batches.js";
 import { isTracked, readNewDevices, addDevices, pickDevices, updateDevices } from "../lib/devices.js";
-import { isRoll, readNewRolls, addRolls, sumMeters, lockRoll, rollEvent } from "../lib/rolls.js";
+import { isRoll, readNewRolls, addRolls, sumMeters, lockRoll, rollEvent, rollValues, averageRollCost, cutOffPiece, toMeters } from "../lib/rolls.js";
 
 /*
  * Stock Management (module "stock").
@@ -201,6 +201,7 @@ router.post("/opening", requirePerm("stock.add"), ah(async (req, res) => {
       locationId: loc.id, reason: "opening", reference: optText(b.reference, 80), note: optText(b.notes, 255), batches: readBatch(b, qty), devices: true });
     if (devices) await addDevices(conn, { businessId: bid, product, locationId: loc.id, devices, cost: num(product.cost_price), userId: req.user.id, event: "opening", refType: "stock", refId: m.id });
     if (rolls) await addRolls(conn, { businessId: bid, product, locationId: loc.id, rolls, costPerMeter: num(product.cost_price), userId: req.user.id, source: "opening", refType: "stock", refId: m.id });
+    if (rolls) await refreshRollCost(conn, bid, product.id);
     await audit(conn, { businessId: bid, userId: req.user.id, action: "stock.opening", entity: "product", entityId: product.id, meta: { location: loc.name, qty }, ip: req.ip });
     return m;
   });
@@ -239,6 +240,7 @@ router.post("/add", requirePerm("stock.add"), ah(async (req, res) => {
         locationId: loc.id, reason: type, reference: optText(b.reference, 80), supplierId, note: optText(b.notes, 255), batches: x.batches, devices: true });
       if (devices) await addDevices(conn, { businessId: bid, product, locationId: loc.id, devices, supplierId, cost: num(product.cost_price), userId: req.user.id, event: "received", refType: "stock", refId: m.id });
       if (rolls) await addRolls(conn, { businessId: bid, product, locationId: loc.id, rolls, supplierId, costPerMeter: num(product.cost_price), userId: req.user.id, source: type, refType: "stock", refId: m.id });
+      if (rolls) await refreshRollCost(conn, bid, product.id);
       moves.push(m);
     }
     await audit(conn, { businessId: bid, userId: req.user.id, action: "stock.added", entity: "location", entityId: loc.id,
@@ -317,10 +319,10 @@ router.post("/adjust", requirePerm("stock.adjust"), ah(async (req, res) => {
 router.post("/transfer", requirePerm("stock.transfer"), ah(async (req, res) => {
   const b = req.body || {};
   const bid = req.business.id;
-  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: quantity(x?.qty), deviceIds: x?.deviceIds, rollIds: x?.rollIds })) : [];
+  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: quantity(x?.qty), deviceIds: x?.deviceIds, rollIds: x?.rollIds, cut: x?.cut })) : [];
   const e = {};
   if (!items.length) e.items = "required";
-  items.forEach((x, i) => { if (!x.productId) e[`items.${i}.productId`] = "required"; if (Number.isNaN(x.qty) && !Array.isArray(x.rollIds)) e[`items.${i}.qty`] = "invalidAmount"; });
+  items.forEach((x, i) => { if (!x.productId) e[`items.${i}.productId`] = "required"; if (Number.isNaN(x.qty) && !Array.isArray(x.rollIds) && !x.cut) e[`items.${i}.qty`] = "invalidAmount"; });
   if (id(b.fromLocationId) && id(b.fromLocationId) === id(b.toLocationId)) e.toLocationId = "sameLocation";
   if (Object.keys(e).length) throw badRequest(e);
   const result = await withTx(async (conn) => {
@@ -337,6 +339,16 @@ router.post("/transfer", requirePerm("stock.transfer"), ah(async (req, res) => {
       const devices = isTracked(product) ? await pickDevices(conn, { businessId: bid, product, locationId: from.id, deviceIds: x.deviceIds, qty: x.qty, field: `items.${i}.deviceIds` }) : null;
       // fabric: whole rolls move (their remaining meters)
       const rolls = [];
+      // fabric: part of one roll (cut: { rollId, length, lengthUnit }) becomes a new roll at the other location
+      if (isRoll(product) && x.cut) {
+        const meters = toMeters(Number(x.cut.length), x.cut.lengthUnit === "yard" ? "yard" : "meter");
+        if (!Number.isFinite(meters) || meters <= 0) throw badRequest({ [`items.${i}.cut.length`]: "invalidAmount" });
+        const common = { businessId: bid, userId: req.user.id, product, refType: "transfer", reason: "transfer", reference: optText(b.reference, 80) || ref, transferRef: ref, note: optText(b.notes, 255), devices: true };
+        const m = await moveStock(conn, { ...common, qtyChange: -meters, type: "transfer_out", locationId: from.id });
+        await moveStock(conn, { ...common, qtyChange: meters, type: "transfer_in", locationId: to.id });
+        await cutOffPiece(conn, { businessId: bid, product, rollId: x.cut.rollId, meters, fromId: from.id, toId: to.id, userId: req.user.id, refId: m.id, note: `${from.name} → ${to.name} (${ref})`, field: `items.${i}.cut.rollId` });
+        continue;
+      }
       if (isRoll(product)) {
         const ids = [...new Set((Array.isArray(x.rollIds) ? x.rollIds : []).map(Number).filter(Boolean))];
         if (!ids.length) throw badRequest({ [`items.${i}.rollIds`]: "rollsRequired" });
@@ -440,6 +452,12 @@ router.get("/low", requirePerm("stock.view"), ah(async (req, res) => {
   })) });
 }));
 
+/* rolls: the product cost = average cost of its rolls on hand (each roll keeps its own) */
+async function refreshRollCost(conn, businessId, productId) {
+  const avg = await averageRollCost(conn, businessId, productId);
+  if (avg !== null) await conn.query("UPDATE products SET cost_price = ? WHERE id = ? AND business_id = ?", [avg, productId, businessId]);
+}
+
 /* ===================== Valuation (cost and retail value of stock on hand) ===================== */
 router.get("/valuation", requirePerm("stock.view"), ah(async (req, res) => {
   const bid = req.business.id;
@@ -449,11 +467,17 @@ router.get("/valuation", requirePerm("stock.view"), ah(async (req, res) => {
        FROM product_stock ps JOIN products p ON p.id = ps.product_id AND p.business_id = ps.business_id
        JOIN stock_locations l ON l.id = ps.location_id
       WHERE ps.business_id = ? AND ps.qty <> 0 ${loc ? "AND l.id = ?" : ""} ORDER BY l.is_default DESC, l.name, p.name`, loc ? [bid, loc] : [bid]);
-  const items = rows.map((r) => ({
-    productId: r.id, name: r.name, sku: r.sku, unit: r.unit, location: r.location_name, locationId: r.location_id, qty: num(r.qty),
-    costPrice: num(r.cost_price), sellingPrice: num(r.selling_price),
-    costValue: round2(num(r.qty) * num(r.cost_price)), retailValue: round2(num(r.qty) * num(r.selling_price))
-  }));
+  // fabric sold from rolls: each roll at its own purchase cost
+  const rolls = req.business.profile.fabric ? await rollValues(pool, bid) : new Map();
+  const items = rows.map((r) => {
+    const rollValue = rolls.get(`${r.id}|${r.location_id}`);
+    const costValue = rollValue === undefined ? round2(num(r.qty) * num(r.cost_price)) : round2(rollValue);
+    return {
+      productId: r.id, name: r.name, sku: r.sku, unit: r.unit, location: r.location_name, locationId: r.location_id, qty: num(r.qty),
+      costPrice: rollValue === undefined || !num(r.qty) ? num(r.cost_price) : q4(rollValue / num(r.qty)), sellingPrice: num(r.selling_price),
+      costValue, retailValue: round2(num(r.qty) * num(r.selling_price))
+    };
+  });
   const byLocation = {};
   for (const i of items) {
     const b = (byLocation[i.locationId] ||= { locationId: i.locationId, location: i.location, units: 0, costValue: 0, retailValue: 0 });

@@ -876,6 +876,12 @@ COLUMNS.push(
   { table: "products", column: "cost_per_gram", ddl: "ALTER TABLE products ADD COLUMN cost_per_gram DECIMAL(14,4) NULL AFTER extra_charge" }
 );
 
+// fabric: dye lot, remnant price, parent roll, reservations; per-yard / whole-roll prices, minimum cut, remnant length, shade code, GSM
+COLUMNS.push(
+  { table: "fabric_rolls", column: "dye_lot", ddl: "ALTER TABLE fabric_rolls ADD COLUMN dye_lot VARCHAR(40) NULL AFTER cost_per_meter, ADD COLUMN price_override DECIMAL(14,4) NULL AFTER dye_lot, ADD COLUMN parent_roll_id INT UNSIGNED NULL AFTER price_override, ADD COLUMN reserved DECIMAL(14,4) NOT NULL DEFAULT 0 AFTER remaining, ADD COLUMN reserved_ref VARCHAR(80) NULL AFTER reserved" },
+  { table: "products", column: "yard_price", ddl: "ALTER TABLE products ADD COLUMN yard_price DECIMAL(14,4) NULL AFTER cost_per_gram, ADD COLUMN wholesale_yard_price DECIMAL(14,4) NULL AFTER yard_price, ADD COLUMN roll_rate DECIMAL(14,4) NULL AFTER wholesale_yard_price, ADD COLUMN min_cut DECIMAL(14,4) NULL AFTER roll_rate, ADD COLUMN remnant_length DECIMAL(14,4) NULL AFTER min_cut, ADD COLUMN shade_code VARCHAR(40) NULL AFTER remnant_length, ADD COLUMN gsm DECIMAL(10,2) NULL AFTER shade_code" }
+);
+
 const INDEXES = [
   { table: "products", name: "idx_products_category", ddl: "ALTER TABLE products ADD INDEX idx_products_category (business_id, category_id)" },
   { table: "products", name: "idx_products_brand", ddl: "ALTER TABLE products ADD INDEX idx_products_brand (business_id, brand_id)" },

@@ -202,6 +202,14 @@ CREATE TABLE IF NOT EXISTS products (
   extra_charge    DECIMAL(14,4) NULL,
 
   cost_per_gram   DECIMAL(14,4) NULL,             -- jewelry: cost price = net weight × cost per gram
+
+  yard_price      DECIMAL(14,4) NULL,             -- fabric: retail price per yard (empty = meter price × 0.9144)
+  wholesale_yard_price DECIMAL(14,4) NULL,
+  roll_rate       DECIMAL(14,4) NULL,             -- fabric: price per meter when a whole roll is sold
+  min_cut         DECIMAL(14,4) NULL,             -- fabric: shortest length sold (meters)
+  remnant_length  DECIMAL(14,4) NULL,             -- fabric: rolls shorter than this are remnants
+  shade_code      VARCHAR(40)  NULL,              -- fabric: supplier's shade number
+  gsm             DECIMAL(10,2) NULL,             -- fabric: grams per square meter
   unique_item     TINYINT(1)   NOT NULL DEFAULT 0, -- one individual piece (stock 0 or 1)
   item_status     VARCHAR(20)  NOT NULL DEFAULT 'active', -- active, sold, returned, damaged
   country_of_origin VARCHAR(60) NULL,
@@ -876,7 +884,14 @@ CREATE TABLE IF NOT EXISTS fabric_rolls (
   declared_length DECIMAL(14,4) NULL,             -- meters the supplier declared
   verified_length DECIMAL(14,4) NOT NULL,         -- meters measured on receipt (what came into stock)
   remaining       DECIMAL(14,4) NOT NULL,         -- meters left on the roll
+
+  reserved        DECIMAL(14,4) NOT NULL DEFAULT 0, -- meters held for an order (not sellable to others)
+  reserved_ref    VARCHAR(80)  NULL,              -- who / what it is held for
   cost_per_meter  DECIMAL(14,4) NULL,
+
+  dye_lot         VARCHAR(40)  NULL,              -- dye lot / batch (shade can differ between lots)
+  price_override  DECIMAL(14,4) NULL,             -- price per meter for this roll (remnant, second quality)
+  parent_roll_id  INT UNSIGNED NULL,              -- a returned / cut-off piece: the roll it came from
   location_id     INT UNSIGNED NULL,
   status          VARCHAR(20)  NOT NULL DEFAULT 'available',  -- available, finished, pending_inspection, damaged, returned_supplier, removed
   source          VARCHAR(20)  NOT NULL DEFAULT 'purchase',   -- purchase, stock_in, opening, return (returned cut)

@@ -50,10 +50,39 @@ const shape = (p, rates = null) => withJewelry(p, rates, {
   warrantyMonths: p.warranty_months ?? null, warrantyProvider: p.warranty_provider || "", warrantyTerms: p.warranty_terms || "",
   // food: what the item is, its kitchen station, sizes / extras, sold out today
   itemKind: p.item_kind || "goods", station: p.station || "", available: p.available === undefined ? true : Boolean(p.available), menuOptions: optionsOf(p),
+  // fabric: per-yard and whole-roll prices, shortest cut, remnant length, shade code, weight
+  yardPrice: optNum(p.yard_price), wholesaleYardPrice: optNum(p.wholesale_yard_price), rollRate: optNum(p.roll_rate), minCut: optNum(p.min_cut),
+  remnantLength: optNum(p.remnant_length), shadeCode: p.shade_code || "", gsm: optNum(p.gsm),
   stockStatus: num(p.stock_qty) < 0 ? "negative" : num(p.stock_qty) === 0 ? "out" : num(p.stock_qty) <= num(p.min_stock) ? "low" : "in"
 });
 
 function specsOf(p) { try { return JSON.parse(p.specs || "{}") || {}; } catch { return {}; } }
+const optNum = (v) => (v === null || v === undefined ? null : num(v));
+
+/* Fabric fields from the form (only fabric businesses send them; others keep what is saved). */
+const FABRIC_FIELDS = [["yardPrice", "yard_price"], ["wholesaleYardPrice", "wholesale_yard_price"], ["rollRate", "roll_rate"], ["minCut", "min_cut"], ["remnantLength", "remnant_length"], ["gsm", "gsm"]];
+function readFabric(body, profile) {
+  if (!profile.fabric) return null;
+  const d = {};
+  const e = {};
+  for (const [k] of FABRIC_FIELDS) {
+    if (body[k] === undefined) continue;
+    d[k] = body[k] === "" || body[k] === null ? null : Number(body[k]);
+    if (d[k] !== null && (!Number.isFinite(d[k]) || d[k] < 0)) e[k] = "invalidAmount";
+    else if (d[k] !== null) d[k] = Math.round(d[k] * 10000) / 10000;
+  }
+  if (body.shadeCode !== undefined) d.shadeCode = optText(body.shadeCode, 40);
+  if (Object.keys(e).length) throw badRequest(e);
+  return d;
+}
+async function saveFabric(conn, productId, d) {
+  if (!d) return;
+  const sets = [];
+  const params = [];
+  for (const [k, col] of FABRIC_FIELDS) if (d[k] !== undefined) { sets.push(`${col} = ?`); params.push(d[k]); }
+  if (d.shadeCode !== undefined) { sets.push("shade_code = ?"); params.push(d.shadeCode); }
+  if (sets.length) await conn.query(`UPDATE products SET ${sets.join(", ")} WHERE id = ?`, [...params, productId]);
+}
 
 /* Technical specifications from the form: { "RAM": "8 GB", … } (multipart: JSON string), up to 60 fields. */
 function readSpecs(raw) {
@@ -437,6 +466,7 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
   if (req.business.profile.batches) d.trackBatches = true;     // e.g. cosmetics: every product tracks batches & expiry
   rollRules(d, req.business.profile);
   jewelryCost(d, req.business.profile);
+  const fabric = readFabric(req.body || {}, req.business.profile);
   const image = await imageFrom(req);
   const bid = req.business.id;
   try {
@@ -460,6 +490,7 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
       );
       await saveBarcodes(conn, bid, r.insertId, d.barcodes || []);
       if (d.costPerGram !== undefined) await conn.query("UPDATE products SET cost_per_gram = ? WHERE id = ?", [d.costPerGram, r.insertId]);
+      await saveFabric(conn, r.insertId, fabric);
       if (d.itemKind || d.station) await conn.query("UPDATE products SET item_kind = ?, station = ? WHERE id = ?", [d.itemKind || "goods", d.station ?? null, r.insertId]);
       // A product can exist with zero stock. Opening stock is normally entered in Stock → Opening stock.
       if (d.openingStock > 0 && d.tracking === "qty") {
@@ -481,6 +512,7 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
   if (req.business.profile.batches) d.trackBatches = true;
   rollRules(d, req.business.profile);
   jewelryCost(d, req.business.profile);
+  const fabric = readFabric(req.body || {}, req.business.profile);
   const image = await imageFrom(req);
   const bid = req.business.id;
   try {
@@ -512,6 +544,7 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
       );
       await saveBarcodes(conn, bid, p.id, d.barcodes);
       if (d.costPerGram !== undefined) await conn.query("UPDATE products SET cost_per_gram = ? WHERE id = ?", [d.costPerGram, p.id]);
+      await saveFabric(conn, p.id, fabric);
       if (d.trackBatches && !p.track_batches) await startBatchTracking(conn, bid, p.id);
       const changes = changesOf(p, d);
       await audit(conn, { businessId: bid, userId: req.user.id, action: changes.length ? "product.changed" : "product.updated", entity: "product", entityId: p.id,

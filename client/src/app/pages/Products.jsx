@@ -32,7 +32,7 @@ export const EMPTY = {
   // clothing (profile.fashion)
   collection: "", season: "",
   // jewelry (profile.jewelry)
-  metal: "", purity: "", grossWeight: "", stoneWeight: "", pricingMode: "fixed", makingCharge: "", makingType: "per_gram", extraCharge: "", costPerGram: "", uniqueItem: false, itemStatus: "active",
+  metal: "", purity: "", grossWeight: "", stoneWeight: "", pricingMode: "fixed", makingCharge: "", makingType: "per_gram", extraCharge: "", costPerGram: "", uniqueItem: false, yardPrice: "", wholesaleYardPrice: "", rollRate: "", minCut: "", remnantLength: "", shadeCode: "", gsm: "", itemStatus: "active",
   // food (profile.itemKinds): menu item, goods, ingredient, packaging, extra, prepared; kitchen station
   itemKind: "", station: ""
 };
@@ -69,6 +69,8 @@ function ExpiryCell({ value, soonDays }) {
     </span>
   );
 }
+
+const YARD_M = 0.9144;   // fabric: 1 yd in meters (margins of per-yard prices)
 
 export default function Products() {
   const { t, lang } = useLanguage();
@@ -323,7 +325,8 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     collection: product.collection || "", season: product.season || "",
     metal: product.metal || "", purity: product.purity || "", grossWeight: product.grossWeight ?? "", stoneWeight: product.stoneWeight ?? "",
     pricingMode: product.pricingMode || "fixed", makingCharge: product.makingCharge ?? "", makingType: product.makingType || "per_gram",
-    extraCharge: product.extraCharge ?? "", costPerGram: product.costPerGram ?? "", uniqueItem: Boolean(product.uniqueItem), itemStatus: product.itemStatus || "active",
+    extraCharge: product.extraCharge ?? "", costPerGram: product.costPerGram ?? "", yardPrice: product.yardPrice ?? "", wholesaleYardPrice: product.wholesaleYardPrice ?? "", rollRate: product.rollRate ?? "",
+    minCut: product.minCut ?? "", remnantLength: product.remnantLength ?? "", shadeCode: product.shadeCode || "", gsm: product.gsm ?? "", uniqueItem: Boolean(product.uniqueItem), itemStatus: product.itemStatus || "active",
     sellingPrice: product.fixedPrice ?? product.sellingPrice ?? ""
   });
   /* jewelry: purity options and today's rates (price preview) */
@@ -558,6 +561,8 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
             <p className="form-sub ff--full"><Icon name="roll" /> {t("ui.products.fabricSection")}</p>
             <Field label={`${L("modelNumber")} ${t("ui.common.optional")}`}><input className="input" value={f.modelNumber} onChange={set("modelNumber")} placeholder={L("modelNumber")} /></Field>
             <Field label={`${L("genericName")} ${t("ui.common.optional")}`}><input className="input" value={f.genericName} onChange={set("genericName")} placeholder={t("ui.products.compositionPh")} /></Field>
+            <Field label={`${t("ui.fabric.shadeCode")} ${t("ui.common.optional")}`} hint={t("ui.fabric.shadeCodeHint")}><input className="input" value={f.shadeCode} onChange={set("shadeCode")} maxLength={40} placeholder={t("ui.fabric.shadeCode")} /></Field>
+            <Field label={`${t("ui.fabric.gsm")} ${t("ui.common.optional")}`} error={err.gsm} hint={t("ui.fabric.gsmHint")}><input className="input" type="number" min="0" step="any" value={f.gsm} onChange={set("gsm")} placeholder="g/m²" /></Field>
             <Field label={`${t("ui.common.supplier")} ${t("ui.common.optional")}`} error={err.supplierId}>
               <select className="input" value={f.supplierId} onChange={set("supplierId")}>
                 <option value="">—</option>
@@ -660,9 +665,26 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
           ? <Field label={L("costPrice")} error={err.costPrice} hint={jCost !== null ? fill(t("ui.jewelry.costFormula"), { net: jNet.toFixed(jRates.data?.weightDecimals ?? 3), rate: m(Number(f.costPerGram) || 0) }) : t("ui.jewelry.costFromGram")}>
               <input className="input packaging__total" readOnly tabIndex={-1} value={jCost !== null ? m(jCost) : f.costPrice === "" ? "—" : m(Number(f.costPrice) || 0)} />
             </Field>
-          : <Field label={L("costPrice")} error={err.costPrice}><input className="input" type="number" min="0" step="any" value={f.costPrice} onChange={set("costPrice")} placeholder={L("costPrice")} /></Field>}
+          : profile.fabric && f.tracking === "roll" && !isNew
+            ? <Field label={L("costPrice")} hint={t("ui.fabric.avgCostHint")}><input className="input packaging__total" readOnly tabIndex={-1} value={`${m(Number(f.costPrice) || 0)} / m`} /></Field>
+            : <Field label={L("costPrice")} error={err.costPrice} hint={profile.fabric && f.tracking === "roll" ? t("ui.fabric.defaultCostHint") : undefined}><input className="input" type="number" min="0" step="any" value={f.costPrice} onChange={set("costPrice")} placeholder={L("costPrice")} /></Field>}
         <Field label={profile.jewelry && f.pricingMode === "weight" ? t("ui.jewelry.fallbackPrice") : L("sellingPrice")} error={err.sellingPrice}><input className="input" type="number" min="0" step="any" value={f.sellingPrice} onChange={set("sellingPrice")} placeholder={L("sellingPrice")} /></Field>
         {!profile.hiddenFields?.includes("wholesalePrice") && <Field label={`${t("ui.products.wholesalePrice")} ${t("ui.common.optional")}`} error={err.wholesalePrice}><input className="input" type="number" min="0" step="any" value={f.wholesalePrice} onChange={set("wholesalePrice")} placeholder={t("ui.products.wholesalePrice")} /></Field>}
+        {profile.fabric && f.tracking === "roll" && (
+          <>
+            <p className="form-sub ff--full"><Icon name="roll" /> {t("ui.fabric.pricesSection")}</p>
+            {[["yardPrice", "yardPriceHint"], ["wholesaleYardPrice", "wholesaleYardHint"], ["rollRate", "rollRateHint"]].map(([k, hint]) => {
+              const cost = Number(f.costPrice) * (k === "rollRate" ? 1 : YARD_M);
+              const price = Number(f[k]);
+              return <Field key={k} label={`${t(`ui.fabric.${k}`)} ${t("ui.common.optional")}`} error={err[k]}
+                hint={f[k] !== "" && price > 0 && cost > 0 ? fill(t("ui.fabric.marginLine"), { pct: Math.round(((price - cost) / price) * 1000) / 10 }) : t(`ui.fabric.${hint}`)}>
+                <input className="input" type="number" min="0" step="any" value={f[k]} onChange={set(k)} placeholder={t(`ui.fabric.${k}`)} /></Field>;
+            })}
+            <Field label={`${t("ui.fabric.minCut")} ${t("ui.common.optional")}`} error={err.minCut} hint={t("ui.fabric.minCutHint")}><input className="input" type="number" min="0" step="any" value={f.minCut} onChange={set("minCut")} placeholder="m" /></Field>
+            <Field label={`${t("ui.fabric.remnantLength")} ${t("ui.common.optional")}`} error={err.remnantLength} hint={t("ui.fabric.remnantHint")}><input className="input" type="number" min="0" step="any" value={f.remnantLength} onChange={set("remnantLength")} placeholder="m" /></Field>
+            {Number(f.sellingPrice) > 0 && Number(f.costPrice) > 0 && <p className="muted ff--full">{fill(t("ui.fabric.meterMargin"), { pct: Math.round(((Number(f.sellingPrice) - Number(f.costPrice)) / Number(f.sellingPrice)) * 1000) / 10 })}</p>}
+          </>
+        )}
         {profile.electronics && <Field label={`${t("ui.products.minPrice")} ${t("ui.common.optional")}`} error={err.minPrice} hint={t("ui.products.minPriceHint")}><input className="input" type="number" min="0" step="any" value={f.minPrice} onChange={set("minPrice")} placeholder={t("ui.products.minPrice")} /></Field>}
         <Field label={L("lowStockAlert")} error={err.minStock} hint={t("ui.products.lowStockAlertHint")}><input className="input" type="number" min="0" step="any" value={f.minStock} onChange={set("minStock")} placeholder={L("lowStockAlert")} /></Field>
         {profile.warranties && (

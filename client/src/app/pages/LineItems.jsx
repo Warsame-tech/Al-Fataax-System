@@ -9,7 +9,7 @@ import CameraScanner from "../CameraScanner.jsx";
 import { BatchFields } from "./Stock.jsx";
 import { unitsOf, unitsPer, packPrice, breakdown } from "../packaging.js";
 import { DeviceEntry, DevicePicker, deviceText } from "../Devices.jsx";
-import { isRoll, YARD, RollEntry, RollPicker, rollsDeclared, lengthText } from "../Fabric.jsx";
+import { isRoll, YARD, RollEntry, RollPicker, rollsDeclared, lengthText, fabricPrice, rollAvailable } from "../Fabric.jsx";
 
 const tracked = (p) => ["serial", "imei", "serial_imei"].includes(p?.tracking);
 const q4 = (v) => Math.round(Number(v) * 10000) / 10000;
@@ -43,8 +43,8 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
   const basePrice = (p) => (priceList === "wholesale" && p.wholesalePrice !== null ? p.wholesalePrice : p.sellingPrice);
   const priceOf = (p, unit = null, roll = null) => {
     if (isRoll(p)) {
-      const per = unit === "yard" ? YARD : unit === "roll" ? roll?.remaining || 0 : 1;
-      return q4((mode === "buy" ? p.costPrice : basePrice(p)) * per);
+      if (mode !== "buy") return fabricPrice(p, roll, unit, priceList);   // the same rules as the server
+      return q4(p.costPrice * (unit === "yard" ? YARD : 1));
     }
     if (mode === "buy") return Math.round(p.costPrice * (unit ? unitsPer(p, unit) || 1 : 1) * 10000) / 10000;
     const base = basePrice(p);
@@ -55,7 +55,7 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
   // rolls: meters (base), yards, or (selling) the whole roll
   const unitList = (p) => (isRoll(p) ? [{ name: p.unit }, { name: "yard" }, ...(sell ? [{ name: "roll" }] : [])] : unitsOf(p, sell ? "sell" : "buy"));
   const perOf = (l) => (isRoll(l.product) ? (l.unit === "yard" ? YARD : l.unit === "roll" ? l.roll?.remaining || 1 : 1) : l.unit ? unitsPer(l.product, l.unit) || 1 : 1);
-  const available = (l) => (isRoll(l.product) && sell ? l.roll?.remaining ?? 0 : l.product.stock);
+  const available = (l) => (isRoll(l.product) && sell ? rollAvailable(l.roll) : l.product.stock);
   const unitLabel = (u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
   const addProduct = (p) => {
     if (!p) return;

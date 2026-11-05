@@ -10,7 +10,7 @@ import { VAT_RATE, vatOf } from "../vat.js";
 import { useDraft, DraftBar } from "../Drafts.jsx";
 import { unitsOf, unitsPer, packPrice } from "../packaging.js";
 import { DevicePicker, deviceText } from "../Devices.jsx";
-import { isRoll, YARD, RollPicker, lengthText } from "../Fabric.jsx";
+import { isRoll, YARD, RollPicker, lengthText, fabricPrice, rollAvailable } from "../Fabric.jsx";
 import { ShiftBanner } from "../Shifts.jsx";
 
 /* serial / IMEI products (electronics): a line is the exact devices chosen or scanned */
@@ -21,8 +21,8 @@ const tracked = (p) => ["serial", "imei", "serial_imei"].includes(p?.tracking);
 const rollPer = (l) => (l.unit === "yard" ? YARD : l.unit === "roll" ? l.roll?.remaining || 1 : 1);
 const r4 = (v) => Math.round(Number(v) * 10000) / 10000;
 const perOf = (l) => (isRoll(l.product) ? rollPer(l) : l.unit ? unitsPer(l.product, l.unit) || 1 : 1);
-const priceOf = (l) => (isRoll(l.product) ? Math.round(l.product.sellingPrice * rollPer(l) * 10000) / 10000 : l.unit ? packPrice(l.product, l.unit) : l.product.sellingPrice);
-const maxOf = (l) => Math.floor(((isRoll(l.product) ? l.roll?.remaining ?? 0 : l.product.stock) / perOf(l)) * 10000 + 1e-6) / 10000;
+const priceOf = (l) => (isRoll(l.product) ? fabricPrice(l.product, l.roll, l.unit) : l.unit ? packPrice(l.product, l.unit) : l.product.sellingPrice);
+const maxOf = (l) => Math.floor(((isRoll(l.product) ? rollAvailable(l.roll) : l.product.stock) / perOf(l)) * 10000 + 1e-6) / 10000;
 const keyOf = (l) => (l.rollId ? `${l.product.id}:${l.rollId}` : String(l.product.id));
 const ROLL_UNITS = ["meter", "yard", "roll"];
 
@@ -102,7 +102,7 @@ function Register() {
   const [rollFor, setRollFor] = useState(null);
   const addRoll = (p, roll) => {
     const key = `${p.id}:${roll.id}`;
-    setCart((c) => (c.some((l) => keyOf(l) === key) ? c : [...c, { product: p, rollId: roll.id, roll, qty: Math.min(1, roll.remaining), unit: null }]));
+    setCart((c) => (c.some((l) => keyOf(l) === key) ? c : [...c, { product: p, rollId: roll.id, roll, qty: Math.min(1, rollAvailable(roll)), unit: null }]));
     setActive(key); setPulse((x) => x + 1); setNotice(null);
   };
   const setQty = (key, v) => setCart((c) => c.map((l) => (keyOf(l) === key ? { ...l, qty: Math.max(0, Math.min(Number(v) || 0, maxOf(l))) } : l)).filter((l) => l.qty > 0));
@@ -207,7 +207,17 @@ function Register() {
                 <span className="pos2__line-name">{l.product.name}{l.product.rxRequired && <span className="rx-tag" title={t("ui.products.rxRequired")}>Rx</span>}</span>
                 <span className="pos2__line-total">{m(l.qty * priceOf(l))}</span>
               </div>
-              {l.roll && <small className="pos2__roll"><Icon name="roll" /> {l.roll.code} · {fill(t("ui.fabric.left"), { len: lengthText(l.roll.remaining) })}</small>}
+              {l.roll && (() => {
+                // fabric: what stays on the roll after this cut, and a warning when another line of this fabric is from a different dye lot
+                const cut = l.unit === "roll" ? rollAvailable(l.roll) : Math.round(Number(l.qty || 0) * rollPer(l) * 10000) / 10000;
+                const other = cart.find((x) => x.product.id === l.product.id && x.rollId !== l.rollId && x.roll?.dyeLot && l.roll.dyeLot && x.roll.dyeLot !== l.roll.dyeLot);
+                return (<>
+                  <small className="pos2__roll"><Icon name="roll" /> {l.roll.code}{l.roll.dyeLot ? ` · ${fill(t("ui.fabric.lotN"), { lot: l.roll.dyeLot })}` : ""} · {fill(t("ui.fabric.leftAfter"), { len: lengthText(Math.max(0, Math.round((rollAvailable(l.roll) - cut) * 10000) / 10000)) })}
+                    {l.roll.remnant && <> <span className="roll-badge is-remnant">{t("ui.fabric.remnant")}</span></>}</small>
+                  {other && <small className="roll-warn"><Icon name="alert" /> {fill(t("ui.fabric.mixedLots"), { a: l.roll.dyeLot, b: other.roll.dyeLot })}</small>}
+                  {l.unit !== "roll" && <span className="len-quick" onClick={(e) => e.stopPropagation()}>{[0.5, 1, 2, 3, 5].map((v) => <button key={v} type="button" onClick={() => setQty(keyOf(l), v)}>{v}</button>)}</span>}
+                </>);
+              })()}
               <div className="pos2__line-bottom">
                 {isRoll(l.product) ? (
                   <span className="pos2__unit" onClick={(e) => e.stopPropagation()}>
@@ -300,7 +310,7 @@ function Register() {
           onDone={(ids, devices) => { setDevices(picking, devices); setPicking(null); codeRef.current?.focus(); }} onClose={() => setPicking(null)} />
       )}
       {rollFor && (
-        <RollPicker product={rollFor} filter={(r) => !cart.some((l) => l.rollId === r.id)} onClose={() => setRollFor(null)}
+        <RollPicker product={rollFor} filter={(r) => !cart.some((l) => l.rollId === r.id)} lots={[...new Set(cart.filter((l) => l.product.id === rollFor.id && l.roll?.dyeLot).map((l) => l.roll.dyeLot))]} onClose={() => setRollFor(null)}
           onDone={(ids, rolls) => { addRoll(rollFor, rolls[0]); setRollFor(null); codeRef.current?.focus(); }} />
       )}
       {camera && <CameraScanner onCode={onCameraCode} onClose={() => { setCamera(false); codeRef.current?.focus(); }} />}

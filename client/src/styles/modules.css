@@ -1154,9 +1154,12 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 .roll-entry { display: grid; gap: 8px; padding: 12px; border: 1px dashed #c9d2e6; border-radius: 12px; background: #fbfcff; }
 .roll-entry__top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; color: var(--navy); }
 .roll-entry__top strong { display: inline-flex; align-items: center; gap: 6px; }
-.roll-entry__quick { display: grid; grid-template-columns: minmax(80px, .8fr) 1fr 1fr auto; gap: 6px; }
+.roll-entry__quick { display: grid; grid-template-columns: minmax(70px, .7fr) 1fr 1fr 1fr auto auto; gap: 6px; }
+.roll-entry__paste { display: grid; gap: 6px; justify-items: start; }
+.roll-entry__paste textarea { width: 100%; font-family: ui-monospace, monospace; font-size: .85rem; }
 .roll-entry__rows { display: grid; gap: 4px; }
-.roll-entry__row { display: grid; grid-template-columns: 26px minmax(70px, 1fr) minmax(80px, 1fr) minmax(80px, 1fr) 34px; align-items: center; gap: 6px; }
+.roll-entry__row { display: grid; grid-template-columns: 26px minmax(70px, 1fr) minmax(70px, 1fr) minmax(70px, 1fr) minmax(64px, .8fr) 34px; align-items: center; gap: 6px; }
+.roll-entry__rows.has-cost .roll-entry__row { grid-template-columns: 26px minmax(70px, 1fr) minmax(64px, 1fr) minmax(64px, 1fr) minmax(60px, .8fr) minmax(64px, .9fr) 34px; }
 .roll-entry__row--head { font-size: .74rem; color: var(--muted); font-weight: 600; }
 .roll-entry__no { color: var(--muted); font-size: .8rem; text-align: right; }
 .roll-entry__verified { display: grid; gap: 1px; }
@@ -1178,7 +1181,21 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 .roll-total.is-on { border-color: var(--navy); box-shadow: 0 0 0 2px rgba(44, 52, 148, .15); }
 .roll-total small { justify-self: start; }
 .roll-picker .device-picker__item { cursor: pointer; }
-.pos2__roll { display: flex; align-items: center; gap: 4px; color: var(--muted); font-size: .78rem; }
+.pos2__roll { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--muted); font-size: .78rem; }
+.roll-badge { display: inline-block; padding: 1px 7px; border-radius: 999px; background: #eef1ff; color: #2c3494; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+.roll-badge.is-remnant { background: #fff4e0; color: #9a5b00; }
+.roll-badge.is-warn { background: #fde8e8; color: #b42318; }
+.roll-warn { display: flex; align-items: center; gap: 4px; color: #b42318; font-size: .78rem; font-weight: 600; }
+.roll-warn .icon { width: 14px; height: 14px; flex: none; }
+.roll-bar { display: block; height: 5px; border-radius: 999px; background: #eef1f7; overflow: hidden; }
+.roll-bar span { display: block; height: 100%; border-radius: inherit; background: #0f766e; }
+.roll-facts { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; color: var(--ink-2); font-size: .9rem; }
+.form-actions--start { justify-content: flex-start; }
+.len-quick { display: flex; gap: 4px; margin-top: 2px; }
+.len-quick button { min-width: 34px; min-height: 26px; padding: 2px 6px; border: 1px solid #d5d9e6; border-radius: 8px; background: #fff; font: inherit; font-size: .78rem; cursor: pointer; }
+.len-quick button:hover { border-color: var(--navy); color: var(--navy); }
+.roll-move { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.roll-move .stock-lines__qty { width: 120px; }
 .stage-tag { display: inline-block; padding: 2px 9px; border-radius: 999px; background: #eef1ff; color: #2c3494; font-size: .78rem; font-weight: 700; white-space: nowrap; }
 .stage-steps { display: flex; flex-wrap: wrap; gap: 4px; margin: 0; padding: 0; list-style: none; counter-reset: st; }
 .stage-steps li { counter-increment: st; padding: 4px 10px; border-radius: 999px; background: #f1f3f8; color: var(--muted); font-size: .8rem; }
@@ -1197,7 +1214,9 @@ textarea.input { min-height: 64px; resize: vertical; padding-top: 8px; }
 @media (max-width: 640px) {
   .roll-entry__quick { grid-template-columns: 1fr 1fr; }
   .roll-entry__quick .btn { grid-column: 1 / -1; }
-  .roll-entry__row { grid-template-columns: 22px 1fr 1fr 1fr 30px; gap: 4px; }
+  /* phones: ID, declared, verified on the first line; dye lot, cost and remove below */
+  .roll-entry__row, .roll-entry__rows.has-cost .roll-entry__row { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; padding-bottom: 6px; border-bottom: 1px dotted #d5d9e6; }
+  .roll-entry__no, .roll-entry__row--head { display: none; }
 }
 
 /* ---------- Restaurant & cafe ---------- */
