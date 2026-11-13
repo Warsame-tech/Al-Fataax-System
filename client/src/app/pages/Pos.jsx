@@ -430,12 +430,16 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
     if (submit || !cart.length) return undefined;
     const timer = setTimeout(() => {
       apiRequest("/api/sales/price-check", { method: "POST", body: { items: saleItems(cart), customerId: customer?.id || null, discount: disc, pos: true } })
-        .then(setCostCheck).catch(() => {});
+        .then((r) => { setCostCheck(r); if (r.lines.length || r.bill) setCostAlert(true); }).catch(() => {});
     }, 300);
     return () => clearTimeout(timer);
   }, [disc, customer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const belowCost = costCheck.lines.length > 0 || costCheck.bill;
-  const canConfirm = cart.length > 0 && changeOk && (remaining <= 0 || customer) && !sub.busy && !tooHigh && !needsApproval && !needsPriceApproval && !belowCost;
+  const [costAlert, setCostAlert] = useState(false);   // the "can't sell below cost" pop-up
+  // the server refused the sale for the same reason (e.g. the price changed meanwhile): the pop-up too
+  useEffect(() => { if (Object.values(sub.fieldErrors || {}).includes("belowCost")) setCostAlert(true); }, [sub.fieldErrors]);
+  // Confirm stays clickable when below cost: pressing it shows the pop-up again
+  const canConfirm = cart.length > 0 && changeOk && (remaining <= 0 || customer) && !sub.busy && !tooHigh && !needsApproval && !needsPriceApproval;
 
   const METHODS = (methodsApi.data?.methods || []).map((pm) => ({ key: `pm-${pm.id}`, paymentMethodId: pm.id, kind: pm.kind, label: pm.label }));
 
@@ -449,6 +453,7 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
   const remove = (key) => setPayments((list) => list.filter((p) => p.key !== key));
 
   const confirm = async () => {
+    if (belowCost) { setCostAlert(true); return; }
     const body = {
       ...(submit ? {} : { items: saleItems(cart) }),
       customerId: customer?.id || null,
@@ -465,6 +470,12 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
   return (
     <Modal title={t("ui.pos.payTitle")} onClose={onClose} wide>
       {asking && <ManagerApproval onClose={() => setAsking(false)} onApproved={(a) => { setApproval(a); setAsking(false); }} />}
+      {costAlert && (
+        <BelowCostAlert onClose={() => setCostAlert(false)}
+          names={(costCheck.lines.length ? costCheck.lines : Object.keys(sub.fieldErrors || {}).filter((k) => sub.fieldErrors[k] === "belowCost" && k.startsWith("items.")).map((k) => Number(k.split(".")[1])))
+            .map((i) => cart[i]?.product.name).filter(Boolean)}
+          bill={costCheck.bill || sub.fieldErrors?.discount === "belowCost"} />
+      )}
       {askingPrice && <ManagerApproval what="price" onClose={() => setAskingPrice(false)} onApproved={(a) => { setPriceApproval(a); setAskingPrice(false); }} />}
       <div className="paybox">
         <div className="paybox__left">
@@ -616,6 +627,25 @@ function History() {
         </div>
       )}
     </>
+  );
+}
+
+/**
+ * Pop-up: nothing can be sold below its cost price. names: the products priced below cost; bill: the discount takes the
+ * bill below the cost of its goods. The cost itself is never shown.
+ */
+export function BelowCostAlert({ names = [], bill = false, onClose }) {
+  const { t } = useLanguage();
+  return (
+    <Modal title={t("ui.pricing.belowCostTitle")} onClose={onClose}>
+      <div className="cost-alert" role="alertdialog">
+        <span className="cost-alert__icon"><Icon name="alert" /></span>
+        <p className="cost-alert__rule">{t("ui.pricing.belowCostRule")}</p>
+        {names.length > 0 && <p className="cost-alert__what">{fill(t("ui.pricing.belowCostLines"), { names: names.join(", ") })}</p>}
+        {bill && <p className="cost-alert__what">{t("ui.pricing.belowCostBill")}</p>}
+        <div className="form-actions"><button type="button" className="btn btn--primary" onClick={onClose} autoFocus>{t("ui.pricing.belowCostFix")}</button></div>
+      </div>
+    </Modal>
   );
 }
 

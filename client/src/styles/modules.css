@@ -1402,3 +1402,9 @@ tr.is-muted td { opacity: .6; }
 .pos2__price .link-btn .icon { width: 13px; height: 13px; }
 .pos2__price input { width: 110px; min-height: 30px; padding: 3px 8px; border: 1px solid var(--navy); border-radius: 8px; font: inherit; font-size: .85rem; }
 .pos2__price small { display: inline-flex; align-items: center; gap: 4px; }
+.cost-alert { display: grid; justify-items: center; gap: 10px; text-align: center; }
+.cost-alert__icon { display: grid; place-items: center; width: 56px; height: 56px; border-radius: 50%; background: #fde8e8; color: #b42318; }
+.cost-alert__icon .icon { width: 28px; height: 28px; }
+.cost-alert__rule { margin: 0; font-weight: 600; color: var(--ink, #111); }
+.cost-alert__what { margin: 0; padding: 8px 12px; border-radius: 10px; background: #fff4e0; color: #9a5b00; font-size: .9rem; }
+.cost-alert .form-actions { width: 100%; justify-content: center; }

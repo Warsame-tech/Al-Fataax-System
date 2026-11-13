@@ -5,7 +5,7 @@ import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest } from "../../services/api.js";
 import { PageHeader, useApi, usePerm, useSubmit, useMoney, Modal, Field, FormError, Money, EmptyState, Loading, SearchBox, PaymentFields, StatusBadge, DateRange, daysAgo, isoDate } from "../ui.jsx";
 import LineItems, { sellItems, linesBelowMin } from "./LineItems.jsx";
-import { ManagerApproval } from "./Pos.jsx";
+import { ManagerApproval, BelowCostAlert } from "./Pos.jsx";
 import { canChangePrice } from "../pricing.js";
 import { date, fill } from "../format.js";
 import SearchSelect from "../SearchSelect.jsx";
@@ -104,11 +104,13 @@ export function InvoiceForm() {
     if (!lines.length) { setCostCheck({ lines: [], bill: false }); return undefined; }
     const timer = setTimeout(() => {
       apiRequest("/api/sales/price-check", { method: "POST", body: { items: sellItems(lines, allowPrice), customerId: f.customerId || null, priceList: f.priceList, discount: disc.amount || 0 } })
-        .then(setCostCheck).catch(() => {});
+        .then((r) => { setCostCheck(r); if (r.lines.length || r.bill) setCostAlert(true); }).catch(() => {});
     }, 300);
     return () => clearTimeout(timer);
   }, [costKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const belowCost = costCheck.lines.length > 0 || costCheck.bill;
+  const [costAlert, setCostAlert] = useState(false);   // the "can't sell below cost" pop-up
+  useEffect(() => { if (Object.values(sub.fieldErrors || {}).includes("belowCost")) setCostAlert(true); }, [sub.fieldErrors]);
 
   /* choosing a customer fills their business phone and address (editable for this invoice) and their price type's prices */
   const pickCustomer = (cid, fromList = list) => {
@@ -127,6 +129,7 @@ export function InvoiceForm() {
 
   const save = async (e) => {
     e.preventDefault();
+    if (belowCost) { setCostAlert(true); return; }
     const body = { ...f, items: sellItems(lines, allowPrice), ...(approval ? { priceApprovalToken: approval.token } : {}) };
     const r = await sub.run(() => apiRequest("/api/invoices", { method: "POST", body }));
     if (r) { await draft.finish(); navigate(`/app/invoices/${r.id}`, { replace: true }); }
@@ -200,9 +203,14 @@ export function InvoiceForm() {
           <FormError error={sub.formError} />
           {costCheck.lines.length > 0 && <p className="form-status form-status--error" role="alert">{fill(t("ui.pricing.belowCostLines"), { names: costCheck.lines.map((i) => lines[i]?.product.name).filter(Boolean).join(", ") })}</p>}
           {costCheck.bill && <p className="form-status form-status--error" role="alert">{t("ui.pricing.belowCostBill")}</p>}
-          <button type="submit" className="btn btn--primary btn--lg" disabled={sub.busy || !lines.length || disc.error || needsApproval || belowCost}><Icon name="check" /><span>{t("ui.invoices.create")}</span></button>
+          <button type="submit" className="btn btn--primary btn--lg" disabled={sub.busy || !lines.length || disc.error || needsApproval}><Icon name="check" /><span>{t("ui.invoices.create")}</span></button>
         </div>
       </form>
+      {costAlert && (
+        <BelowCostAlert onClose={() => setCostAlert(false)} bill={costCheck.bill || sub.fieldErrors?.discount === "belowCost"}
+          names={(costCheck.lines.length ? costCheck.lines : Object.keys(sub.fieldErrors || {}).filter((k) => sub.fieldErrors[k] === "belowCost" && k.startsWith("items.")).map((k) => Number(k.split(".")[1])))
+            .map((i) => lines[i]?.product.name).filter(Boolean)} />
+      )}
       {asking && <ManagerApproval what="price" onClose={() => setAsking(false)} onApproved={(a) => { setApproval(a); setAsking(false); }} />}
       {newCustomer !== null && (
         <NewCustomerForm name={newCustomer} onClose={() => setNewCustomer(null)} onSaved={async (created) => {
