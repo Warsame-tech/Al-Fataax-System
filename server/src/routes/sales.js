@@ -103,6 +103,9 @@ export function priceLines(items, products, { user, userId = null, priceList = "
     if (!roll) baseQty = Math.round(qty * per * 10000) / 10000;
     // serial / IMEI products are sold as whole units, each one a chosen device
     if (isTracked(p) && (unit || !Number.isInteger(baseQty))) { errors[`items.${i}.qty`] = "wholeUnits"; return; }
+    // never below the cost price (per base unit; fabric: the roll's own cost per meter) — for everyone, with or without approval
+    const cost = roll && it.roll?.cost_per_meter != null ? num(it.roll.cost_per_meter) : num(p.cost_price);
+    if (cost > 0 && unitPrice / per < cost - 0.00005) { errors[`items.${i}.unitPrice`] = "belowCost"; return; }
     // minimum selling price (per base unit): below it only with prices.approve or a manager's approval
     const belowMin = p.min_price !== null && p.min_price !== undefined && unitPrice / per < num(p.min_price) - 0.00005;
     const approvedBy = !belowMin ? null : can(user, "prices.approve") ? userId : priceApprover;
@@ -119,6 +122,9 @@ export function priceLines(items, products, { user, userId = null, priceList = "
   if (Object.keys(errors).length) throw badRequest(errors);
   return lines;
 }
+
+/* what the goods on the bill cost (menu items are costed from their recipes later, so they are left out) */
+export const goodsCost = (lines) => round2(lines.reduce((s, l) => s + (l.menu ? 0 : l.qty * num(l.unitCost)), 0));
 
 function readItems(body) {
   const items = Array.isArray(body.items) ? body.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: x?.qty, unitPrice: x?.unitPrice, unit: x?.unit,
@@ -215,6 +221,7 @@ export async function createSale(conn, ctx, body) {
   const approvedBy = await checkDiscount(conn, { businessId, role, discount: manualDiscount, base: subtotal, approvalToken: body.approvalToken });
   const discount = round2(manualDiscount + promo.order.discount);
   if (discount > subtotal) throw badRequest({ discount: "tooLarge" });
+  if (manualDiscount > 0 && round2(subtotal - discount) < goodsCost(lines) - 0.005) throw badRequest({ discount: "belowCost" });
   const vat = vatFor(body.vat, round2(subtotal - discount));   // optional 5% VAT on the amount after discount
   const fee = ctx.fee?.amount > 0 ? round2(ctx.fee.amount) : 0;  // e.g. delivery fee
   const total = round2(subtotal - discount + vat.amount + fee);
@@ -279,6 +286,42 @@ export async function createSale(conn, ctx, body) {
   if (changed.length) await audit(conn, { businessId, userId, action: "price.changed", entity: "sale", entityId: saleId, meta: { ref: receiptNo, priceList, lines: changed } });
   return { id: saleId, receiptNo, total, paid, change };
 }
+
+/*
+ * POST /api/sales/price-check { items, customerId?, priceList?, discount?, pos? } — before paying: which lines are priced below
+ * their cost, and whether the manual discount takes the bill below the cost of its goods. Only yes / no: the cost itself
+ * stays hidden from staff without costs.view. pos: the running promotions count too (as on the POS).
+ */
+router.post("/price-check", (req, res, next) => (can(req.user, "sales.create") || can(req.user, "invoices.create") ? next() : res.status(403).json({ code: "forbidden" })), ah(async (req, res) => {
+  const bid = req.business.id;
+  const b = req.body || {};
+  const items = Array.isArray(b.items) ? b.items.slice(0, 200).map((x) => ({ productId: id(x?.productId), qty: x?.qty, unitPrice: x?.unitPrice, unit: x?.unit, rollId: x?.rollId })) : [];
+  if (!items.length) return res.json({ lines: [], bill: false });
+  const customerId = id(b.customerId);
+  const priceList = ["retail", "wholesale"].includes(b.priceList) ? b.priceList : await priceTierOf(pool, bid, customerId);
+  const [rows] = await pool.query("SELECT * FROM products WHERE business_id = ? AND id IN (?)", [bid, items.map((i) => i.productId).filter(Boolean).concat(0)]);
+  const products = new Map(rows.map((p) => [p.id, p]));
+  const rates = rows.some((p) => p.pricing_mode === "weight") ? await currentRates(pool, bid) : null;
+  for (const it of items) {
+    if (!it.rollId) continue;
+    const [[r]] = await pool.query("SELECT * FROM fabric_rolls WHERE id = ? AND business_id = ?", [Number(it.rollId) || 0, bid]);
+    it.roll = r || null;
+  }
+  // price each line on its own: a line below its cost is reported; other problems are left to the sale itself
+  const lines = [];
+  const below = [];
+  items.forEach((it, i) => {
+    try { lines.push(priceLines([it], products, { user: req.user, userId: req.user.id, priceList, rates, priceApprover: req.user.id })[0]); }
+    catch (err) { if (err.errors?.["items.0.unitPrice"] === "belowCost") below.push(i); }
+  });
+  let subtotal = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
+  if (b.pos && lines.length) {
+    const promo = applyPromotions(await activePromotions(pool, bid), lines.map((l) => ({ productId: l.product.id, categoryId: l.product.category_id, qty: l.qty, unitPrice: l.qty ? l.lineTotal / l.qty : 0, lineTotal: l.lineTotal })));
+    subtotal = round2(subtotal - promo.lines.reduce((s, x) => s + (x.discount || 0), 0) - promo.order.discount);
+  }
+  const discount = Number(b.discount) > 0 ? Number(b.discount) : 0;
+  res.json({ lines: below, bill: discount > 0 && !below.length && lines.length === items.length && round2(subtotal - discount) < goodsCost(lines) - 0.005 });
+}));
 
 router.post("/", requirePerm("sales.create"), ah(async (req, res) => {
   const result = await withTx((conn) => createSale(conn, { businessId: req.business.id, userId: req.user.id, role: req.user, branch: req.branch }, req.body || {}));

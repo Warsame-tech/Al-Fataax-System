@@ -4,7 +4,7 @@ import { requireAuth, audit } from "../middleware/auth.js";
 import { can, requirePerm } from "../lib/permissions.js";
 import { ah, id, money, withTx, ensureOwned, badRequest, conflict, num, round2, METHODS, text, optText, isDate, today, range } from "../lib/http.js";
 import { nextNumber, lockProducts, moveStock } from "../lib/ledger.js";
-import { priceLines } from "./sales.js";
+import { priceLines, goodsCost } from "./sales.js";
 import { sellDevices, returnSoldDevices, deviceLabel } from "../lib/devices.js";
 import { isRoll, attachRolls, cutFromRoll, returnCuts, cutsByItem } from "../lib/rolls.js";
 import { consumeForSale, restoreConsumption, viaRecipe } from "../lib/food.js";
@@ -72,6 +72,7 @@ export async function createInvoice(conn, ctx, body) {
   const discount = disc.amount;
   if (discount > 0 && !can(role, "sales.discount")) throw badRequest({ discount: "forbidden" });
   if (discount > subtotal) throw badRequest({ discount: "tooLarge" });
+  if (discount > 0 && round2(subtotal - discount) < goodsCost(lines) - 0.005) throw badRequest({ discount: "belowCost" });
   const vat = vatFor(body.vat, round2(subtotal - discount));   // optional 5% VAT on the amount after discount
   const total = round2(subtotal - discount + vat.amount);
   const discountLabel = discount > 0 ? optText(body.discountLabel, 80) || (disc.percent !== undefined ? `${disc.percent}%` : null) : null;

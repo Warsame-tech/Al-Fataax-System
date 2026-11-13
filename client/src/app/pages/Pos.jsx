@@ -34,6 +34,9 @@ const listPriceOf = (l, tier = "retail") => {
 /* a line's price: the one typed by the seller (l.price, when the product's price mode allows it) or the list price */
 const hasOwnPrice = (l) => l.price !== undefined && l.price !== null && l.price !== "";
 const priceOf = (l, tier) => (hasOwnPrice(l) ? Number(l.price) : listPriceOf(l, tier));
+/* cart lines as the API takes them */
+const saleItems = (cart) => cart.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}),
+  ...(l.rollId ? { rollId: l.rollId } : {}), ...(hasOwnPrice(l) ? { unitPrice: Number(l.price) } : {}) }));
 const maxOf = (l) => Math.floor(((isRoll(l.product) ? rollAvailable(l.roll) : l.product.stock) / perOf(l)) * 10000 + 1e-6) / 10000;
 const keyOf = (l) => (l.rollId ? `${l.product.id}:${l.rollId}` : String(l.product.id));
 const ROLL_UNITS = ["meter", "yard", "roll"];
@@ -421,7 +424,18 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
   const cashPaid = r2(payments.filter((p) => p.kind === "cash").reduce((s, p) => s + (Number(p.amount) || 0), 0));
   const change = remaining < 0 ? -remaining : 0;
   const changeOk = change === 0 || cashPaid >= change;
-  const canConfirm = cart.length > 0 && changeOk && (remaining <= 0 || customer) && !sub.busy && !tooHigh && !needsApproval && !needsPriceApproval;
+  // never below the cost price: the server says which lines (or the discount) would sell below cost, without showing the cost
+  const [costCheck, setCostCheck] = useState({ lines: [], bill: false });
+  useEffect(() => {
+    if (submit || !cart.length) return undefined;
+    const timer = setTimeout(() => {
+      apiRequest("/api/sales/price-check", { method: "POST", body: { items: saleItems(cart), customerId: customer?.id || null, discount: disc, pos: true } })
+        .then(setCostCheck).catch(() => {});
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [disc, customer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const belowCost = costCheck.lines.length > 0 || costCheck.bill;
+  const canConfirm = cart.length > 0 && changeOk && (remaining <= 0 || customer) && !sub.busy && !tooHigh && !needsApproval && !needsPriceApproval && !belowCost;
 
   const METHODS = (methodsApi.data?.methods || []).map((pm) => ({ key: `pm-${pm.id}`, paymentMethodId: pm.id, kind: pm.kind, label: pm.label }));
 
@@ -436,8 +450,7 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
 
   const confirm = async () => {
     const body = {
-      ...(submit ? {} : { items: cart.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}), ...(l.rollId ? { rollId: l.rollId } : {}),
-        ...(hasOwnPrice(l) ? { unitPrice: Number(l.price) } : {}) })) }),
+      ...(submit ? {} : { items: saleItems(cart) }),
       customerId: customer?.id || null,
       discount: disc || 0,
       ...(approval ? { approvalToken: approval.token } : {}),
@@ -530,6 +543,8 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
             ? <p className="paybox__note"><Icon name="info" />{fill(t("ui.pos.restOnCredit"), { name: customer.name })}</p>
             : payments.length > 0 && <p className="paybox__note is-warn"><Icon name="alert" />{t("ui.pos.needCustomer")}</p>)}
           {!changeOk && <p className="paybox__note is-warn"><Icon name="alert" />{t("ui.errors.changeNeedsCash")}</p>}
+          {costCheck.lines.length > 0 && <p className="paybox__note is-warn" role="alert"><Icon name="alert" />{fill(t("ui.pricing.belowCostLines"), { names: costCheck.lines.map((i) => cart[i]?.product.name).filter(Boolean).join(", ") })}</p>}
+          {costCheck.bill && <p className="paybox__note is-warn" role="alert"><Icon name="alert" />{t("ui.pricing.belowCostBill")}</p>}
           {sub.formError && sub.formError.code !== "validation" && <p className="form-status form-status--error" role="alert">{errText(sub.formError)}</p>}
           {sub.formError?.code === "validation" && <FormError error={sub.formError} />}
 

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
@@ -97,6 +97,18 @@ export function InvoiceForm() {
   const below = linesBelowMin(lines);
   const needsApproval = below.length > 0 && !can("prices.approve") && !approval;
   const customer = list.find((c) => String(c.id) === String(f.customerId)) || null;
+  // never below the cost price: the server says which lines (or the discount) would sell below cost, without showing the cost
+  const [costCheck, setCostCheck] = useState({ lines: [], bill: false });
+  const costKey = JSON.stringify([sellItems(lines, allowPrice), f.priceList, f.customerId, disc.amount || 0]);
+  useEffect(() => {
+    if (!lines.length) { setCostCheck({ lines: [], bill: false }); return undefined; }
+    const timer = setTimeout(() => {
+      apiRequest("/api/sales/price-check", { method: "POST", body: { items: sellItems(lines, allowPrice), customerId: f.customerId || null, priceList: f.priceList, discount: disc.amount || 0 } })
+        .then(setCostCheck).catch(() => {});
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [costKey]); // eslint-disable-line react-hooks/exhaustive-deps
+  const belowCost = costCheck.lines.length > 0 || costCheck.bill;
 
   /* choosing a customer fills their business phone and address (editable for this invoice) and their price type's prices */
   const pickCustomer = (cid, fromList = list) => {
@@ -186,7 +198,9 @@ export function InvoiceForm() {
             <div><dt>{t("ui.common.balance")}</dt><dd>{m(Math.max(0, total - (Number(f.amountPaid) || 0)))}</dd></div>
           </dl>
           <FormError error={sub.formError} />
-          <button type="submit" className="btn btn--primary btn--lg" disabled={sub.busy || !lines.length || disc.error || needsApproval}><Icon name="check" /><span>{t("ui.invoices.create")}</span></button>
+          {costCheck.lines.length > 0 && <p className="form-status form-status--error" role="alert">{fill(t("ui.pricing.belowCostLines"), { names: costCheck.lines.map((i) => lines[i]?.product.name).filter(Boolean).join(", ") })}</p>}
+          {costCheck.bill && <p className="form-status form-status--error" role="alert">{t("ui.pricing.belowCostBill")}</p>}
+          <button type="submit" className="btn btn--primary btn--lg" disabled={sub.busy || !lines.length || disc.error || needsApproval || belowCost}><Icon name="check" /><span>{t("ui.invoices.create")}</span></button>
         </div>
       </form>
       {asking && <ManagerApproval what="price" onClose={() => setAsking(false)} onApproved={(a) => { setApproval(a); setAsking(false); }} />}
