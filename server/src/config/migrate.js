@@ -891,6 +891,14 @@ COLUMNS.push(
   { table: "invoice_items", column: "list_price", ddl: "ALTER TABLE invoice_items ADD COLUMN list_price DECIMAL(14,4) NULL AFTER price_detail, ADD COLUMN price_approved_by INT UNSIGNED NULL AFTER list_price" }
 );
 
+// customer transaction history: the price list each sale / invoice used (retail | wholesale transactions; older sales
+// were retail, older invoices wholesale) and the walk-in customer's name / phone typed at the POS (to find their sales later)
+COLUMNS.push(
+  { table: "sales", column: "price_list", ddl: "ALTER TABLE sales ADD COLUMN price_list VARCHAR(10) NOT NULL DEFAULT 'retail' AFTER payment_method" },
+  { table: "invoices", column: "price_list", ddl: "ALTER TABLE invoices ADD COLUMN price_list VARCHAR(10) NOT NULL DEFAULT 'wholesale' AFTER status" },
+  { table: "sales", column: "walkin_phone", ddl: "ALTER TABLE sales ADD COLUMN walkin_name VARCHAR(120) NULL AFTER customer_id, ADD COLUMN walkin_phone VARCHAR(30) NULL AFTER walkin_name, ADD INDEX idx_sales_walkin_phone (business_id, walkin_phone)" }
+);
+
 const INDEXES = [
   { table: "products", name: "idx_products_category", ddl: "ALTER TABLE products ADD INDEX idx_products_category (business_id, category_id)" },
   { table: "products", name: "idx_products_brand", ddl: "ALTER TABLE products ADD INDEX idx_products_brand (business_id, brand_id)" },

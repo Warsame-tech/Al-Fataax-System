@@ -154,28 +154,114 @@ function partyRouter(kind) {
     res.json({ code: "saved" });
   }));
 
-  /* GET /:id/statement — documents, payments and running balance */
+  /*
+   * GET /api/customers/:id/history?from&to&q&branchId&type&status — the customer's transactions (POS sales and invoices),
+   * each with its branch, retail / wholesale type, total, paid, balance, payment status, payments and returns / refunds,
+   * linked to the original document. summary: totals over all their transactions (not the filters).
+   * Staff tied to one branch see only that branch's transactions.
+   */
+  if (isCustomer) router.get("/:id/history", requirePerm("customers.view"), ah(async (req, res) => {
+    const bid = req.business.id;
+    const c = await ensureOwned(pool, "customers", id(req.params.id), bid);
+    const forced = req.branch?.fixed ? req.branch.filterId : null;
+    const [docs] = await pool.query(
+      `SELECT 'sale' kind, s.id, s.receipt_no ref, s.sold_at at, NULL due_date, s.total, s.amount_paid, s.status, s.price_list, s.branch_id, b.name branch
+         FROM sales s LEFT JOIN branches b ON b.id = s.branch_id WHERE s.business_id = ? AND s.customer_id = ?${forced ? " AND s.branch_id = ?" : ""}
+       UNION ALL
+       SELECT 'invoice', i.id, i.invoice_no, CAST(i.issue_date AS DATETIME), i.due_date, i.total, i.amount_paid,
+              CASE WHEN i.status IN ('unpaid','partially_paid') AND i.due_date IS NOT NULL AND i.due_date < UTC_DATE() THEN 'overdue' ELSE i.status END,
+              i.price_list, i.branch_id, b.name
+         FROM invoices i LEFT JOIN branches b ON b.id = i.branch_id WHERE i.business_id = ? AND i.customer_id = ? AND i.status <> 'draft'${forced ? " AND i.branch_id = ?" : ""}
+       ORDER BY at DESC, id DESC LIMIT 3000`, forced ? [bid, c.id, forced, bid, c.id, forced] : [bid, c.id, bid, c.id]);
+    const saleIds = docs.filter((d) => d.kind === "sale").map((d) => d.id);
+    const invIds = docs.filter((d) => d.kind === "invoice").map((d) => d.id);
+    const [pays] = saleIds.length || invIds.length ? await pool.query(
+      `SELECT cp.id, cp.sale_id, cp.invoice_id, cp.amount, cp.method, cp.reference, cp.paid_at, pm.name pm_name, u.full_name user_name
+         FROM customer_payments cp LEFT JOIN payment_methods pm ON pm.id = cp.payment_method_id AND pm.business_id = cp.business_id LEFT JOIN users u ON u.id = cp.user_id
+        WHERE cp.business_id = ? AND (cp.sale_id IN (?) OR cp.invoice_id IN (?)) ORDER BY cp.paid_at, cp.id`, [bid, saleIds.concat(0), invIds.concat(0)]) : [[]];
+    const [rets] = saleIds.length ? await pool.query(
+      "SELECT r.id, r.sale_id, r.total, r.refund_amount, r.reason, r.returned_at, u.full_name user_name FROM returns r LEFT JOIN users u ON u.id = r.user_id WHERE r.business_id = ? AND r.type = 'sale' AND r.sale_id IN (?) ORDER BY r.returned_at",
+      [bid, saleIds]) : [[]];
+    const list = docs.map((d) => {
+      const mine = (x) => (d.kind === "sale" ? x.sale_id === d.id : x.invoice_id === d.id);
+      const cancelled = d.status === "cancelled";
+      const total = num(d.total);
+      const paid = num(d.amount_paid);
+      const balance = cancelled ? 0 : Math.max(0, round2(total - paid));
+      // payment status: invoices keep theirs (overdue included); a POS sale's comes from what was paid
+      const status = cancelled ? "cancelled" : d.kind === "invoice" ? d.status : balance <= 0 ? "paid" : paid > 0 ? "partially_paid" : "unpaid";
+      const returns = rets.filter(mine).map((r) => ({ id: r.id, at: r.returned_at, amount: num(r.total), refund: num(r.refund_amount), reason: r.reason || "", user: r.user_name }));
+      return {
+        kind: d.kind, id: d.id, number: d.ref, at: d.at, dueDate: d.due_date, type: d.price_list === "wholesale" ? "wholesale" : "retail", branchId: d.branch_id, branch: d.branch || null,
+        total, paid, balance, status, cancelled,
+        payments: pays.filter(mine).map((p) => ({ id: p.id, at: p.paid_at, amount: num(p.amount), method: p.method, label: p.pm_name || null, reference: p.reference || "", refund: num(p.amount) < 0, user: p.user_name })),
+        returns, returned: round2(returns.reduce((s, r) => s + r.amount, 0)), refunded: round2(returns.reduce((s, r) => s + r.refund, 0))
+      };
+    });
+    const live = list.filter((x) => !x.cancelled);
+    const summary = {
+      totalPurchases: round2(live.reduce((s, x) => s + x.total, 0)), totalPaid: round2(live.reduce((s, x) => s + x.paid, 0)),
+      outstanding: round2(live.reduce((s, x) => s + x.balance, 0)), transactions: live.length,
+      lastPurchase: live.length ? live.reduce((a, x) => (String(x.at) > String(a) ? x.at : a), live[0].at) : null,
+      returned: round2(list.reduce((s, x) => s + x.returned, 0)), refunded: round2(list.reduce((s, x) => s + x.refunded, 0)),
+      retail: live.filter((x) => x.type === "retail").length, wholesale: live.filter((x) => x.type === "wholesale").length
+    };
+    // filters (after the summary, which covers everything)
+    const q = text(req.query.q, 60).toLowerCase();
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from || "") ? req.query.from : null;
+    const to = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to || "") ? req.query.to : null;
+    const day = (v) => (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+    const branchId = id(req.query.branchId);
+    const shown = list.filter((x) => (!from || day(x.at) >= from) && (!to || day(x.at) <= to) && (!q || x.number.toLowerCase().includes(q))
+      && (!branchId || x.branchId === branchId) && (!["retail", "wholesale"].includes(req.query.type) || x.type === req.query.type)
+      && (!req.query.status || x.status === req.query.status || (req.query.status === "returned" && x.returns.length > 0)));
+    res.json({ customer: { id: c.id, name: c.name, phone: c.phone, email: c.email, address: c.address, priceTier: c.price_tier || "retail" }, summary, transactions: shown });
+  }));
+
+  /*
+   * GET /:id/statement?from&to — documents, payments and running balance. Customers: refunds (money given back), returns
+   * and cancelled sales are shown too (returns / cancellations don't move the balance: the sale's total already changed);
+   * with from, the lines before it make the opening balance.
+   */
   router.get("/:id/statement", requirePerm(`${perm}.view`), ah(async (req, res) => {
     const bid = req.business.id;
     const party = await ensureOwned(pool, table, id(req.params.id), bid);
     const [rows] = isCustomer
       ? await pool.query(
         `SELECT * FROM (
-           SELECT 'invoice' kind, invoice_no ref, CAST(issue_date AS DATETIME) at, total debit, 0 credit, status, id, due_date FROM invoices WHERE business_id = ? AND customer_id = ? AND status NOT IN ('draft','cancelled')
-           UNION ALL SELECT 'sale', receipt_no, sold_at, total, 0, status, id, NULL FROM sales WHERE business_id = ? AND customer_id = ? AND status = 'completed'
-           UNION ALL SELECT 'payment', COALESCE(reference, ''), paid_at, 0, amount, method, id, NULL FROM customer_payments WHERE business_id = ? AND customer_id = ?
-         ) t ORDER BY at, kind DESC, id`, [bid, party.id, bid, party.id, bid, party.id])
+           SELECT 'invoice' kind, invoice_no ref, CAST(issue_date AS DATETIME) at, total debit, 0 credit, status, id, due_date, NULL amount, 'invoice' doc_kind, id doc_id
+             FROM invoices WHERE business_id = ? AND customer_id = ? AND status NOT IN ('draft','cancelled')
+           UNION ALL SELECT 'sale', receipt_no, sold_at, total, 0, status, id, NULL, NULL, 'sale', id FROM sales WHERE business_id = ? AND customer_id = ? AND status = 'completed'
+           UNION ALL SELECT IF(cp.amount < 0, 'refund', 'payment'),
+                  COALESCE(NULLIF(cp.reference, 'REFUND'), (SELECT s.receipt_no FROM sales s WHERE s.id = cp.sale_id), (SELECT i.invoice_no FROM invoices i WHERE i.id = cp.invoice_id), ''),
+                  cp.paid_at, IF(cp.amount < 0, -cp.amount, 0), IF(cp.amount < 0, 0, cp.amount), cp.method, cp.id, NULL, NULL,
+                  IF(cp.sale_id IS NOT NULL, 'sale', IF(cp.invoice_id IS NOT NULL, 'invoice', NULL)), COALESCE(cp.sale_id, cp.invoice_id)
+             FROM customer_payments cp WHERE cp.business_id = ? AND cp.customer_id = ?
+           UNION ALL SELECT 'cancelled', receipt_no, sold_at, 0, 0, status, id, NULL, total, 'sale', id FROM sales WHERE business_id = ? AND customer_id = ? AND status = 'cancelled'
+           UNION ALL SELECT 'return', s.receipt_no, r.returned_at, 0, 0, 'returned', r.id, NULL, r.total, 'sale', s.id FROM returns r JOIN sales s ON s.id = r.sale_id
+                      WHERE r.business_id = ? AND r.type = 'sale' AND s.customer_id = ? AND s.status <> 'cancelled'
+         ) t ORDER BY at, FIELD(kind, 'invoice', 'sale', 'cancelled', 'return', 'payment', 'refund'), id`, [bid, party.id, bid, party.id, bid, party.id, bid, party.id, bid, party.id])
       : await pool.query(
         `SELECT * FROM (
            SELECT 'purchase' kind, purchase_no ref, purchased_at at, total debit, 0 credit, status, id, NULL due_date FROM purchases WHERE business_id = ? AND supplier_id = ? AND status IN ('received', 'partial')
            UNION ALL SELECT 'payment', COALESCE(reference, ''), paid_at, 0, amount, method, id, NULL FROM supplier_payments WHERE business_id = ? AND supplier_id = ?
          ) t ORDER BY at, kind DESC, id`, [bid, party.id, bid, party.id]);
     let bal = 0;
-    const lines = rows.map((r) => {
+    const all = rows.map((r) => {
       bal = round2(bal + num(r.debit) - num(r.credit));
-      return { kind: r.kind, ref: r.ref, at: r.at, debit: num(r.debit), credit: num(r.credit), status: r.status, id: r.id, dueDate: r.due_date, balance: bal };
+      return { kind: r.kind, ref: r.ref, at: r.at, debit: num(r.debit), credit: num(r.credit), status: r.status, id: r.id, dueDate: r.due_date, balance: bal,
+        ...(r.amount !== undefined && r.amount !== null ? { amount: num(r.amount) } : {}), ...(r.doc_kind ? { docKind: r.doc_kind, docId: r.doc_id } : {}) };
     });
-    res.json({ party: { id: party.id, name: party.name, phone: party.phone, email: party.email, address: party.address }, lines, balance: bal });
+    // a period: what came before it is the opening balance
+    const day = (v) => (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+    const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from || "") ? req.query.from : null;
+    const to = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to || "") ? req.query.to : null;
+    const before = from ? all.filter((l) => day(l.at) < from) : [];
+    const opening = before.length ? before[before.length - 1].balance : 0;
+    const lines = all.filter((l) => (!from || day(l.at) >= from) && (!to || day(l.at) <= to));
+    const sum = (k) => round2(lines.reduce((s, l) => s + l[k], 0));
+    res.json({ party: { id: party.id, name: party.name, phone: party.phone, email: party.email, address: party.address }, lines, balance: bal,
+      period: { from, to, opening, debit: sum("debit"), credit: sum("credit"), closing: lines.length ? lines[lines.length - 1].balance : opening } });
   }));
 
   /* POST /:id/payments — customer pays us / we pay supplier (oldest first) */

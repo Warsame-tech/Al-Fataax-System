@@ -87,6 +87,7 @@ export default function Receipt() {
           <p>{t("ui.common.date")}: {date(s.at, lang, true)}</p>
           <p>{t("ui.receipt.servedBy")}: {s.cashier}</p>
           {s.customer && <p>{t("ui.common.customer")}: {s.customer.name}{s.customer.phone ? ` · ${s.customer.phone}` : ""}</p>}
+          {!s.customer && s.walkIn && <p>{t("ui.common.customer")}: {[s.walkIn.name, s.walkIn.phone].filter(Boolean).join(" · ")}</p>}
           {s.status !== "completed" && <p className="thermal__status"><StatusBadge status={s.status} /></p>}
         </section>
 

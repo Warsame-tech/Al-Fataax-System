@@ -394,6 +394,8 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
   const [discount, setDiscount] = useState("");
   const [discMode, setDiscMode] = useState("percent"); // "percent" | "amount"
   const [payments, setPayments] = useState([]);    // [{ key, paymentMethodId, kind, label, amount }]
+  // walk-in customer (no customer chosen): name / phone kept on the sale, to find their purchases later (Sales history search)
+  const [walkIn, setWalkIn] = useState({ name: "", phone: "" });
   // promotions running now (server works them out the same way when the sale is saved) and the discount rules
   const [promo, setPromo] = useState(null);
   const rules = useApi("/api/promotions/rules");
@@ -462,6 +464,7 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
     const body = {
       ...(submit ? {} : { items: saleItems(cart) }),
       customerId: customer?.id || null,
+      ...(!customer && (walkIn.name.trim() || walkIn.phone.trim()) ? { walkIn: { name: walkIn.name.trim(), phone: walkIn.phone.trim() } } : {}),
       discount: disc || 0,
       ...(approval ? { approvalToken: approval.token } : {}),
       ...(priceApproval ? { priceApprovalToken: priceApproval.token } : {}),
@@ -542,6 +545,16 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
         </div>
 
         <div className="paybox__right">
+          {!customer && (
+            <div className="walkin-box">
+              <span className="walkin-box__title"><Icon name="users" /> {t("ui.history.walkIn")}</span>
+              <div className="walkin-box__fields">
+                <input className="input input--sm" type="tel" inputMode="tel" value={walkIn.phone} onChange={(e) => setWalkIn((w) => ({ ...w, phone: e.target.value }))} placeholder={t("ui.history.walkInPhone")} aria-label={t("ui.history.walkInPhone")} maxLength={30} />
+                <input className="input input--sm" value={walkIn.name} onChange={(e) => setWalkIn((w) => ({ ...w, name: e.target.value }))} placeholder={t("ui.history.walkInName")} aria-label={t("ui.history.walkInName")} maxLength={120} />
+              </div>
+              <small className="muted">{t("ui.history.walkInHint")}</small>
+            </div>
+          )}
           <h3>{t("ui.pos.applied")}</h3>
           {payments.length === 0 ? <p className="dash-empty">{t("ui.pos.noApplied")}</p> : (
             <ul className="paybox__applied">
@@ -613,7 +626,7 @@ function History() {
   const rows = list.data?.sales || [];
   return (
     <>
-      <div className="toolbar"><DateRange value={range} onChange={setRange} /><SearchBox value={q} onChange={setQ} /></div>
+      <div className="toolbar"><DateRange value={range} onChange={setRange} /><SearchBox value={q} onChange={setQ} placeholder={t("ui.pos.historySearchPh")} /></div>
       {list.loading && !list.data ? <Loading /> : rows.length === 0 ? <EmptyState icon="cart" text={t("ui.common.noResults")} /> : (
         <div className="table-wrap">
           <table className="table">
@@ -623,7 +636,7 @@ function History() {
                 <tr key={s.id}>
                   <td><Link to={`/app/sales/${s.id}`}>{s.number}</Link></td>
                   <td>{date(s.at, lang, true)}</td>
-                  <td>{s.customer || "—"}</td>
+                  <td>{s.customer || (s.walkIn ? <>{[s.walkIn.name, s.walkIn.phone].filter(Boolean).join(" · ")} <span className="track-tag">{t("ui.history.walkInTag")}</span></> : "—")}</td>
                   <td>{s.cashier}</td>
                   <td>{t(`ui.methods.${s.method}`)}</td>
                   <td className="num"><Money value={s.total} /></td>

@@ -415,6 +415,8 @@ CREATE TABLE IF NOT EXISTS sales (
   business_id    INT UNSIGNED NOT NULL,
   receipt_no     VARCHAR(30) NOT NULL,
   customer_id    INT UNSIGNED NULL,
+  walkin_name    VARCHAR(120) NULL,                -- walk-in customer (no customer chosen): name / phone typed at the POS
+  walkin_phone   VARCHAR(30)  NULL,
   user_id        INT UNSIGNED NOT NULL,
   subtotal       DECIMAL(14,4) NOT NULL,
   discount       DECIMAL(14,4) NOT NULL DEFAULT 0,
@@ -428,10 +430,12 @@ CREATE TABLE IF NOT EXISTS sales (
   amount_paid    DECIMAL(14,4) NOT NULL DEFAULT 0,  -- informational; money in = customer_payments
   change_amount  DECIMAL(14,4) NOT NULL DEFAULT 0,  -- change given back (receipt)
   payment_method ENUM('cash','mobile_money','bank','credit') NOT NULL,
+  price_list     VARCHAR(10) NOT NULL DEFAULT 'retail',   -- retail | wholesale transaction
   status         ENUM('completed','cancelled','returned','partially_returned') NOT NULL DEFAULT 'completed',
   sold_at        DATETIME NOT NULL,
   UNIQUE KEY uq_receipt (business_id, receipt_no),
   INDEX idx_sales_date (business_id, sold_at),
+  INDEX idx_sales_walkin_phone (business_id, walkin_phone),
   CONSTRAINT fk_sales_business FOREIGN KEY (business_id) REFERENCES businesses(id),
   CONSTRAINT fk_sales_customer FOREIGN KEY (customer_id) REFERENCES customers(id),
   CONSTRAINT fk_sales_user     FOREIGN KEY (user_id)     REFERENCES users(id)
@@ -481,6 +485,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   total       DECIMAL(14,4) NOT NULL,
   amount_paid DECIMAL(14,4) NOT NULL DEFAULT 0,  -- sum of linked customer_payments, updated in the same transaction
   status      ENUM('draft','unpaid','partially_paid','paid','overdue','cancelled') NOT NULL DEFAULT 'unpaid',
+  price_list  VARCHAR(10) NOT NULL DEFAULT 'wholesale',   -- retail | wholesale transaction
   notes       VARCHAR(255) NULL,
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   UNIQUE KEY uq_invoice_no (business_id, invoice_no),

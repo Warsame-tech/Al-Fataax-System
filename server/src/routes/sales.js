@@ -265,10 +265,12 @@ export async function createSale(conn, ctx, body) {
   if (!split && paid > 0) collected = [{ method: paidMethod, bankAccountId: id(body.bankAccountId), amount: paid }];
 
   const receiptNo = await nextNumber(conn, businessId, "receipt");
+  // walk-in customer (no customer chosen): the name / phone typed at the POS, to find their sales later
+  const walkIn = customerId ? null : { name: optText(body.walkIn?.name, 120), phone: optText(body.walkIn?.phone, 30) };
   const [s] = await conn.query(
-    `INSERT INTO sales (business_id, receipt_no, customer_id, user_id, subtotal, discount, discount_approved_by, promo_detail, vat_rate, vat_amount, fee_amount, fee_label, total, amount_paid, change_amount, payment_method, sold_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, UTC_TIMESTAMP()))`,
-    [businessId, receiptNo, customerId, userId, subtotal, discount, approvedBy, promoDetail ? JSON.stringify(promoDetail) : null, vat.rate, vat.amount, fee, fee ? ctx.fee.label || null : null, total, paid, change, method, ctx.at || null]
+    `INSERT INTO sales (business_id, receipt_no, customer_id, walkin_name, walkin_phone, user_id, subtotal, discount, discount_approved_by, promo_detail, vat_rate, vat_amount, fee_amount, fee_label, total, amount_paid, change_amount, payment_method, price_list, sold_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, UTC_TIMESTAMP()))`,
+    [businessId, receiptNo, customerId, walkIn?.name || null, walkIn?.phone || null, userId, subtotal, discount, approvedBy, promoDetail ? JSON.stringify(promoDetail) : null, vat.rate, vat.amount, fee, fee ? ctx.fee.label || null : null, total, paid, change, method, priceList, ctx.at || null]
   );
   const saleId = s.insertId;
   // the branch's own stock (ctx.branch, lib/branches.js), or the default location
@@ -349,14 +351,16 @@ router.get("/", requirePerm("sales.view"), ah(async (req, res) => {
   const r = range(req.query, 7);
   const q = text(req.query.q, 60);
   const [rows] = await pool.query(
-    `SELECT s.id, s.receipt_no, s.total, s.amount_paid, s.payment_method, s.status, s.sold_at, c.name customer, u.full_name cashier,
+    `SELECT s.id, s.receipt_no, s.total, s.amount_paid, s.payment_method, s.status, s.sold_at, c.name customer, s.walkin_name, s.walkin_phone, u.full_name cashier,
             (SELECT COUNT(*) FROM sale_items si WHERE si.sale_id = s.id) lines_count
        FROM sales s LEFT JOIN customers c ON c.id = s.customer_id JOIN users u ON u.id = s.user_id
-      WHERE s.business_id = ?${branchSql(req)("s")} AND s.sold_at BETWEEN ? AND ? ${q ? "AND (s.receipt_no LIKE ? OR c.name LIKE ?)" : ""}
+      WHERE s.business_id = ?${branchSql(req)("s")} AND s.sold_at BETWEEN ? AND ? ${q ? "AND (s.receipt_no LIKE ? OR c.name LIKE ? OR c.phone LIKE ? OR s.walkin_name LIKE ? OR s.walkin_phone LIKE ?)" : ""}
       ORDER BY s.sold_at DESC, s.id DESC LIMIT 500`,
-    q ? [req.business.id, r.start, r.end, `%${q}%`, `%${q}%`] : [req.business.id, r.start, r.end]
+    q ? [req.business.id, r.start, r.end, ...Array(5).fill(`%${q}%`)] : [req.business.id, r.start, r.end]
   );
-  res.json({ range: r, sales: rows.map((s) => ({ id: s.id, number: s.receipt_no, total: num(s.total), paid: num(s.amount_paid), method: s.payment_method, status: s.status, at: s.sold_at, customer: s.customer, cashier: s.cashier, lines: num(s.lines_count) })) });
+  // walk-in sales show the name / phone typed at the POS
+  res.json({ range: r, sales: rows.map((s) => ({ id: s.id, number: s.receipt_no, total: num(s.total), paid: num(s.amount_paid), method: s.payment_method, status: s.status, at: s.sold_at, customer: s.customer, cashier: s.cashier, lines: num(s.lines_count),
+    walkIn: s.customer ? null : (s.walkin_name || s.walkin_phone ? { name: s.walkin_name || "", phone: s.walkin_phone || "" } : null) })) });
 }));
 
 /* GET /api/sales/:id — receipt */
@@ -378,7 +382,8 @@ router.get("/:id", requirePerm("sales.view"), ah(async (req, res) => {
   res.json({
     business: req.business,
     sale: { id: s.id, number: s.receipt_no, at: s.sold_at, status: s.status, method: s.payment_method, subtotal: num(s.subtotal), discount: num(s.discount), vatRate: num(s.vat_rate || 0), vat: num(s.vat_amount || 0),
-      fee: num(s.fee_amount || 0), feeLabel: s.fee_label || null, promo: s.promo_detail ? JSON.parse(s.promo_detail) : null, total: num(s.total), paid: num(s.amount_paid), change: num(s.change_amount || 0), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name },
+      fee: num(s.fee_amount || 0), feeLabel: s.fee_label || null, promo: s.promo_detail ? JSON.parse(s.promo_detail) : null, total: num(s.total), paid: num(s.amount_paid), change: num(s.change_amount || 0), balance: round2(num(s.total) - num(s.amount_paid)), customer: cust, cashier: cashier?.full_name,
+      walkIn: !cust && (s.walkin_name || s.walkin_phone) ? { name: s.walkin_name || "", phone: s.walkin_phone || "" } : null, priceList: s.price_list || "retail" },
     // sold in a pack: shown as e.g. 2 Strip × 1.50 (qty / unitPrice); baseQty is the stock that left
     items: items.map((i) => ({ id: i.id, productId: i.product_id, name: i.name, sku: i.sku, qty: i.sell_unit ? num(i.sell_qty) : num(i.qty), unitPrice: i.sell_unit ? num(i.sell_price) : num(i.unit_price),
       unit: i.sell_unit || null, baseQty: num(i.qty), baseUnit: i.base_unit, total: num(i.line_total),

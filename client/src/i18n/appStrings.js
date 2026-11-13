@@ -383,6 +383,19 @@ const en = {
     err: { supplierNotFound: "no supplier with this name — add it in Suppliers first", duplicateInList: "also used in row {row}", usedBy: "already used by {name}",
       barcodeOneVariant: "a barcode belongs to one product — put each variant on its own row", required: "required" }
   },
+  history: {
+    open: "History", title: "Customer history", tabs: { transactions: "Transactions", statement: "Account statement" },
+    totalPurchases: "Total purchases", totalPaid: "Total paid", outstanding: "Outstanding balance", transactions: "Transactions", lastPurchase: "Last purchase",
+    returnsLine: "Returns {amount} · refunded {refund}", typesLine: "{retail} retail · {wholesale} wholesale", never: "No purchases yet",
+    searchPh: "Invoice / receipt number", allBranches: "All branches", allTypes: "Retail and wholesale", allStatuses: "Every payment status",
+    types: { retail: "Retail", wholesale: "Wholesale" }, docs: { sale: "POS sale", invoice: "Invoice" },
+    number: "Invoice no.", type: "Type", branch: "Branch", total: "Invoice total", paid: "Paid", balance: "Outstanding", status: "Payment status",
+    payments: "Payment history", returns: "Returns and refunds", noPayments: "No payments yet.", refundTag: "Refund", returnedTag: "Returned", returnLine: "{amount} returned · {refund} refunded",
+    statuses: { paid: "Paid", partially_paid: "Partly paid", unpaid: "Unpaid", overdue: "Overdue", cancelled: "Cancelled", returned: "With returns" },
+    empty: "No transactions match.", exportCsv: "Download CSV", showDetails: "Payments and returns",
+    walkIn: "Walk-in customer (optional)", walkInName: "Name", walkInPhone: "Phone number", walkInHint: "Saved on the receipt. Search the phone in Sales history to find this customer's purchases later.",
+    walkInTag: "Walk-in"
+  },
   pricing: {
     section: "Prices", priceEdit: "Price at a sale",
     priceEditOptions: { fixed: "Fixed price", editable: "Editable price", permission: "Permission-based price" },
@@ -483,7 +496,8 @@ const en = {
     customers: "Customers", suppliers: "Suppliers", addCustomer: "Add customer", addSupplier: "Add supplier", editCustomer: "Edit customer",
     editSupplier: "Edit supplier", owesYou: "Owes you", youOwe: "You owe", overdue: "Overdue", statement: "Account statement",
     receivePayment: "Receive payment", paySupplier: "Pay supplier", debit: "Charged", credit: "Paid", runningBalance: "Balance",
-    kinds: { invoice: "Invoice", sale: "Credit sale", purchase: "Purchase", payment: "Payment" },
+    kinds: { invoice: "Invoice", sale: "Sale", purchase: "Purchase", payment: "Payment", refund: "Refund", return: "Return", cancelled: "Cancelled sale" },
+    opening: "Opening balance", closing: "Closing balance", period: "Period", allTime: "All time", noBalanceEffect: "no change to the balance",
     emptyCustomers: "No customers yet.", emptySuppliers: "No suppliers yet.",
     paymentHelp: "The payment is applied to the oldest unpaid documents first."
   },
@@ -494,7 +508,7 @@ const en = {
     charge: "Complete sale · {amount}", newSale: "New sale", receipt: "Receipt", history: "Sales history", cancelSale: "Cancel & refund",
     cancelHelp: "Stock will be returned and the money received will be refunded. This is recorded in the activity log.",
     inStock: "{qty} in stock", outOfStock: "Out of stock", cashier: "Cashier", receiptNo: "Receipt no.", thankYou: "Thank you for shopping with us!",
-    done: "Sale completed", notFound: "No product with this barcode.", noDiscount: "Only owners and managers can give discounts.",
+    historySearchPh: "Receipt no., customer, or walk-in phone", done: "Sale completed", notFound: "No product with this barcode.", noDiscount: "Only owners and managers can give discounts.",
     scan: "Scan barcode", scanTitle: "Scan with camera", scanHelp: "Hold the item's barcode in front of the camera.",
     scanNoCamera: "The camera can't be opened. Allow camera access, or use a barcode scanner or type the code.",
     scanned: "Scanned item", added: "Added to cart", inCart: "In cart: {qty}", addAnother: "Add another",
@@ -1076,6 +1090,19 @@ const so = {
     err: { supplierNotFound: "alaab-qeybiye magacan leh ma jiro — marka hore ku dar Alaab-qeybiyeyaasha", duplicateInList: "sidoo kale waxaa lagu isticmaalay safka {row}", usedBy: "waxaa horay u isticmaalay {name}",
       barcodeOneVariant: "baarkood wuxuu u yahay hal alaab — nooc kasta saf gooni ah u samee", required: "waa loo baahan yahay" }
   },
+  history: {
+    open: "Taariikh", title: "Taariikhda macmiilka", tabs: { transactions: "Dhaqdhaqaaqa", statement: "Bayaanka xisaabta" },
+    totalPurchases: "Wadarta iibka", totalPaid: "Wadarta la bixiyay", outstanding: "Haraaga lagu leeyahay", transactions: "Dhaqdhaqaaqyada", lastPurchase: "Iibkii ugu dambeeyay",
+    returnsLine: "Celin {amount} · lacag celin {refund}", typesLine: "{retail} tafaariiq · {wholesale} jumlo", never: "Weli wax ma iibsan",
+    searchPh: "Lambarka qaansheegta / rasiidka", allBranches: "Laamaha oo dhan", allTypes: "Tafaariiq iyo jumlo", allStatuses: "Xaalad kasta oo lacag-bixin",
+    types: { retail: "Tafaariiq", wholesale: "Jumlo" }, docs: { sale: "Iib POS", invoice: "Qaansheeg" },
+    number: "Lambarka", type: "Nooca", branch: "Laanta", total: "Wadarta", paid: "La bixiyay", balance: "Haraaga", status: "Xaaladda lacagta",
+    payments: "Taariikhda lacag-bixinta", returns: "Celinta iyo lacag celinta", noPayments: "Weli lacag lama bixin.", refundTag: "Lacag celin", returnedTag: "La celiyay", returnLine: "{amount} la celiyay · {refund} lacag la celiyay",
+    statuses: { paid: "La bixiyay", partially_paid: "Qayb la bixiyay", unpaid: "Lama bixin", overdue: "Waqtigii dhaafay", cancelled: "La joojiyay", returned: "Celin leh" },
+    empty: "Dhaqdhaqaaq u dhigma ma jiro.", exportCsv: "Soo deji CSV", showDetails: "Lacag-bixinta iyo celinta",
+    walkIn: "Macmiil soo socod ah (ikhtiyaari)", walkInName: "Magaca", walkInPhone: "Lambarka taleefanka", walkInHint: "Waxaa lagu kaydiyaa rasiidka. Ka raadi lambarka Taariikhda iibka si aad mar dambe u hesho iibsashadiisa.",
+    walkInTag: "Soo socod"
+  },
   pricing: {
     section: "Qiimaha", priceEdit: "Qiimaha marka la iibinayo",
     priceEditOptions: { fixed: "Qiime go'an", editable: "Qiime la beddeli karo", permission: "Qiime ogolaansho ku xiran" },
@@ -1176,7 +1203,8 @@ const so = {
     customers: "Macaamiisha", suppliers: "Alaab-qeybiyeyaasha", addCustomer: "Ku dar macmiil", addSupplier: "Ku dar alaab-qeybiye", editCustomer: "Wax ka beddel macmiilka",
     editSupplier: "Wax ka beddel alaab-qeybiyaha", owesYou: "Wuu kugu leeyahay", youOwe: "Waad ku leedahay", overdue: "Waqtigii dhaafay", statement: "Bayaanka akoonka",
     receivePayment: "Qaado lacag", paySupplier: "Bixi alaab-qeybiyaha", debit: "Lagu dallacay", credit: "La bixiyay", runningBalance: "Haraaga",
-    kinds: { invoice: "Qaansheeg", sale: "Iib deyn ah", purchase: "Iibsi", payment: "Lacag-bixin" },
+    kinds: { invoice: "Qaansheeg", sale: "Iib", purchase: "Iibsi", payment: "Lacag-bixin", refund: "Lacag celin", return: "Celin alaab", cancelled: "Iib la joojiyay" },
+    opening: "Haraaga bilowga", closing: "Haraaga dhammaadka", period: "Muddada", allTime: "Waqti kasta", noBalanceEffect: "haraaga isma beddelin",
     emptyCustomers: "Weli macaamiil ma jiraan.", emptySuppliers: "Weli alaab-qeybiyeyaal ma jiraan.",
     paymentHelp: "Lacagta waxaa marka hore la mariyaa dukumentiyada ugu da'da weyn ee aan la bixin."
   },
@@ -1187,7 +1215,7 @@ const so = {
     charge: "Dhammee iibka · {amount}", newSale: "Iib cusub", receipt: "Rasiid", history: "Taariikhda iibka", cancelSale: "Jooji & celi lacagta",
     cancelHelp: "Kaydka waa la celin doonaa, lacagta la helayna waa la celin doonaa. Tan waxaa lagu diiwaan gelinayaa diiwaanka dhaqdhaqaaqa.",
     inStock: "{qty} ayaa kaydka ku jira", outOfStock: "Kaydka waa dhammaaday", cashier: "Khasnaji", receiptNo: "Lambarka rasiidka", thankYou: "Waad ku mahadsan tahay iibsashadaada!",
-    done: "Iibka waa la dhammeeyay", notFound: "Ma jiro alaab baarkoodkan leh.", noDiscount: "Kaliya milkiilayaasha iyo maamulayaasha ayaa dhimis bixin kara.",
+    historySearchPh: "Rasiidka, macmiilka, ama taleefanka macmiilka soo socda", done: "Iibka waa la dhammeeyay", notFound: "Ma jiro alaab baarkoodkan leh.", noDiscount: "Kaliya milkiilayaasha iyo maamulayaasha ayaa dhimis bixin kara.",
     scan: "Akhri baarkoodka", scanTitle: "Ku akhri kamarada", scanHelp: "Baarkoodka alaabta hor dhig kamarada.",
     scanNoCamera: "Kamarada lama furi karo. Oggolow kamarada, ama isticmaal qalabka baarkoodka ama qor koodka.",
     scanned: "Alaabta la akhriyay", added: "Waa lagu daray gaadhiga", inCart: "Gaadhiga: {qty}", addAnother: "Mid kale ku dar",

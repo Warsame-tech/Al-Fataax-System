@@ -89,6 +89,7 @@ export async function createInvoice(conn, ctx, body) {
   );
   const loc = ctx.branch?.locationId || await defaultLocationId(conn, businessId);
   if (ctx.branch) await conn.query("UPDATE invoices SET branch_id = ? WHERE id = ?", [ctx.branch.id, r.insertId]);
+  await conn.query("UPDATE invoices SET price_list = ? WHERE id = ?", [priceList, r.insertId]);   // retail / wholesale transaction
   for (const [i, l] of lines.entries()) {
     const food = await consumeForSale(conn, { businessId, userId, product: l.product, qty: l.qty, locationId: loc, refType: "invoice", refId: r.insertId, note: number });
     if (food) { l.unitCost = food.unitCost; l.priceDetail = food.detail; }

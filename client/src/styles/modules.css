@@ -1440,3 +1440,21 @@ tr.is-muted td { opacity: .6; }
 .bulk-paste { min-height: 200px; font-family: ui-monospace, Consolas, monospace; font-size: .82rem; white-space: pre; }
 .bulk-order { margin: 0; font-size: .82rem; }
 @media (max-width: 700px) { .bulk-count { margin-left: 0; width: 100%; } .bulk-wrap { max-height: none; } }
+
+/* ---------- customer transaction history / walk-in customer ---------- */
+.history-who { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 12px; color: var(--muted); font-size: .9rem; }
+.history-summary { margin-bottom: 14px; }
+.history-date { font-size: 1.05rem; }
+.history-filters { flex-wrap: wrap; gap: 8px; }
+.history-table td { vertical-align: top; }
+.history-detail td { background: #f8f9fc; }
+.history-detail__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px 24px; padding: 4px 2px; font-size: .85rem; }
+.history-detail__grid ul { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 3px; }
+.history-detail__grid .is-neg { color: #b42318; }
+.statement-opening td { background: #f8f9fc; }
+.walkin-box { display: grid; gap: 6px; margin-bottom: 14px; padding: 10px 12px; border: 1px dashed #c9cfe0; border-radius: 12px; background: #fafbfe; }
+.walkin-box__title { display: flex; align-items: center; gap: 6px; font-size: .85rem; font-weight: 700; }
+.walkin-box__title .icon { width: 15px; height: 15px; }
+.walkin-box__fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.walkin-box small { font-size: .76rem; }
+@media (max-width: 600px) { .walkin-box__fields { grid-template-columns: 1fr; } }
