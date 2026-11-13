@@ -217,16 +217,32 @@ export async function createSale(conn, ctx, body) {
   const promo = applyPromotions(promos, lines.map((l) => ({ productId: l.product.id, categoryId: l.product.category_id, qty: l.qty, unitPrice: l.qty ? l.lineTotal / l.qty : 0, lineTotal: l.lineTotal })));
   lines.forEach((l, i) => { const d = promo.lines[i]?.discount || 0; if (d > 0) { l.discount = d; l.promo = { ...promo.lines[i].promo, amount: d }; l.lineTotal = round2(l.lineTotal - d); } });
   const subtotal = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
-  // a manual discount: within the business limits, above the approval level only with a manager approval
-  const approvedBy = await checkDiscount(conn, { businessId, role, discount: manualDiscount, base: subtotal, approvalToken: body.approvalToken });
-  const discount = round2(manualDiscount + promo.order.discount);
-  if (discount > subtotal) throw badRequest({ discount: "tooLarge" });
-  if (manualDiscount > 0 && round2(subtotal - discount) < goodsCost(lines) - 0.005) throw badRequest({ discount: "belowCost" });
-  const vat = vatFor(body.vat, round2(subtotal - discount));   // optional 5% VAT on the amount after discount
   const fee = ctx.fee?.amount > 0 ? round2(ctx.fee.amount) : 0;  // e.g. delivery fee
+  // A walk-in sale (no customer) paid with less than the total: the part not paid is taken off as a discount
+  // (permission and discount limits apply), but the amount paid can never be below the cost of the goods.
+  // With a customer the part not paid stays on their account (credit), as before.
+  let paidLess = 0;
+  if (split && !customerId) {
+    const offered = round2(body.payments.slice(0, 10).reduce((s, x) => s + (Number(x?.amount) > 0 ? Number(x.amount) : 0), 0));
+    const due = round2(subtotal - manualDiscount - promo.order.discount);
+    const vatRate = vatFor(body.vat, 100).rate;
+    if (offered > 0 && offered < round2(due + vatFor(body.vat, due).amount + fee) - 0.00005) {
+      paidLess = Math.max(0, round2(due - (offered - fee) / (1 + vatRate / 100)));
+      if (!can(role, "sales.discount")) throw badRequest({ payments: "paidLessForbidden" });
+    }
+  }
+  const manual = round2(manualDiscount + paidLess);
+  // a manual discount: within the business limits, above the approval level only with a manager approval
+  const approvedBy = await checkDiscount(conn, { businessId, role, discount: manual, base: subtotal, approvalToken: body.approvalToken });
+  const discount = round2(manual + promo.order.discount);
+  if (discount > subtotal) throw badRequest(paidLess ? { payments: "paidBelowCost" } : { discount: "tooLarge" });
+  if (manual > 0 && round2(subtotal - discount) < goodsCost(lines) - 0.005) throw badRequest(paidLess ? { payments: "paidBelowCost" } : { discount: "belowCost" });
+  const vat = vatFor(body.vat, round2(subtotal - discount));   // optional 5% VAT on the amount after discount
+  // paid less: the bill is exactly what was paid (VAT is the rest after the goods)
+  if (paidLess && vat.rate > 0) vat.amount = Math.max(0, round2(body.payments.slice(0, 10).reduce((s, x) => s + (Number(x?.amount) > 0 ? Number(x.amount) : 0), 0) - fee - (subtotal - discount)));
   const total = round2(subtotal - discount + vat.amount + fee);
-  const promoDetail = promo.order.promo || lines.some((l) => l.promo)
-    ? { order: promo.order.promo ? { ...promo.order.promo, amount: promo.order.discount } : null, items: round2(lines.reduce((s, l) => s + (l.discount || 0), 0)), manual: manualDiscount } : null;
+  const promoDetail = promo.order.promo || lines.some((l) => l.promo) || paidLess
+    ? { order: promo.order.promo ? { ...promo.order.promo, amount: promo.order.discount } : null, items: round2(lines.reduce((s, l) => s + (l.discount || 0), 0)), manual, ...(paidLess ? { paidLess } : {}) } : null;
 
   // Money actually collected now (one entry per payment method).
   let paid; let paidMethod; let change = 0;

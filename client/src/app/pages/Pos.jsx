@@ -413,9 +413,6 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
   const base = r2(subtotal - promoOff);              // what a manual discount is taken from
   const discValue = Math.max(Number(discount) || 0, 0);
   const disc = discMode === "percent" ? r2(base * Math.min(discValue, 100) / 100) : Math.min(discValue, base);
-  const discPct = base > 0 ? (disc / base) * 100 : 0;
-  const tooHigh = rules.data && discPct > rules.data.maxPct + 0.0001 && !can("settings.edit");
-  const needsApproval = rules.data && disc > 0 && discPct > rules.data.approvalPct + 0.0001 && !can("discounts.approve") && !approval;
   const vat = vatOf(addVat, r2(base - disc));
   const total = r2(base - disc + vat + fee);
   const promoNames = promo ? [...new Set([...promo.lines.filter((l) => l.promo).map((l) => l.promo.name), promo.order.promo?.name].filter(Boolean))] : [];
@@ -424,22 +421,30 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
   const cashPaid = r2(payments.filter((p) => p.kind === "cash").reduce((s, p) => s + (Number(p.amount) || 0), 0));
   const change = remaining < 0 ? -remaining : 0;
   const changeOk = change === 0 || cashPaid >= change;
-  // never below the cost price: the server says which lines (or the discount) would sell below cost, without showing the cost
+  // walk-in (no customer) paying less than the total: the part not paid is taken off as a discount (same rule as the
+  // server), never below the purchase cost; with a customer it stays on their account
+  const paidLess = !customer && paid > 0 && remaining > 0 ? Math.max(0, r2((base - disc) - (paid - fee) / (1 + (addVat ? VAT_RATE : 0) / 100))) : 0;
+  const allDisc = r2(disc + paidLess);
+  // discount limits count the typed discount and the part not paid together (as the server does)
+  const discPct = base > 0 ? (allDisc / base) * 100 : 0;
+  const tooHigh = rules.data && discPct > rules.data.maxPct + 0.0001 && !can("settings.edit");
+  const needsApproval = rules.data && allDisc > 0 && discPct > rules.data.approvalPct + 0.0001 && !can("discounts.approve") && !approval;
+  // never below the cost price: the server says which lines (or the discount / the amount paid) would sell below cost, without showing the cost
   const [costCheck, setCostCheck] = useState({ lines: [], bill: false });
   useEffect(() => {
     if (submit || !cart.length) return undefined;
     const timer = setTimeout(() => {
-      apiRequest("/api/sales/price-check", { method: "POST", body: { items: saleItems(cart), customerId: customer?.id || null, discount: disc, pos: true } })
+      apiRequest("/api/sales/price-check", { method: "POST", body: { items: saleItems(cart), customerId: customer?.id || null, discount: allDisc, pos: true } })
         .then((r) => { setCostCheck(r); if (r.lines.length || r.bill) setCostAlert(true); }).catch(() => {});
-    }, 300);
+    }, 400);
     return () => clearTimeout(timer);
-  }, [disc, customer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [allDisc, customer?.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const belowCost = costCheck.lines.length > 0 || costCheck.bill;
   const [costAlert, setCostAlert] = useState(false);   // the "can't sell below cost" pop-up
   // the server refused the sale for the same reason (e.g. the price changed meanwhile): the pop-up too
-  useEffect(() => { if (Object.values(sub.fieldErrors || {}).includes("belowCost")) setCostAlert(true); }, [sub.fieldErrors]);
+  useEffect(() => { if (Object.values(sub.fieldErrors || {}).some((x) => x === "belowCost" || x === "paidBelowCost")) setCostAlert(true); }, [sub.fieldErrors]);
   // Confirm stays clickable when below cost: pressing it shows the pop-up again
-  const canConfirm = cart.length > 0 && changeOk && (remaining <= 0 || customer) && !sub.busy && !tooHigh && !needsApproval && !needsPriceApproval;
+  const canConfirm = cart.length > 0 && changeOk && (remaining <= 0 || customer || (paid > 0 && can("sales.discount"))) && !sub.busy && !tooHigh && !needsApproval && !needsPriceApproval;
 
   const METHODS = (methodsApi.data?.methods || []).map((pm) => ({ key: `pm-${pm.id}`, paymentMethodId: pm.id, kind: pm.kind, label: pm.label }));
 
@@ -474,7 +479,7 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
         <BelowCostAlert onClose={() => setCostAlert(false)}
           names={(costCheck.lines.length ? costCheck.lines : Object.keys(sub.fieldErrors || {}).filter((k) => sub.fieldErrors[k] === "belowCost" && k.startsWith("items.")).map((k) => Number(k.split(".")[1])))
             .map((i) => cart[i]?.product.name).filter(Boolean)}
-          bill={costCheck.bill || sub.fieldErrors?.discount === "belowCost"} />
+          bill={costCheck.bill || sub.fieldErrors?.discount === "belowCost" || sub.fieldErrors?.payments === "paidBelowCost"} paid={paidLess > 0 || sub.fieldErrors?.payments === "paidBelowCost"} />
       )}
       {askingPrice && <ManagerApproval what="price" onClose={() => setAskingPrice(false)} onApproved={(a) => { setPriceApproval(a); setAskingPrice(false); }} />}
       <div className="paybox">
@@ -552,7 +557,10 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
 
           {remaining > 0 && (customer
             ? <p className="paybox__note"><Icon name="info" />{fill(t("ui.pos.restOnCredit"), { name: customer.name })}</p>
-            : payments.length > 0 && <p className="paybox__note is-warn"><Icon name="alert" />{t("ui.pos.needCustomer")}</p>)}
+            // walk-in: the part not paid becomes a discount (only staff who can give discounts), never below the purchase cost
+            : paidLess > 0 && (can("sales.discount")
+              ? <p className="paybox__note"><Icon name="info" />{fill(t("ui.pricing.paidLessNote"), { amount: m(remaining) })}</p>
+              : <p className="paybox__note is-warn"><Icon name="alert" />{t("ui.errors.paidLessForbidden")}</p>))}
           {!changeOk && <p className="paybox__note is-warn"><Icon name="alert" />{t("ui.errors.changeNeedsCash")}</p>}
           {costCheck.lines.length > 0 && <p className="paybox__note is-warn" role="alert"><Icon name="alert" />{fill(t("ui.pricing.belowCostLines"), { names: costCheck.lines.map((i) => cart[i]?.product.name).filter(Boolean).join(", ") })}</p>}
           {costCheck.bill && <p className="paybox__note is-warn" role="alert"><Icon name="alert" />{t("ui.pricing.belowCostBill")}</p>}
@@ -634,7 +642,7 @@ function History() {
  * Pop-up: nothing can be sold below its cost price. names: the products priced below cost; bill: the discount takes the
  * bill below the cost of its goods. The cost itself is never shown.
  */
-export function BelowCostAlert({ names = [], bill = false, onClose }) {
+export function BelowCostAlert({ names = [], bill = false, paid = false, onClose }) {
   const { t } = useLanguage();
   return (
     <Modal title={t("ui.pricing.belowCostTitle")} onClose={onClose}>
@@ -642,7 +650,7 @@ export function BelowCostAlert({ names = [], bill = false, onClose }) {
         <span className="cost-alert__icon"><Icon name="alert" /></span>
         <p className="cost-alert__rule">{t("ui.pricing.belowCostRule")}</p>
         {names.length > 0 && <p className="cost-alert__what">{fill(t("ui.pricing.belowCostLines"), { names: names.join(", ") })}</p>}
-        {bill && <p className="cost-alert__what">{t("ui.pricing.belowCostBill")}</p>}
+        {bill && <p className="cost-alert__what">{t(paid ? "ui.pricing.paidBelowCost" : "ui.pricing.belowCostBill")}</p>}
         <div className="form-actions"><button type="button" className="btn btn--primary" onClick={onClose} autoFocus>{t("ui.pricing.belowCostFix")}</button></div>
       </div>
     </Modal>
