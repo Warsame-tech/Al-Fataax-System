@@ -1,5 +1,5 @@
-import { Fragment, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Fragment, useEffect, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest } from "../../services/api.js";
@@ -18,6 +18,15 @@ export default function Parties({ kind }) {
   const [statement, setStatement] = useState(null);
   const [history, setHistory] = useState(null);     // customer whose transaction history is open
   const rows = list.data?.[kind] || [];
+  // ?open=<id> (global search, Ctrl + K): a customer opens their history, a supplier their statement
+  const [params, setParams] = useSearchParams();
+  useEffect(() => {
+    const want = Number(params.get("open"));
+    const p = want && rows.find((x) => x.id === want);
+    if (!p) return;
+    if (isCustomer) setHistory(p); else setStatement(p);
+    setParams({}, { replace: true });
+  }, [params, list.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const editPerm = isCustomer ? "customers.edit" : "suppliers.edit";
 
   return (

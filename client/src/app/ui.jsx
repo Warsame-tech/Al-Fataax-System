@@ -90,16 +90,29 @@ export function Tabs({ tabs, value, onChange }) {
   );
 }
 
+/* open dialogs, newest last: Esc closes only the one on top (e.g. a manager approval over the payment screen) */
+const modalStack = [];
 export function Modal({ title, onClose, children, footer, wide = false }) {
   const ref = useRef(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
-    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    const me = {};
+    modalStack.push(me);
+    const onKey = (e) => {
+      if (e.key !== "Escape" || modalStack[modalStack.length - 1] !== me) return;
+      e.stopPropagation();
+      closeRef.current();
+    };
     document.addEventListener("keydown", onKey);
-    const first = ref.current?.querySelector("input, select, textarea, button");
-    first?.focus();
+    if (!ref.current?.contains(document.activeElement)) ref.current?.querySelector("input:not([readonly]), select, textarea, button")?.focus();
     document.body.style.overflow = "hidden";
-    return () => { document.removeEventListener("keydown", onKey); document.body.style.overflow = ""; };
-  }, [onClose]);
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      modalStack.splice(modalStack.indexOf(me), 1);
+      if (!modalStack.length) document.body.style.overflow = "";
+    };
+  }, []);
   return (
     <div className="modal" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className={"modal__box" + (wide ? " modal__box--wide" : "")} role="dialog" aria-modal="true" aria-label={title} ref={ref}>

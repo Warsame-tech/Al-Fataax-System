@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest } from "../../services/api.js";
@@ -20,6 +20,8 @@ export default function Purchases() {
   const { t } = useLanguage();
   const can = usePerm();
   const [tab, setTab] = useState("list");
+  const [params] = useSearchParams();
+  useEffect(() => { if (params.get("open")) setTab("list"); }, [params]);   // a purchase opened from global search
   return (
     <div className="page">
       <PageHeader icon="truck" title={t("ui.purchases.title")} />
@@ -37,7 +39,9 @@ function PurchaseList() {
   const [range, setRange] = useState({ from: daysAgo(89), to: isoDate(new Date()) });
   const [q, setQ] = useState("");
   const list = useApi(`/api/purchases?${new URLSearchParams({ ...range, q })}`);
-  const [open, setOpen] = useState(null);
+  const [params] = useSearchParams();
+  const [open, setOpen] = useState(() => Number(params.get("open")) || null);
+  useEffect(() => { if (Number(params.get("open"))) setOpen(Number(params.get("open"))); }, [params]);
   const rows = list.data?.purchases || [];
   return (
     <>

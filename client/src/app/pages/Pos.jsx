@@ -302,7 +302,7 @@ function Register() {
           getData={() => ({ customerId, addVat, cart: cart.map((l) => ({ product: l.product, qty: l.qty, unit: l.unit || null, deviceIds: l.deviceIds, devices: l.devices, rollId: l.rollId, roll: l.roll, price: l.price })) })}
           onLoad={(d) => { setCustomerId(d.customerId || ""); setAddVat(Boolean(d.addVat)); setCart(d.cart || []); setActive(null); }} />
 
-        <button type="button" className="pos2__pay" disabled={!cart.length} onClick={() => setPaying(true)}>
+        <button type="button" className="pos2__pay" disabled={!cart.length} onClick={() => setPaying(true)} data-shortcut-save>
           <span>{t("ui.pos.payment")}</span><Icon name="arrow-right" />
         </button>
       </aside>
@@ -580,7 +580,7 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
           {sub.formError && sub.formError.code !== "validation" && <p className="form-status form-status--error" role="alert">{errText(sub.formError)}</p>}
           {sub.formError?.code === "validation" && <FormError error={sub.formError} />}
 
-          <button type="button" className="paybox__confirm" disabled={!canConfirm} onClick={confirm}>
+          <button type="button" className="paybox__confirm" disabled={!canConfirm} onClick={confirm} data-shortcut-save>
             <span>{sub.busy ? t("ui.common.saving") : t("ui.pos.confirm")}</span><Icon name="check" />
           </button>
         </div>

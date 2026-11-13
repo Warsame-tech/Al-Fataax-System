@@ -40,6 +40,7 @@ import { expensesRouter, accountsRouter } from "./routes/money.js";
 import { staffRouter, settingsRouter, profileRouter, notificationsRouter, auditRouter } from "./routes/account.js";
 import { HttpError } from "./lib/http.js";
 import { filesRouter } from "./lib/files.js";
+import searchRoutes from "./routes/search.js";
 
 const app = express();
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -108,6 +109,7 @@ app.use("/api/settings", settingsRouter);
 app.use("/api/profile", profileRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/audit", auditRouter);
+app.use("/api/search", searchRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", (req, res) => res.status(404).json({ code: "notFound" }));
 

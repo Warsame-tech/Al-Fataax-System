@@ -925,6 +925,10 @@ TABLES.push({
 COLUMNS.push(
   { table: "business_settings", column: "invoice_edit_rules", ddl: "ALTER TABLE business_settings ADD COLUMN invoice_edit_rules TEXT NULL" }
 );
+// keyboard shortcuts the owner changed (JSON { action: "Alt+S" }; NULL = the app's defaults)
+COLUMNS.push(
+  { table: "business_settings", column: "shortcuts", ddl: "ALTER TABLE business_settings ADD COLUMN shortcuts TEXT NULL" }
+);
 
 const INDEXES = [
   { table: "products", name: "idx_products_category", ddl: "ALTER TABLE products ADD INDEX idx_products_category (business_id, category_id)" },

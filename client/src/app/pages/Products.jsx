@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { useAuth } from "../../auth/AuthContext.jsx";
@@ -124,7 +124,11 @@ export default function Products() {
   const groups = showVariant || profile.variantGroups;          // product families: "Add variant", "n variants"
   const [specSettings, setSpecSettings] = useState(false);
   const [lists, setLists] = useState(false);
-  const [f, setF] = useState(NO_FILTERS);
+  // ?q= / ?categoryId= (global search, Ctrl + K) start the list filtered; a new search link while here filters again
+  const [params] = useSearchParams();
+  const fromUrl = () => ({ ...NO_FILTERS, q: params.get("q") || "", categoryId: params.get("categoryId") || "" });
+  const [f, setF] = useState(fromUrl);
+  useEffect(() => { if (params.get("q") || params.get("categoryId")) { setF(fromUrl()); setPage(1); } }, [params]); // eslint-disable-line react-hooks/exhaustive-deps
   const [sort, setSort] = useState({ by: "name", dir: "asc" });
   const [page, setPage] = useState(1);
   const options = useApi("/api/products/filters");

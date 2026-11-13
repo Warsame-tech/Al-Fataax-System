@@ -7,6 +7,7 @@ import { saveLanguage } from "../services/authService.js";
 import { apiRequest, fileUrl } from "../services/api.js";
 import { fill } from "./format.js";
 import { BranchSwitch } from "./Branches.jsx";
+import { ShortcutsProvider, useShortcuts, Kbd } from "./Shortcuts.jsx";
 import logo from "../assets/faatix-logo.png";
 
 /** Frame for the signed-in business application. */
@@ -29,6 +30,7 @@ export default function AppLayout() {
   const initials = (business?.name || "?").split(/\s+/).map((w) => w[0]).join("").slice(0, 2).toUpperCase();
 
   return (
+    <ShortcutsProvider>
     <div className="app-shell">
       <a className="skip-link" href="#app-main">{t("nav.skip")}</a>
       <header className="app-bar">
@@ -45,6 +47,7 @@ export default function AppLayout() {
           </div>
 
           <div className="app-bar__actions">
+            <QuickNav />
             <div className="lang-switch" role="group" aria-label={t("nav.language")}>
               <Icon name="globe" className="lang-switch__icon" />
               {SUPPORTED.map((code) => (
@@ -72,6 +75,21 @@ export default function AppLayout() {
       <main id="app-main" className="app-main">
         <Outlet />
       </main>
+    </div>
+    </ShortcutsProvider>
+  );
+}
+
+/* Header: global search (shows its key) and the keyboard shortcuts list */
+function QuickNav() {
+  const { t } = useLanguage();
+  const { keyOf, openSearch, openHelp } = useShortcuts();
+  return (
+    <div className="quick-nav">
+      <button type="button" className="quick-nav__search" onClick={openSearch} aria-label={t("ui.shortcuts.searchTitle")}>
+        <Icon name="search-glass" /><span className="quick-nav__ph">{t("ui.shortcuts.searchShort")}</span><Kbd combo={keyOf("search")} />
+      </button>
+      <button type="button" className="quick-nav__help" onClick={openHelp} title={t("ui.shortcuts.helpTitle")} aria-label={t("ui.shortcuts.helpTitle")}><Icon name="keyboard" /></button>
     </div>
   );
 }

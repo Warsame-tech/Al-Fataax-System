@@ -424,6 +424,20 @@ const en = {
     showVersions: "Before / after", before: "Before", after: "After", by: "By", approvedByCol: "Approved by", noHistory: "No changes recorded yet (made before editing history existed).",
     payments: "Payments and refunds", revision: "Version {n}", refundTag: "Refund"
   },
+  shortcuts: {
+    searchTitle: "Search Faatix", searchShort: "Search…", searchPh: "Search products, customers, invoices, receipts, modules…",
+    groups: { go: "Go to", product: "Products", customer: "Customers", supplier: "Suppliers", invoice: "Invoices", sale: "Receipts", purchase: "Purchases", expense: "Expenses", category: "Categories" },
+    productsN: "products", choose: "choose", open: "open", close: "close",
+    helpTitle: "Keyboard shortcuts", change: "Change shortcuts", esc: "Close the dialog on top, or leave the field you are typing in", questionMark: "Show this list (when not typing)",
+    helpNote: "Shortcuts with Ctrl or Alt also work while typing: Ctrl + S saves the form or dialog you are in. On a Mac use ⌘ for Ctrl and ⌥ (Option) for Alt. If your browser still opens its own menu for a key, the owner can change that key.",
+    actions: { search: "Global search", save: "Save the current record", help: "Keyboard shortcuts", dashboard: "Dashboard", pos: "Open POS", inventory: "Open inventory (stock)",
+      products: "Open products", newInvoice: "Create a new invoice", invoices: "Open invoices", purchases: "Open purchases", customers: "Open customers", suppliers: "Open suppliers",
+      expenses: "Open expenses", reports: "Open reports", cashbook: "Open the cash book" },
+    settingsTitle: "Change keyboard shortcuts", settingsHelp: "Click a box and press the new keys (with Ctrl or Alt). Backspace removes a shortcut. The keys are the same for everyone in the business.",
+    pressKeys: "Press keys…", default: "Default", reset: "Back to the defaults", duplicate: "Used by another action",
+    clash: { reserved: "The browser keeps these keys — they won't work.", browser: "The browser uses these keys too; Faatix will take them over.", typing: "Used for copy / paste and typing — better not." },
+    errors: { invalidKey: "Not a key Faatix can use.", needsModifier: "Use Ctrl or Alt with the key.", keyTaken: "Used by another action." }
+  },
   pricing: {
     section: "Prices", priceEdit: "Price at a sale",
     priceEditOptions: { fixed: "Fixed price", editable: "Editable price", permission: "Permission-based price" },
@@ -1159,6 +1173,20 @@ const so = {
     fields: { issueDate: "Taariikhda", dueDate: "Taariikhda bixinta", notes: "Qoraal", billPhone: "Taleefan", billAddress: "Cinwaan", discountLabel: "Magaca dhimista", vat: "VAT", priceList: "Liiska qiimaha" },
     showVersions: "Ka hor / kadib", before: "Ka hor", after: "Kadib", by: "Qofka", approvedByCol: "Waxaa ansixiyay", noHistory: "Weli isbeddel lama diiwaangelin (waxaa la sameeyay ka hor taariikhda isbeddelka).",
     payments: "Lacag-bixinta iyo celinta", revision: "Nooca {n}", refundTag: "Lacag celin"
+  },
+  shortcuts: {
+    searchTitle: "Ka raadi Faatix", searchShort: "Raadi…", searchPh: "Raadi alaab, macaamiil, qaansheegyo, rasiidyo, qaybo…",
+    groups: { go: "U gudub", product: "Alaabta", customer: "Macaamiisha", supplier: "Alaab-qeybiyeyaasha", invoice: "Qaansheegyada", sale: "Rasiidyada", purchase: "Iibsiyada", expense: "Kharashaadka", category: "Qaybaha" },
+    productsN: "alaab", choose: "dooro", open: "fur", close: "xir",
+    helpTitle: "Furayaasha kiiboodhka", change: "Beddel furayaasha", esc: "Xir sanduuqa ugu sarreeya, ama ka bax goobta aad wax ku qorayso", questionMark: "Muuji liiskan (marka aanad wax qorayn)",
+    helpNote: "Furayaasha leh Ctrl ama Alt way shaqeeyaan xitaa marka aad wax qorayso: Ctrl + S wuxuu kaydiyaa foomka ama sanduuqa aad ku jirto. Mac-ga isticmaal ⌘ halkii Ctrl iyo ⌥ (Option) halkii Alt. Haddii browser-ku weli furo menu-giisa, milkiiluhu wuu beddeli karaa furahaas.",
+    actions: { search: "Raadinta guud", save: "Kaydi diiwaanka hadda", help: "Furayaasha kiiboodhka", dashboard: "Bogga hore", pos: "Fur POS", inventory: "Fur kaydka",
+      products: "Fur alaabta", newInvoice: "Samee qaansheeg cusub", invoices: "Fur qaansheegyada", purchases: "Fur iibsiyada", customers: "Fur macaamiisha", suppliers: "Fur alaab-qeybiyeyaasha",
+      expenses: "Fur kharashaadka", reports: "Fur warbixinnada", cashbook: "Fur buugga lacagta" },
+    settingsTitle: "Beddel furayaasha kiiboodhka", settingsHelp: "Guji sanduuq oo riix furayaasha cusub (Ctrl ama Alt la jira). Backspace wuu tirtiraa furaha. Furayaashu waa isku mid qof kasta oo ganacsiga ka tirsan.",
+    pressKeys: "Riix furayaasha…", default: "Asalka", reset: "Ku celi kuwii asalka ahaa", duplicate: "Ficil kale ayaa isticmaala",
+    clash: { reserved: "Browser-ku wuu haystaa furayaashan — ma shaqeyn doonaan.", browser: "Browser-ku sidoo kale wuu isticmaalaa; Faatix ayaa la wareegaya.", typing: "Waxaa loo isticmaalaa koobiyeynta / qorista — ha isticmaalin." },
+    errors: { invalidKey: "Fure Faatix isticmaali karo ma aha.", needsModifier: "Furaha la isticmaal Ctrl ama Alt.", keyTaken: "Ficil kale ayaa isticmaala." }
   },
   pricing: {
     section: "Qiimaha", priceEdit: "Qiimaha marka la iibinayo",
