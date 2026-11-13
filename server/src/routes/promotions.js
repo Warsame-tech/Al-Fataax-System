@@ -98,7 +98,9 @@ router.post("/preview", requirePerm("sales.create"), ah(async (req, res) => {
  */
 const approvalLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false, message: { code: "tooManyAttempts" } });
 router.post("/approval", approvalLimit, (req, res, next) => (can(req.user, "sales.create") || can(req.user, "invoices.create") ? next() : res.status(403).json({ code: "forbidden" })), ah(async (req, res) => {
-  const what = req.body?.what === "price" ? "price" : "discount";
+  // what: discount (discounts.approve) | price (prices.approve) | invoiceEdit (invoices.approveEdit)
+  const what = ["price", "invoiceEdit"].includes(req.body?.what) ? req.body.what : "discount";
+  const needs = { discount: "discounts.approve", price: "prices.approve", invoiceEdit: "invoices.approveEdit" }[what];
   const username = text(req.body?.username, 30).toLowerCase();
   const password = typeof req.body?.password === "string" ? req.body.password : "";
   const [[u]] = await pool.query(
@@ -108,7 +110,7 @@ router.post("/approval", approvalLimit, (req, res, next) => (can(req.user, "sale
   const ok = u && u.status === "active" && (await bcrypt.compare(password, u.password_hash));
   if (!ok) throw badRequest({ password: "wrongPassword" });
   const perms = u.role === "owner" ? ALL_PERMISSIONS : u.role_id ? (u.role_name ? parsePermissions(u.role_permissions) : []) : permissionsFor(u.role);
-  if (!perms.includes(what === "price" ? "prices.approve" : "discounts.approve")) throw badRequest({ username: what === "price" ? "cannotApprovePrice" : "cannotApprove" });
+  if (!perms.includes(needs)) throw badRequest({ username: { price: "cannotApprovePrice", invoiceEdit: "cannotApproveEdit" }[what] || "cannotApprove" });
   await audit(null, { businessId: req.business.id, userId: u.id, action: `${what}.approval`, entity: "user", entityId: req.user.id, meta: { for: req.user.fullName }, ip: req.ip });
   res.json({ token: signApproval(req.business.id, u.id, what), approver: u.full_name });
 }));

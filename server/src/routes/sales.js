@@ -95,8 +95,10 @@ export function priceLines(items, products, { user, userId = null, priceList = "
     const pack = unit ? packOf(p, unit) : null;
     const listPrice = roll ? fabricPrice(p, it.roll, unit, per, priceList) : pack && pack.price !== null && priceList !== "wholesale" ? num(pack.price) : round2(basePrice * per);
     let unitPrice = listPrice;
+    // an invoice edit keeps a line's earlier price (it.keepPrice): it was allowed when the invoice was made
+    const kept = it.keepPrice !== undefined && it.unitPrice !== undefined && Math.abs(Number(it.unitPrice) - it.keepPrice) < 0.00005;
     if (it.unitPrice !== undefined && it.unitPrice !== null && it.unitPrice !== "" && Math.abs(Number(it.unitPrice) - listPrice) > 0.00005) {
-      if (!canChangePrice(user, p)) { errors[`items.${i}.unitPrice`] = (p.price_edit || "permission") === "fixed" ? "priceFixed" : "priceLocked"; return; }
+      if (!kept && !canChangePrice(user, p)) { errors[`items.${i}.unitPrice`] = (p.price_edit || "permission") === "fixed" ? "priceFixed" : "priceLocked"; return; }
       unitPrice = money(it.unitPrice);
       if (Number.isNaN(unitPrice)) { errors[`items.${i}.unitPrice`] = "invalidAmount"; return; }
     }
@@ -105,9 +107,9 @@ export function priceLines(items, products, { user, userId = null, priceList = "
     if (isTracked(p) && (unit || !Number.isInteger(baseQty))) { errors[`items.${i}.qty`] = "wholeUnits"; return; }
     // never below the cost price (per base unit; fabric: the roll's own cost per meter) — for everyone, with or without approval
     const cost = roll && it.roll?.cost_per_meter != null ? num(it.roll.cost_per_meter) : num(p.cost_price);
-    if (cost > 0 && unitPrice / per < cost - 0.00005) { errors[`items.${i}.unitPrice`] = "belowCost"; return; }
+    if (!kept && cost > 0 && unitPrice / per < cost - 0.00005) { errors[`items.${i}.unitPrice`] = "belowCost"; return; }
     // minimum selling price (per base unit): below it only with prices.approve or a manager's approval
-    const belowMin = p.min_price !== null && p.min_price !== undefined && unitPrice / per < num(p.min_price) - 0.00005;
+    const belowMin = !kept && p.min_price !== null && p.min_price !== undefined && unitPrice / per < num(p.min_price) - 0.00005;
     const approvedBy = !belowMin ? null : can(user, "prices.approve") ? userId : priceApprover;
     if (belowMin && !approvedBy) { errors[`items.${i}.unitPrice`] = "belowMinPrice"; return; }
     const warrantyMonths = it.warrantyMonths === undefined || it.warrantyMonths === null || it.warrantyMonths === "" ? null : Number(it.warrantyMonths);

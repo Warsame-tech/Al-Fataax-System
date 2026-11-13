@@ -520,6 +520,27 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   CONSTRAINT fk_inv_items_product  FOREIGN KEY (product_id)  REFERENCES products(id)
 ) ENGINE=InnoDB;
 
+-- Every version of an invoice: created, edited, posted (draft → invoice), cancelled. before / after hold the whole invoice
+-- (header and lines, JSON); changes lists what changed. Nothing here is ever updated or deleted.
+CREATE TABLE IF NOT EXISTS invoice_revisions (
+  id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  business_id INT UNSIGNED NOT NULL,
+  invoice_id  BIGINT UNSIGNED NOT NULL,
+  rev_no      INT UNSIGNED NOT NULL,
+  action      VARCHAR(20) NOT NULL,             -- created | edited | posted | cancelled
+  before_data MEDIUMTEXT NULL,
+  after_data  MEDIUMTEXT NULL,
+  changes     TEXT NULL,
+  reason      VARCHAR(255) NULL,
+  user_id     INT UNSIGNED NOT NULL,
+  approved_by INT UNSIGNED NULL,                -- manager who approved changes that need approval
+  created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_invoice_rev (invoice_id, rev_no),
+  INDEX idx_invoice_rev_business (business_id, created_at),
+  CONSTRAINT fk_invrev_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+  CONSTRAINT fk_invrev_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+) ENGINE=InnoDB;
+
 CREATE TABLE IF NOT EXISTS customer_payments (
   id              BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   business_id     INT UNSIGNED NOT NULL,

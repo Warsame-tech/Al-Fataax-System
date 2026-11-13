@@ -672,18 +672,19 @@ export function BelowCostAlert({ names = [], bill = false, paid = false, onClose
 
 /**
  * A manager types their username and password to approve one discount above the approval level,
- * or (what = "price") prices below the minimum selling price.
+ * (what = "price") prices below the minimum selling price, or (what = "invoiceEdit") changes to an invoice.
  */
 export function ManagerApproval({ what = "discount", onClose, onApproved }) {
   const { t } = useLanguage();
   const [f, setF] = useState({ username: "", password: "" });
   const sub = useSubmit();
   const save = async (e) => { e.preventDefault(); const r = await sub.run(() => apiRequest("/api/promotions/approval", { method: "POST", body: { ...f, what } })); if (r) onApproved(r); };
-  const price = what === "price";
+  // what: discount | price | invoiceEdit — each its own title and explanation
+  const ns = { price: "ui.pricing", invoiceEdit: "ui.invEdit" }[what] || "ui.promo";
   return (
-    <Modal title={t(price ? "ui.pricing.askApproval" : "ui.promo.askApproval")} onClose={onClose}>
+    <Modal title={t(what === "invoiceEdit" ? "ui.invEdit.approve" : `${ns}.askApproval`)} onClose={onClose}>
       <form onSubmit={save} className="form-grid">
-        <p className="modal__help">{t(price ? "ui.pricing.approvalHelp" : "ui.promo.approvalHelp")}</p>
+        <p className="modal__help">{t(`${ns}.approvalHelp`)}</p>
         <Field label={t("ui.promo.managerUser")} error={sub.fieldErrors.username}><input className="input" autoComplete="off" value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} /></Field>
         <Field label={t("ui.promo.managerPassword")} error={sub.fieldErrors.password}><input className="input" type="password" autoComplete="off" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
         <FormError error={sub.formError} />

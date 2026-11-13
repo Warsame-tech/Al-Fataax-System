@@ -899,6 +899,33 @@ COLUMNS.push(
   { table: "sales", column: "walkin_phone", ddl: "ALTER TABLE sales ADD COLUMN walkin_name VARCHAR(120) NULL AFTER customer_id, ADD COLUMN walkin_phone VARCHAR(30) NULL AFTER walkin_name, ADD INDEX idx_sales_walkin_phone (business_id, walkin_phone)" }
 );
 
+// invoice editing: every version of an invoice (created, edited, posted, cancelled) with the full before / after,
+// the changes, reason, user and approver; the business's rules for which changes need a manager's approval
+TABLES.push({
+  table: "invoice_revisions",
+  ddl: `CREATE TABLE IF NOT EXISTS invoice_revisions (
+    id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    business_id INT UNSIGNED NOT NULL,
+    invoice_id  BIGINT UNSIGNED NOT NULL,
+    rev_no      INT UNSIGNED NOT NULL,
+    action      VARCHAR(20) NOT NULL,
+    before_data MEDIUMTEXT NULL,
+    after_data  MEDIUMTEXT NULL,
+    changes     TEXT NULL,
+    reason      VARCHAR(255) NULL,
+    user_id     INT UNSIGNED NOT NULL,
+    approved_by INT UNSIGNED NULL,
+    created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_invoice_rev (invoice_id, rev_no),
+    INDEX idx_invoice_rev_business (business_id, created_at),
+    CONSTRAINT fk_invrev_business FOREIGN KEY (business_id) REFERENCES businesses(id),
+    CONSTRAINT fk_invrev_invoice FOREIGN KEY (invoice_id) REFERENCES invoices(id)
+  ) ENGINE=InnoDB`
+});
+COLUMNS.push(
+  { table: "business_settings", column: "invoice_edit_rules", ddl: "ALTER TABLE business_settings ADD COLUMN invoice_edit_rules TEXT NULL" }
+);
+
 const INDEXES = [
   { table: "products", name: "idx_products_category", ddl: "ALTER TABLE products ADD INDEX idx_products_category (business_id, category_id)" },
   { table: "products", name: "idx_products_brand", ddl: "ALTER TABLE products ADD INDEX idx_products_brand (business_id, brand_id)" },

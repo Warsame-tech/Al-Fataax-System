@@ -62,7 +62,8 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
   // rolls: meters (base), yards, or (selling) the whole roll
   const unitList = (p) => (isRoll(p) ? [{ name: p.unit }, { name: "yard" }, ...(sell ? [{ name: "roll" }] : [])] : unitsOf(p, sell ? "sell" : "buy"));
   const perOf = perOfLine;
-  const available = (l) => (isRoll(l.product) && sell ? rollAvailable(l.roll) : l.product.stock);
+  // editing an invoice: a kept line's own quantity (l.held, base units) comes back to stock, so it counts as available
+  const available = (l) => (isRoll(l.product) && sell ? rollAvailable(l.roll) : l.product.stock) + (Number(l.held) || 0);
   const unitLabel = (u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
   const addProduct = (p) => {
     if (!p) return;
@@ -137,6 +138,7 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
                 <tr key={`${l.product.id}-${l.rollId || ""}`}>
                   <td>
                     {l.product.name}
+                    {l.locked && <small className="cell-sub lines__locked"><Icon name="lock" /> {t("ui.invEdit.locked")}</small>}
                     {sell && isRoll(l.product) && l.roll ? (
                       <small className="cell-sub">
                         <button type="button" className={"link-btn" + (errors[`items.${i}.rollId`] ? " is-neg" : "")} onClick={() => setRollFor({ product: l.product, index: i })}><Icon name="roll" /> {l.roll.code}</button> · {fill(t("ui.fabric.left"), { len: lengthText(l.roll.remaining) })}
@@ -154,15 +156,15 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
                     )}
                   </td>
                   <td className="num">
-                    {sell && tracked(l.product) ? (
+                    {sell && tracked(l.product) && !l.locked ? (
                       <button type="button" className={"btn btn--outline btn--sm" + (errors[`items.${i}.deviceIds`] ? " has-error" : "")} onClick={() => setPicking(i)}>
                         <Icon name="smartphone" /><span>{fill(t("ui.devices.count"), { n: (l.deviceIds || []).length })}</span>
                       </button>
                     ) : <div className="lines__qty">
                       <input className={"input input--sm" + (errors[`items.${i}.qty`] || l.capped ? " has-error" : "")} type="number" min="0" step={tracked(l.product) ? "1" : "any"}
-                        max={sell ? maxOf(l) : undefined} value={l.qty} onChange={(e) => setQty(i, e.target.value)} disabled={l.unit === "roll" || (!sell && deviceEntry && isRoll(l.product) && l.rolls?.rolls.length > 0)} />
+                        max={sell ? maxOf(l) : undefined} value={l.qty} onChange={(e) => setQty(i, e.target.value)} disabled={l.locked || l.unit === "roll" || (!sell && deviceEntry && isRoll(l.product) && l.rolls?.rolls.length > 0)} />
                       {unitList(l.product).length > 1 && (
-                        <select className={"input input--sm" + (errors[`items.${i}.unit`] ? " has-error" : "")} value={l.unit || l.product.unit} onChange={(e) => setUnit(i, e.target.value)} aria-label={t("ui.products.unit")}>
+                        <select className={"input input--sm" + (errors[`items.${i}.unit`] ? " has-error" : "")} value={l.unit || l.product.unit} onChange={(e) => setUnit(i, e.target.value)} aria-label={t("ui.products.unit")} disabled={l.locked}>
                           {unitList(l.product).map((u) => <option key={u.name} value={u.name}>{isRoll(l.product) && u.name === "roll" ? t("ui.fabric.wholeRoll") : u.name === l.product.unit || isRoll(l.product) ? unitLabel(u.name) : u.name}</option>)}
                         </select>
                       )}
@@ -172,14 +174,16 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
                     {sell && l.capped && <small className="ff__error lines__cap">{isRoll(l.product) ? fill(t("ui.fabric.onlyOnRoll"), { len: lengthText(available(l)) }) : fill(t("ui.invoices.onlyInStock"), { qty: qty(l.product.stock), unit: unitLabel(l.product.unit) })}</small>}
                   </td>
                   <td className="num">
-                    {mode === "buy" || mayPrice(l.product)
+                    {mode === "buy" || (mayPrice(l.product) && !l.locked)
                       ? <input className={"input input--sm" + (errors[`items.${i}.unitCost`] || errors[`items.${i}.unitPrice`] || (sell && isBelowMin(l.product, l.price, perOf(l))) ? " has-error" : "")} type="number" min="0" step="any" value={l.price} onChange={(e) => update(i, { price: e.target.value })} />
                       : <>{m(l.price)}{l.product.priceEdit === "fixed" && <small className="cell-sub"><Icon name="lock" /> {t("ui.pricing.locked")}</small>}</>}
                     {sell && isBelowMin(l.product, l.price, perOf(l)) && <small className="ff__error lines__cap">{fill(t("ui.pricing.belowMin"), { price: m(q4(l.product.minPrice * perOf(l))) })}</small>}
                     {sell && errors[`items.${i}.unitPrice`] && !isBelowMin(l.product, l.price, perOf(l)) && <small className="ff__error lines__cap">{t(`ui.errors.${errors[`items.${i}.unitPrice`]}`)}</small>}
                   </td>
                   <td className="num">{m((Number(l.qty) || 0) * (Number(l.price) || 0))}</td>
-                  <td><button type="button" className="icon-btn" aria-label={t("ui.common.remove")} onClick={() => onChange(lines.filter((_, k) => k !== i))}><Icon name="trash" /></button></td>
+                  <td>{l.locked
+                    ? <span className="icon-btn is-locked" title={t("ui.invEdit.locked")}><Icon name="lock" /></span>
+                    : <button type="button" className="icon-btn" aria-label={t("ui.common.remove")} onClick={() => onChange(lines.filter((_, k) => k !== i))}><Icon name="trash" /></button>}</td>
                 </tr>
               ))}
             </tbody>

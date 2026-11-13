@@ -1458,3 +1458,26 @@ tr.is-muted td { opacity: .6; }
 .walkin-box__fields { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .walkin-box small { font-size: .76rem; }
 @media (max-width: 600px) { .walkin-box__fields { grid-template-columns: 1fr; } }
+
+/* ---------- invoice editing and modification history ---------- */
+.check-row { display: flex; align-items: center; gap: 8px; font-size: .92rem; }
+.inv-edit-rule { display: flex; align-items: flex-start; gap: 6px; }
+.inv-edit-rule .icon { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+.inv-edit-refund { display: grid; gap: 6px; padding: 12px; border: 1px solid #f5c2c2; border-radius: 12px; background: #fff7f7; }
+.lines__locked { display: flex; align-items: flex-start; gap: 4px; color: #92400e; }
+.lines__locked .icon, .icon-btn.is-locked .icon { width: 13px; height: 13px; flex: none; margin-top: 2px; }
+.icon-btn.is-locked { color: var(--muted); cursor: default; }
+.inv-history { list-style: none; margin: 0 0 16px; padding: 0 0 0 14px; border-left: 2px solid #e3e6ef; display: grid; gap: 14px; }
+.inv-history__item { position: relative; display: grid; gap: 6px; }
+.inv-history__item::before { content: ""; position: absolute; left: -21px; top: 6px; width: 12px; height: 12px; border-radius: 50%; background: #fff; border: 2px solid var(--navy); }
+.inv-history__item.is-cancelled::before { border-color: #b42318; }
+.inv-history__head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: .9rem; }
+.inv-history__ok { display: inline-flex; align-items: center; gap: 4px; color: #11683f; font-size: .82rem; font-weight: 700; }
+.inv-history__ok .icon { width: 14px; height: 14px; }
+.inv-history__reason { margin: 0; font-style: italic; color: var(--ink-2, #333); }
+.inv-history__changes { margin: 0; padding-left: 18px; display: grid; gap: 2px; font-size: .86rem; }
+.inv-history__versions { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.inv-version { padding: 10px; border: 1px solid #e3e6ef; border-radius: 10px; background: #fafbfe; font-size: .85rem; }
+.inv-version p { margin: 4px 0 8px; }
+.inv-history__sub { margin: 8px 0; font-size: 1rem; }
+tr.is-neg td { color: #b42318; }

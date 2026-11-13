@@ -16,7 +16,9 @@ export const PERMISSION_GROUPS = [
   // prices.edit: change a selling price at the till / on an invoice (products whose price mode is "permission");
   // prices.approve: sell below a product's minimum selling price, and approve it for others
   { module: "pos", perms: ["sales.create", "sales.view", "sales.discount", "sales.cancel", "discounts.approve", "promotions.manage", "prices.edit", "prices.approve"] },
-  { module: "invoices", perms: ["invoices.view", "invoices.create", "invoices.cancel", "payments.receive"] },
+  // invoices.edit: correct a posted, unpaid invoice (with a reason); invoices.editPaid: correct partly / fully paid invoices
+  // (with refunds of any overpayment) and cancel paid invoices with a refund; invoices.approveEdit: approve changes that need it
+  { module: "invoices", perms: ["invoices.view", "invoices.create", "invoices.cancel", "payments.receive", "invoices.edit", "invoices.editPaid", "invoices.approveEdit"] },
   // costs.view / costs.edit: see and change cost prices (ordinary cashiers have neither)
   { module: "products", perms: ["products.view", "products.edit", "costs.view", "costs.edit"] },
   { module: "stock", perms: ["stock.view", "stock.add", "stock.adjust", "stock.transfer", "stock.locations", "branches.transfer"] },
@@ -57,6 +59,7 @@ const LEGACY = {
   "sales.create": ["manager", "cashier"], "sales.view": ["manager", "cashier"], "sales.discount": OM, "sales.cancel": OM, "discounts.approve": OM, "promotions.manage": OM,
   "prices.edit": OM, "prices.approve": OM,
   "invoices.view": ["manager", "cashier"], "invoices.create": ["manager", "cashier"], "invoices.cancel": OM, "payments.receive": ["manager", "cashier"],
+  "invoices.edit": OM, "invoices.editPaid": ["owner"], "invoices.approveEdit": OM,
   "products.view": ["manager", "cashier", "stockkeeper"], "products.edit": ["manager", "stockkeeper"],
   "costs.view": ["manager", "stockkeeper"], "costs.edit": OM,
   "stock.view": ["manager", "stockkeeper"], "stock.add": ["manager", "stockkeeper"], "stock.adjust": OM, "stock.transfer": OM, "stock.locations": OM, "branches.transfer": [],

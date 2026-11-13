@@ -37,6 +37,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="m/:id" element={<ModulePage />} />
         <Route path="invoices/new" element={<InvoiceForm />} />
+        <Route path="invoices/:id/edit" element={<InvoiceForm />} />
         <Route path="products/bulk" element={<BulkProducts />} />
         <Route path="invoices/preview" element={<InvoiceView preview />} />
         <Route path="sales/:id" element={<Receipt />} />

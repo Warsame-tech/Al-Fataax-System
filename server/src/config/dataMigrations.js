@@ -87,5 +87,20 @@ export const DATA_STEPS = [
         if (set.size !== perms.length) await db.query("UPDATE roles SET permissions = ? WHERE id = ?", [JSON.stringify([...set]), r.id]);
       }
     }
+  },
+  {
+    // Invoice editing: roles that could cancel invoices (managers) may now correct unpaid invoices and approve edits;
+    // correcting paid invoices (refunds) stays with the owner until given to a role.
+    name: "invoice_edit_permissions_v1",
+    async run(db) {
+      const [roles] = await db.query("SELECT id, permissions FROM roles");
+      for (const r of roles) {
+        let perms;
+        try { perms = JSON.parse(r.permissions || "[]"); } catch { perms = []; }
+        const set = new Set(perms);
+        if (set.has("invoices.cancel")) { set.add("invoices.edit"); set.add("invoices.approveEdit"); }
+        if (set.size !== perms.length) await db.query("UPDATE roles SET permissions = ? WHERE id = ?", [JSON.stringify([...set]), r.id]);
+      }
+    }
   }
 ];

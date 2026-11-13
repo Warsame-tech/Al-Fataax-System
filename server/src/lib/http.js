@@ -53,9 +53,14 @@ export function range(q, defaultDays = 30) {
   return { from, to, start: `${from} 00:00:00`, end: `${to} 23:59:59` };
 }
 
-/** Runs fn inside a transaction; commits on success, rolls back on any error. */
-export async function withTx(fn) {
+/**
+ * Runs fn inside a transaction; commits on success, rolls back on any error.
+ * A deadlock (MySQL rolled the whole transaction back) is tried again, up to twice: fn does all its work inside the
+ * transaction, so running it again is safe.
+ */
+export async function withTx(fn, attempt = 1) {
   const conn = await pool.getConnection();
+  let retry = false;
   try {
     await conn.beginTransaction();
     const result = await fn(conn);
@@ -63,10 +68,13 @@ export async function withTx(fn) {
     return result;
   } catch (err) {
     await conn.rollback().catch(() => {});
-    throw err;
+    if (err?.code !== "ER_LOCK_DEADLOCK" || attempt >= 3) throw err;
+    retry = true;
   } finally {
     conn.release();
   }
+  if (retry) await new Promise((r) => setTimeout(r, 30 * attempt));
+  return withTx(fn, attempt + 1);
 }
 
 /** Throws 404 unless the row exists AND belongs to the business (tenant check). */

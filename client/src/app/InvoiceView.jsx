@@ -10,6 +10,7 @@ import { usePerm, ReasonModal } from "./ui.jsx";
 import { PaymentModal } from "./pages/Parties.jsx";
 import { savePdf } from "./pdf.js";
 import { PriceDetailLine } from "./Jewelry.jsx";
+import { InvoiceHistory, CancelWithRefund } from "./InvoiceHistory.jsx";
 
 /*
  * Printable invoice (Print / Save as PDF from the browser).
@@ -52,6 +53,12 @@ export default function InvoiceView({ preview = false }) {
   const inv = data.invoice;
   const cur = biz.currency || "USD";
   const m = (v) => money(v, cur, lang);
+  // who may edit it in its status (server: lib/invoiceEdits.js); a cancelled invoice is never edited
+  const editPerm = { draft: "invoices.create", unpaid: "invoices.edit", overdue: "invoices.edit", partially_paid: "invoices.editPaid", paid: "invoices.editPaid" }[inv.status];
+  const post = async () => {
+    if (!window.confirm(t("ui.invEdit.postConfirm"))) return;
+    try { await apiRequest(`/api/invoices/${inv.id}/post`, { method: "POST" }); setVersion((v) => v + 1); } catch (err) { window.alert(err?.data?.code ? t(`ui.errors.${err.data.code}`) : t("ui.errors.failed")); }
+  };
 
   /* Save as PDF: builds the PDF file in the browser and downloads it (no print dialog). */
   const exportPdf = async () => {
@@ -66,8 +73,11 @@ export default function InvoiceView({ preview = false }) {
       <div className="invoice-toolbar no-print">
         <Link className="auth__back" to="/app/m/invoices"><Icon name="arrow-left" /><span>{t("invoice.back")}</span></Link>
         <div className="form-actions">
-          {!preview && can("invoices.cancel") && inv.status !== "cancelled" && inv.paid === 0 && (
-            <button type="button" className="btn btn--danger" onClick={() => setModal("cancel")}><Icon name="x" /><span>{t("ui.invoices.cancelInvoice")}</span></button>
+          {!preview && <button type="button" className="btn btn--outline" onClick={() => setModal("history")}><Icon name="history" /><span>{t("ui.invEdit.history")}</span></button>}
+          {!preview && editPerm && can(editPerm) && <Link className="btn btn--outline" to={`/app/invoices/${inv.id}/edit`}><Icon name="settings" /><span>{t("ui.invEdit.edit")}</span></Link>}
+          {!preview && inv.status === "draft" && can("invoices.create") && <button type="button" className="btn btn--navy" onClick={post}><Icon name="check" /><span>{t("ui.invEdit.post")}</span></button>}
+          {!preview && can("invoices.cancel") && inv.status !== "cancelled" && (inv.paid === 0 || can("invoices.editPaid")) && (
+            <button type="button" className="btn btn--danger" onClick={() => setModal(inv.paid > 0 ? "cancelRefund" : "cancel")}><Icon name="x" /><span>{t("ui.invoices.cancelInvoice")}</span></button>
           )}
           {!preview && can("payments.receive") && ["unpaid", "partially_paid", "overdue"].includes(inv.status) && inv.balance > 0 && (
             <button type="button" className="btn btn--navy" onClick={() => setModal("pay")}><Icon name="wallet" /><span>{t("ui.invoices.recordPayment")}</span></button>
@@ -82,9 +92,11 @@ export default function InvoiceView({ preview = false }) {
       </div>
 
       {preview && <p className="invoice-sample no-print" role="note"><Icon name="info" />{t("invoice.sample")}</p>}
+      {inv.status === "draft" && <p className="invoice-sample no-print" role="note"><Icon name="info" />{t("ui.invEdit.draftNote")}</p>}
 
       <article className="invoice" ref={sheetRef} aria-label={`${t("invoice.title")} ${inv.number}`}>
         {preview && <span className="invoice__watermark" aria-hidden="true">SAMPLE</span>}
+        {!preview && inv.status === "draft" && <span className="invoice__watermark" aria-hidden="true">{t("ui.status.draft").toUpperCase()}</span>}
         <div className="invoice__bar" aria-hidden="true" />
 
         {/* business: logo above the name, centred */}
@@ -185,6 +197,8 @@ export default function InvoiceView({ preview = false }) {
       </article>
 
       {modal === "pay" && <PaymentModal url={`/api/invoices/${inv.id}/payments`} max={inv.balance} title={t("ui.invoices.recordPayment")} onClose={() => setModal(null)} onSaved={() => { setModal(null); setVersion((v) => v + 1); }} />}
+      {modal === "history" && <InvoiceHistory invoiceId={inv.id} onClose={() => setModal(null)} />}
+      {modal === "cancelRefund" && <CancelWithRefund invoice={inv} onClose={() => setModal(null)} onDone={() => { setModal(null); setVersion((v) => v + 1); }} />}
       {modal === "cancel" && <ReasonModal title={t("ui.invoices.cancelInvoice")} help={t("ui.invoices.cancelHelp")} confirmLabel={t("ui.invoices.cancelInvoice")}
         onConfirm={(reason) => apiRequest(`/api/invoices/${inv.id}/cancel`, { method: "POST", body: { reason } }).then(() => setVersion((v) => v + 1))} onClose={() => setModal(null)} />}
     </div>
