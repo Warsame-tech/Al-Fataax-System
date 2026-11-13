@@ -129,8 +129,9 @@ async function main() {
     for (const [n, ph] of [["Banadir Wholesale (SAMPLE)", "+252 61 1000001"], ["Hormuud Foods Distributor (SAMPLE)", "+252 61 1000002"], ["Gulf Imports (SAMPLE)", "+252 61 1000003"]]) {
       const [r] = await conn.query("INSERT INTO suppliers (business_id, name, phone) VALUES (?, ?, ?)", [bid, n, ph]); supplierIds.push(r.insertId);
     }
-    for (const [n, ph] of [["Xamar Mini Market (SAMPLE)", "+252 61 2000001"], ["Ayaan Restaurant (SAMPLE)", "+252 61 2000002"], ["Faisal Shop (SAMPLE)", "+252 61 2000003"], ["Walk-in customer (SAMPLE)", null]]) {
-      const [r] = await conn.query("INSERT INTO customers (business_id, name, phone) VALUES (?, ?, ?)", [bid, n, ph]); customerIds.push(r.insertId);
+    // the shop and the restaurant buy at wholesale prices
+    for (const [n, ph, tier] of [["Xamar Mini Market (SAMPLE)", "+252 61 2000001", "wholesale"], ["Ayaan Restaurant (SAMPLE)", "+252 61 2000002", "wholesale"], ["Faisal Shop (SAMPLE)", "+252 61 2000003", "retail"], ["Walk-in customer (SAMPLE)", null, "retail"]]) {
+      const [r] = await conn.query("INSERT INTO customers (business_id, name, phone, price_tier) VALUES (?, ?, ?, ?)", [bid, n, ph, tier]); customerIds.push(r.insertId);
     }
   });
 

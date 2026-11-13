@@ -10,13 +10,19 @@ import { BatchFields } from "./Stock.jsx";
 import { unitsOf, unitsPer, packPrice, breakdown } from "../packaging.js";
 import { DeviceEntry, DevicePicker, deviceText } from "../Devices.jsx";
 import { isRoll, YARD, RollEntry, RollPicker, rollsDeclared, lengthText, fabricPrice, rollAvailable } from "../Fabric.jsx";
+import { isBelowMin } from "../pricing.js";
 
 const tracked = (p) => ["serial", "imei", "serial_imei"].includes(p?.tracking);
 const q4 = (v) => Math.round(Number(v) * 10000) / 10000;
+/* base units in one unit of the line (a pack, a yard, the whole roll) */
+const perOfLine = (l) => (isRoll(l.product) ? (l.unit === "yard" ? YARD : l.unit === "roll" ? l.roll?.remaining || 1 : 1) : l.unit ? unitsPer(l.product, l.unit) || 1 : 1);
+/* selling lines priced below their product's minimum selling price (they need a manager's approval) */
+export const linesBelowMin = (lines) => lines.filter((l) => isBelowMin(l.product, l.price, perOfLine(l)));
 
 /*
  * Editable product lines for invoices and purchases.
- * mode "sell": price from the chosen price list (editable only when allowPrice);
+ * mode "sell": price from the chosen price list (editable only when allowPrice — true / false, or allowPrice(product) by the
+ *              product's price mode, app/pricing.js); a price below the minimum selling price is flagged;
  *              the quantity can never be more than the stock on hand
  * mode "buy":  unit cost entered per line (defaults to the product's cost price); batch no + expiry for products that track batches
  * Packaged products (pharmacy): a line has a unit — a sales unit when selling (box, strip, tablet), a purchase unit when
@@ -40,6 +46,7 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
   const [rollFor, setRollFor] = useState(null);    // { product, index? } choosing a roll (selling)
 
   const sell = mode === "sell";
+  const mayPrice = (p) => (typeof allowPrice === "function" ? allowPrice(p) : allowPrice);
   const basePrice = (p) => (priceList === "wholesale" && p.wholesalePrice !== null ? p.wholesalePrice : p.sellingPrice);
   const priceOf = (p, unit = null, roll = null) => {
     if (isRoll(p)) {
@@ -54,7 +61,7 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
   };
   // rolls: meters (base), yards, or (selling) the whole roll
   const unitList = (p) => (isRoll(p) ? [{ name: p.unit }, { name: "yard" }, ...(sell ? [{ name: "roll" }] : [])] : unitsOf(p, sell ? "sell" : "buy"));
-  const perOf = (l) => (isRoll(l.product) ? (l.unit === "yard" ? YARD : l.unit === "roll" ? l.roll?.remaining || 1 : 1) : l.unit ? unitsPer(l.product, l.unit) || 1 : 1);
+  const perOf = perOfLine;
   const available = (l) => (isRoll(l.product) && sell ? rollAvailable(l.roll) : l.product.stock);
   const unitLabel = (u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
   const addProduct = (p) => {
@@ -165,9 +172,11 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
                     {sell && l.capped && <small className="ff__error lines__cap">{isRoll(l.product) ? fill(t("ui.fabric.onlyOnRoll"), { len: lengthText(available(l)) }) : fill(t("ui.invoices.onlyInStock"), { qty: qty(l.product.stock), unit: unitLabel(l.product.unit) })}</small>}
                   </td>
                   <td className="num">
-                    {mode === "buy" || allowPrice
-                      ? <input className={"input input--sm" + (errors[`items.${i}.unitCost`] || errors[`items.${i}.unitPrice`] ? " has-error" : "")} type="number" min="0" step="any" value={l.price} onChange={(e) => update(i, { price: e.target.value })} />
-                      : m(l.price)}
+                    {mode === "buy" || mayPrice(l.product)
+                      ? <input className={"input input--sm" + (errors[`items.${i}.unitCost`] || errors[`items.${i}.unitPrice`] || (sell && isBelowMin(l.product, l.price, perOf(l))) ? " has-error" : "")} type="number" min="0" step="any" value={l.price} onChange={(e) => update(i, { price: e.target.value })} />
+                      : <>{m(l.price)}{l.product.priceEdit === "fixed" && <small className="cell-sub"><Icon name="lock" /> {t("ui.pricing.locked")}</small>}</>}
+                    {sell && isBelowMin(l.product, l.price, perOf(l)) && <small className="ff__error lines__cap">{fill(t("ui.pricing.belowMin"), { price: m(q4(l.product.minPrice * perOf(l))) })}</small>}
+                    {sell && errors[`items.${i}.unitPrice`] && !isBelowMin(l.product, l.price, perOf(l)) && <small className="ff__error lines__cap">{t(`ui.errors.${errors[`items.${i}.unitPrice`]}`)}</small>}
                   </td>
                   <td className="num">{m((Number(l.qty) || 0) * (Number(l.price) || 0))}</td>
                   <td><button type="button" className="icon-btn" aria-label={t("ui.common.remove")} onClick={() => onChange(lines.filter((_, k) => k !== i))}><Icon name="trash" /></button></td>
@@ -195,6 +204,7 @@ export default function LineItems({ lines, onChange, mode = "sell", priceList = 
   );
 }
 
-/** API items for selling lines (invoices): rolls send the roll and the unit (yard / roll). */
+/** API items for selling lines (invoices): rolls send the roll and the unit (yard / roll); the price only where it may be changed. */
 export const sellItems = (lines, allowPrice) => lines.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}),
-  ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}), ...(l.rollId ? { rollId: l.rollId } : {}), ...(allowPrice ? { unitPrice: l.price } : {}) }));
+  ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}), ...(l.rollId ? { rollId: l.rollId } : {}),
+  ...((typeof allowPrice === "function" ? allowPrice(l.product) : allowPrice) ? { unitPrice: l.price } : {}) }));

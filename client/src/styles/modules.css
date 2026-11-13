@@ -1392,3 +1392,13 @@ tr.is-muted td { opacity: .6; }
 .shift-chip { display: inline-flex; align-items: center; gap: 4px; margin: 2px 0; padding: 2px 8px; border-radius: 999px; background: #eef1ff; color: #2c3494; font-size: .78rem; font-weight: 700; }
 .shift-chip button { border: 0; background: none; color: inherit; cursor: pointer; padding: 0 2px; }
 .shift-add { display: block; width: 100%; margin-top: 2px; border: 1px dashed #c9d2e6; border-radius: 8px; background: none; color: var(--muted); cursor: pointer; }
+
+/* ---------- retail / wholesale pricing ---------- */
+.tier-tag { margin-left: 6px; vertical-align: middle; background: #e7f6ee; color: #146c43; }
+.tier-pill { display: inline-flex; align-items: center; gap: 5px; align-self: flex-start; padding: 2px 10px; border-radius: 999px; background: #e7f6ee; color: #146c43; font-size: .78rem; font-weight: 700; }
+.tier-pill .icon { width: 13px; height: 13px; }
+.pos2__price { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 4px; color: var(--muted); font-size: .78rem; }
+.pos2__price .link-btn { display: inline-flex; align-items: center; gap: 4px; font-size: .78rem; }
+.pos2__price .link-btn .icon { width: 13px; height: 13px; }
+.pos2__price input { width: 110px; min-height: 30px; padding: 3px 8px; border: 1px solid var(--navy); border-radius: 8px; font: inherit; font-size: .85rem; }
+.pos2__price small { display: inline-flex; align-items: center; gap: 4px; }

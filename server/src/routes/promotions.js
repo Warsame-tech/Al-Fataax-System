@@ -13,7 +13,9 @@ import { PROMO_KINDS, activePromotions, applyPromotions, discountRules, signAppr
  *   GET/POST/PUT /api/promotions          promotions (promotions.manage)
  *   GET/PUT      /api/promotions/rules    { maxPct, approvalPct } manual discount limits (owner)
  *   POST /api/promotions/preview          what the active promotions take off a cart (the POS shows it before paying)
- *   POST /api/promotions/approval         { username, password } a manager approves one discount → short-lived approval
+ *   POST /api/promotions/approval         { username, password, what: discount|price } a manager approves one discount, or prices
+ *                                         below the minimum selling price → short-lived approval
+ *   GET  /api/promotions/price-changes    selling prices changed at sales / invoices: list price, price used, who, who approved
  *   GET  /api/promotions/discounts        discount history: who gave it, who approved, which promotions
  */
 const router = Router();
@@ -90,9 +92,13 @@ router.post("/preview", requirePerm("sales.create"), ah(async (req, res) => {
   res.json({ ...r, total: round2(r.lines.reduce((s, l) => s + l.discount, 0) + r.order.discount) });
 }));
 
-/* A manager approves one discount: their username + password (rate limited), never their session. */
+/*
+ * A manager approves one discount (what: "discount", needs discounts.approve) or prices below the minimum selling price
+ * (what: "price", needs prices.approve): their username + password (rate limited), never their session.
+ */
 const approvalLimit = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, standardHeaders: true, legacyHeaders: false, message: { code: "tooManyAttempts" } });
-router.post("/approval", approvalLimit, requirePerm("sales.create"), ah(async (req, res) => {
+router.post("/approval", approvalLimit, (req, res, next) => (can(req.user, "sales.create") || can(req.user, "invoices.create") ? next() : res.status(403).json({ code: "forbidden" })), ah(async (req, res) => {
+  const what = req.body?.what === "price" ? "price" : "discount";
   const username = text(req.body?.username, 30).toLowerCase();
   const password = typeof req.body?.password === "string" ? req.body.password : "";
   const [[u]] = await pool.query(
@@ -102,9 +108,9 @@ router.post("/approval", approvalLimit, requirePerm("sales.create"), ah(async (r
   const ok = u && u.status === "active" && (await bcrypt.compare(password, u.password_hash));
   if (!ok) throw badRequest({ password: "wrongPassword" });
   const perms = u.role === "owner" ? ALL_PERMISSIONS : u.role_id ? (u.role_name ? parsePermissions(u.role_permissions) : []) : permissionsFor(u.role);
-  if (!perms.includes("discounts.approve")) throw badRequest({ username: "cannotApprove" });
-  await audit(null, { businessId: req.business.id, userId: u.id, action: "discount.approval", entity: "user", entityId: req.user.id, meta: { for: req.user.fullName }, ip: req.ip });
-  res.json({ token: signApproval(req.business.id, u.id), approver: u.full_name });
+  if (!perms.includes(what === "price" ? "prices.approve" : "discounts.approve")) throw badRequest({ username: what === "price" ? "cannotApprovePrice" : "cannotApprove" });
+  await audit(null, { businessId: req.business.id, userId: u.id, action: `${what}.approval`, entity: "user", entityId: req.user.id, meta: { for: req.user.fullName }, ip: req.ip });
+  res.json({ token: signApproval(req.business.id, u.id, what), approver: u.full_name });
 }));
 
 /** GET /api/promotions/discounts?from&to — sales with a discount or a promotion */
@@ -121,6 +127,31 @@ router.get("/discounts", (req, res, next) => (can(req.user, "promotions.manage")
   });
   res.json({ range: r, discounts: list, summary: { manual: round2(list.filter((x) => x.status === "completed").reduce((a, x) => a + x.manual, 0)),
     promotions: round2(list.filter((x) => x.status === "completed").reduce((a, x) => a + x.promoItems + (x.promoOrder?.amount || 0), 0)), approved: list.filter((x) => x.approvedBy).length } });
+}));
+
+/** GET /api/promotions/price-changes?from&to — lines sold at another price than the price list (or below the minimum, approved) */
+router.get("/price-changes", (req, res, next) => (can(req.user, "reports.view") || can(req.user, "audit.view") || can(req.user, "prices.approve") ? next() : res.status(403).json({ code: "forbidden" })), ah(async (req, res) => {
+  const r = range(req.query, 30);
+  const bid = req.business.id;
+  const NAME = "CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, ''))";
+  const [rows] = await pool.query(
+    `SELECT * FROM (
+       SELECT 'sale' kind, s.id doc_id, s.receipt_no ref, s.sold_at at, s.status, ${NAME} product, p.unit base_unit, si.sell_unit, COALESCE(si.sell_qty, si.qty) qty,
+              COALESCE(si.sell_price, si.unit_price) price, si.list_price, u.full_name user_name, a.full_name approver_name, c.name customer
+         FROM sale_items si JOIN sales s ON s.id = si.sale_id AND s.business_id = si.business_id JOIN products p ON p.id = si.product_id
+         JOIN users u ON u.id = s.user_id LEFT JOIN users a ON a.id = si.price_approved_by LEFT JOIN customers c ON c.id = s.customer_id
+        WHERE si.business_id = ? AND si.list_price IS NOT NULL AND s.sold_at BETWEEN ? AND ?
+       UNION ALL
+       SELECT 'invoice', i.id, i.invoice_no, i.created_at, i.status, ${NAME}, p.unit, ii.sell_unit, COALESCE(ii.sell_qty, ii.qty),
+              COALESCE(ii.sell_price, ii.unit_price), ii.list_price, u.full_name, a.full_name, c.name
+         FROM invoice_items ii JOIN invoices i ON i.id = ii.invoice_id AND i.business_id = ii.business_id JOIN products p ON p.id = ii.product_id
+         JOIN users u ON u.id = i.user_id LEFT JOIN users a ON a.id = ii.price_approved_by LEFT JOIN customers c ON c.id = i.customer_id
+        WHERE ii.business_id = ? AND ii.list_price IS NOT NULL AND i.created_at BETWEEN ? AND ?
+     ) x ORDER BY at DESC LIMIT 500`, [bid, r.start, r.end, bid, r.start, r.end]);
+  const list = rows.map((x) => ({ kind: x.kind, id: x.doc_id, number: x.ref, at: x.at, status: x.status, product: x.product, unit: x.sell_unit || x.base_unit, qty: num(x.qty),
+    listPrice: num(x.list_price), price: num(x.price), difference: round2(num(x.price) - num(x.list_price)), user: x.user_name, approvedBy: x.approver_name || null, customer: x.customer || null }));
+  res.json({ range: r, changes: list, summary: { count: list.length, lowered: list.filter((x) => x.difference < 0).length, raised: list.filter((x) => x.difference > 0).length,
+    approved: list.filter((x) => x.approvedBy).length } });
 }));
 
 export default router;

@@ -7,6 +7,7 @@ import { lockProducts, moveStock } from "../lib/ledger.js";
 import { defaultLocationId } from "../lib/stock.js";
 import { toMeters, toYards, lockRoll, rollEvent } from "../lib/rolls.js";
 import { units, toNumber } from "../lib/jewelry.js";
+import { withoutCost } from "../lib/pricing.js";
 
 /*
  * Fabric rolls (lib/rolls.js): the rolls of the business, each with its history.
@@ -27,7 +28,8 @@ const KINDS = { damaged: "damaged", waste: "adjustment", measured: "count", foun
 const canSee = (req, res, next) => (["stock.view", "products.view", "sales.create", "invoices.create"].some((p) => can(req.user, p)) ? next() : res.status(403).json({ code: "forbidden" }));
 const NAME = "CONCAT_WS(' ', p.name, NULLIF(p.size, ''), NULLIF(p.shade, ''), NULLIF(p.fragrance, ''), NULLIF(p.formula, ''), NULLIF(p.pack_size, ''))";
 
-const shape = (r) => ({
+const shape = (r, user) => withoutCost(user, shapeAll(r), ["costPerMeter", "value"]);
+const shapeAll = (r) => ({
   id: r.id, code: r.roll_code, productId: r.product_id, product: r.product_name, sku: r.sku || null, sellingPrice: r.selling_price === undefined ? undefined : num(r.selling_price),
   declared: r.declared_length === null ? null : num(r.declared_length), verified: num(r.verified_length), remaining: num(r.remaining),
   remainingYards: toYards(num(r.remaining)), shortage: r.declared_length === null ? 0 : round4(num(r.declared_length) - num(r.verified_length)),
@@ -71,7 +73,7 @@ router.get("/", canSee, ah(async (req, res) => {
        FROM fabric_rolls r JOIN products p ON p.id = r.product_id
       WHERE r.business_id = ? AND r.status IN ('available', 'pending_inspection') GROUP BY r.product_id ORDER BY product_name`, [bid]);
   res.json({
-    rolls: rows.map(shape),
+    rolls: rows.map((r) => shape(r, req.user)),
     products: totals.map((t) => ({ productId: t.product_id, product: t.product_name, rolls: Number(t.rolls), meters: num(t.meters), yards: toYards(num(t.meters)),
       pending: num(t.pending), stock: num(t.stock_qty) }))
   });
@@ -80,7 +82,7 @@ router.get("/", canSee, ah(async (req, res) => {
 router.get("/code/:code", canSee, ah(async (req, res) => {
   const [[r]] = await pool.query(`SELECT ${COLS} ${FROM} WHERE r.business_id = ? AND r.roll_code = ?`, [req.business.id, text(req.params.code, 40)]);
   if (!r) return res.status(404).json({ code: "rollNotFound" });
-  res.json({ roll: shape(r) });
+  res.json({ roll: shape(r, req.user) });
 }));
 
 router.get("/:id(\\d+)", canSee, ah(async (req, res) => {
@@ -95,7 +97,7 @@ router.get("/:id(\\d+)", canSee, ah(async (req, res) => {
        FROM roll_events e LEFT JOIN users u ON u.id = e.user_id LEFT JOIN stock_locations l ON l.id = e.location_id
       WHERE e.roll_id = ? ORDER BY e.id`, [bid, bid, bid, r.id]);
   res.json({
-    roll: shape(r),
+    roll: shape(r, req.user),
     events: events.map((e) => ({ id: e.id, event: e.event, change: num(e.length_change), remaining: num(e.remaining_after), refType: e.ref_type, refId: e.ref_id,
       refNo: e.ref_no || null, location: e.location_name || null, note: e.note || "", user: e.user_name || null, at: e.created_at }))
   });

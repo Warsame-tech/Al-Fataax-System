@@ -16,7 +16,8 @@
  *                   kept in the base unit, purchases / stock entry / POS / invoices may use the packs
  *   purchaseOrders  purchases can be ordered first and received later (goods receipt adds the stock)
  *   electronics     product type, model number, manufacturer, preferred supplier, country of origin, notes,
- *                   minimum selling price, technical specifications by product type
+ *                   technical specifications by product type
+ *                   (every business type: cost, retail, wholesale and minimum selling price, price editing — lib/pricing.js)
  *   serials         per-product tracking: quantity, serial number, IMEI or both (devices table, lib/devices.js)
  *   warranties      warranty policy per product; a warranty record per device / line sold (Warranties module)
  *   variantGroups   product families: "Add variant" and the variants of a product (each variant is a product)
@@ -197,7 +198,7 @@ const PROFILES = {
     labels: { size: "strength", brand: "brandName", category: "therapeuticCategory", unit: "baseUnit",
       costPrice: "purchaseCostBase", sellingPrice: "sellingPriceBase", lowStockAlert: "reorderLevel", lowStockShort: "reorderLevel" },
     units: ["tablet", "capsule", "bottle", "ml", "tube", "sachet", "ampoule", "vial", "pcs"],
-    hiddenFields: ["description", "subcategory", "wholesalePrice"],
+    hiddenFields: ["description", "subcategory"],
     medicine: true,
     packaging: true,
     purchaseOrders: true,
@@ -256,7 +257,7 @@ for (const [type, f] of Object.entries(FOOD_TYPES)) {
     variants: [],
     labels: { sellingPrice: "menuPrice", costPrice: "costPerUnit", lowStockAlert: "minStockLevel", lowStockShort: "minStockLevel" },
     units: ["pcs", "portion", "plate", "cup", "glass", "g", "kg", "ml", "liter", "bottle", "can", "pack", "box", "tray", "dozen"],
-    hiddenFields: ["wholesalePrice"],
+    hiddenFields: [],
     purchaseOrders: true,
     itemKinds: ["menu", "goods", "ingredient", "packaging", "modifier", "prepared"],
     food: { type, stations: f.stations, services: f.services, tables: f.tables },

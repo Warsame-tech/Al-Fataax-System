@@ -129,7 +129,7 @@ router.get("/current", requirePerm("stock.view"), ah(async (req, res) => {
       productId: r.id, name: r.name, sku: r.sku, barcode: r.barcode, imagePath: r.image_path, unit: r.unit, category: r.category,
       locationId: r.location_id, location: r.location_name, qty: num(r.qty), available: num(r.qty),
       alertLevel: r.alert_level === null ? num(r.min_stock) : num(r.alert_level), alertSource: r.alert_level === null ? "product" : "location",
-      status: r.status, lastMovementAt: r.last_move, value: round2(num(r.qty) * num(r.cost_price))
+      status: r.status, lastMovementAt: r.last_move, value: can(req.user, "costs.view") ? round2(num(r.qty) * num(r.cost_price)) : null
     }))
   });
 }));
@@ -167,7 +167,7 @@ router.get("/product/:id", canSee, ah(async (req, res) => {
     product: {
       id: p.id, name: productName(p), size: p.size || "", unit: p.unit, sku: p.sku, barcode: p.barcode, imagePath: p.image_path, brand: names?.brand || null,
       category: names?.category || null, subcategory: p.subcategory || null, sellingPrice: num(p.selling_price),
-      costPrice: num(p.cost_price), total: num(p.stock_qty), stock: num(p.stock_qty), alertLevel: num(p.min_stock), isActive: Boolean(p.is_active),
+      costPrice: can(req.user, "costs.view") ? num(p.cost_price) : null, total: num(p.stock_qty), stock: num(p.stock_qty), alertLevel: num(p.min_stock), isActive: Boolean(p.is_active),
       tracking: p.tracking || "qty", trackBatches: Boolean(p.track_batches)
     },
     locations: rows.map((r) => ({ locationId: r.id, location: r.name, isDefault: Boolean(r.is_default), qty: num(r.qty),
@@ -484,6 +484,11 @@ router.get("/valuation", requirePerm("stock.view"), ah(async (req, res) => {
     b.units = q4(b.units + i.qty); b.costValue = round2(b.costValue + i.costValue); b.retailValue = round2(b.retailValue + i.retailValue);
   }
   const totals = Object.values(byLocation).reduce((t, b) => ({ units: q4(t.units + b.units), costValue: round2(t.costValue + b.costValue), retailValue: round2(t.retailValue + b.retailValue) }), { units: 0, costValue: 0, retailValue: 0 });
+  // without costs.view: retail values only
+  if (!can(req.user, "costs.view")) {
+    const strip = (x) => ({ ...x, costPrice: undefined, costValue: null });
+    return res.json({ items: items.map(strip), byLocation: Object.values(byLocation).map(strip), totals: strip(totals), costsHidden: true });
+  }
   res.json({ items, byLocation: Object.values(byLocation), totals });
 }));
 

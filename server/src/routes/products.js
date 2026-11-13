@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { pool } from "../config/db.js";
 import { requireAuth, audit } from "../middleware/auth.js";
-import { requirePerm } from "../lib/permissions.js";
+import { can, requirePerm } from "../lib/permissions.js";
 import { ah, text, optText, id, money, withTx, ensureOwned, badRequest, num, HttpError } from "../lib/http.js";
 import { moveStock } from "../lib/ledger.js";
 import { imageUpload, saveImage, removeImage } from "../lib/files.js";
@@ -13,6 +13,7 @@ import { TRACKING } from "../lib/devices.js";
 import { conflict } from "../lib/http.js";
 import { currentRates, weightPrice, netWeight } from "../lib/jewelry.js";
 import { ITEM_KINDS, viaRecipe, optionsOf } from "../lib/food.js";
+import { PRICE_EDIT, withoutCost } from "../lib/pricing.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -30,8 +31,10 @@ async function imageFrom(req) {
  * stock is the quantity at that location (POS and invoices sell from the default location),
  * and totalStock keeps the total.
  * Variant fields (size, shade, fragrance, formula, packSize) are part of the shown name.
+ * Cost prices are left out (null) for users without costs.view (lib/pricing.js).
  */
-const shape = (p, rates = null) => withJewelry(p, rates, {
+const shape = (p, rates = null, user = null) => withoutCost(user, shapeAll(p, rates));
+const shapeAll = (p, rates) => withJewelry(p, rates, {
   id: p.id, name: productName(p), baseName: p.name, size: p.size || "", shade: p.shade || "", fragrance: p.fragrance || "", formula: p.formula || "",
   packSize: p.pack_size || "", variantOf: p.variant_of || null, variantCount: p.variant_count === undefined ? undefined : Number(p.variant_count),
   description: p.description || "", sku: p.sku, barcode: p.barcode, unit: p.unit, imagePath: p.image_path || null,
@@ -47,6 +50,8 @@ const shape = (p, rates = null) => withJewelry(p, rates, {
   collection: p.collection || "", season: p.season || "",
   productType: p.product_type || "", modelNumber: p.model_number || "", countryOfOrigin: p.country_of_origin || "", notes: p.notes || "",
   specs: specsOf(p), tracking: p.tracking || "qty", minPrice: p.min_price === null || p.min_price === undefined ? null : num(p.min_price),
+  // who may change the selling price at a sale: fixed | editable | permission (lib/pricing.js)
+  priceEdit: PRICE_EDIT.includes(p.price_edit) ? p.price_edit : "permission",
   warrantyMonths: p.warranty_months ?? null, warrantyProvider: p.warranty_provider || "", warrantyTerms: p.warranty_terms || "",
   // food: what the item is, its kitchen station, sizes / extras, sold out today
   itemKind: p.item_kind || "goods", station: p.station || "", available: p.available === undefined ? true : Boolean(p.available), menuOptions: optionsOf(p),
@@ -189,7 +194,8 @@ router.get("/", requirePerm("products.view"), ah(async (req, res) => {
   if (req.query.active === "archived") where.push("p.is_active = 0");
   else if (req.query.active !== "all") where.push("p.is_active = 1");
   const loc = await requestedLocation(req);
-  const sort = SORTS[req.query.sort] || "p.name";
+  // sorting by cost would show the cost order to users who can't see costs
+  const sort = (["cost", "value"].includes(req.query.sort) && !can(req.user, "costs.view") ? null : SORTS[req.query.sort]) || "p.name";
   const dir = req.query.dir === "desc" ? "DESC" : "ASC";
   const paged = req.query.page !== undefined;
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
@@ -205,10 +211,10 @@ router.get("/", requirePerm("products.view"), ah(async (req, res) => {
          FROM products p LEFT JOIN brands b ON b.id = p.brand_id AND b.business_id = p.business_id
          LEFT JOIN categories c ON c.id = p.category_id AND c.business_id = p.business_id WHERE ${where.join(" AND ")}`, params);
     total = Number(c.n);
-    summary = { count: total, units: num(c.units), stockValue: Math.round(num(c.value) * 10000) / 10000 };
+    summary = { count: total, units: num(c.units), stockValue: can(req.user, "costs.view") ? Math.round(num(c.value) * 10000) / 10000 : null };
   }
   const rates = req.business.profile.jewelry ? await currentRates(pool, bid) : null;
-  res.json({ products: rows.map((p) => shape(p, rates)), total, summary, page: paged ? page : 1, pageSize: paged ? pageSize : rows.length });
+  res.json({ products: rows.map((p) => shape(p, rates, req.user)), total, summary, page: paged ? page : 1, pageSize: paged ? pageSize : rows.length });
 }));
 
 /* GET /api/products/filters — options for the filter dropdowns */
@@ -233,13 +239,13 @@ router.get("/barcode/:code", requirePerm("products.view"), ah(async (req, res) =
   const loc = await requestedLocation(req);
   const [[p]] = await pool.query(`${withLocation(loc)} WHERE p.business_id = ? AND p.is_active = 1 AND (p.barcode = ? OR p.sku = ?) LIMIT 1`, [req.business.id, code, code]);
   const rates = req.business.profile.jewelry ? await currentRates(pool, req.business.id) : null;
-  if (p) return res.json({ product: shape(p, rates), pack: null });
+  if (p) return res.json({ product: shape(p, rates, req.user), pack: null });
   const [[x]] = await pool.query(
     `${withLocation(loc)} JOIN product_barcodes xb ON xb.product_id = p.id AND xb.business_id = p.business_id
       WHERE p.business_id = ? AND p.is_active = 1 AND xb.barcode = ? LIMIT 1`, [req.business.id, code]);
   if (!x) return res.status(404).json({ code: "notFound" });
   const [[pack]] = await pool.query("SELECT pack_label, pack_qty FROM product_barcodes WHERE business_id = ? AND barcode = ? AND product_id = ? LIMIT 1", [req.business.id, code, x.id]);
-  res.json({ product: shape(x, rates), pack: { label: pack.pack_label || null, qty: num(pack.pack_qty) || 1 } });
+  res.json({ product: shape(x, rates, req.user), pack: { label: pack.pack_label || null, qty: num(pack.pack_qty) || 1 } });
 }));
 
 /* GET /api/products/check-barcode/:code — for the product form: is this barcode already used (also by archived products, and as a packaging barcode)? */
@@ -248,7 +254,7 @@ router.get("/check-barcode/:code", requirePerm("products.view"), ah(async (req, 
   const [[p]] = await pool.query(
     `${SELECT} WHERE p.business_id = ? AND (p.barcode = ? OR EXISTS (SELECT 1 FROM product_barcodes xb WHERE xb.product_id = p.id AND xb.barcode = ?)) LIMIT 1`,
     [req.business.id, code, code]);
-  res.json({ product: p ? shape(p, null) : null, allowDuplicates: req.business.allowDuplicateCodes });
+  res.json({ product: p ? shape(p, null, req.user) : null, allowDuplicates: req.business.allowDuplicateCodes });
 }));
 
 /* GET /api/products/categories */
@@ -351,6 +357,7 @@ function readProduct(body, { creating }) {
     notes: optText(body.notes, 2000), specs: body.specs === undefined ? undefined : JSON.stringify(readSpecs(body.specs)),
     tracking: TRACKING.includes(body.tracking) ? body.tracking : "qty",
     minPrice: body.minPrice === "" || body.minPrice == null ? null : money(body.minPrice),
+    priceEdit: PRICE_EDIT.includes(body.priceEdit) ? body.priceEdit : "permission",
     warrantyMonths: body.warrantyMonths === "" || body.warrantyMonths == null ? null : Number(body.warrantyMonths),
     warrantyProvider: optText(body.warrantyProvider, 100), warrantyTerms: optText(body.warrantyTerms, 255),
     // food: not sent by other businesses (kept as saved)
@@ -370,6 +377,8 @@ function readProduct(body, { creating }) {
   if (d.costPerGram != null && (Number.isNaN(d.costPerGram) || d.costPerGram < 0)) e.costPerGram = "invalidAmount";
   if (d.pricingMode === "weight" && (!d.metal || !d.purity || !(d.grossWeight > 0))) e.pricingMode = "weightNeedsMetal";
   if (d.minPrice !== null && !Number.isNaN(d.minPrice) && !Number.isNaN(d.sellingPrice) && d.minPrice > d.sellingPrice) e.minPrice = "minAboveSelling";
+  // the wholesale price is a normal price too: it can't need an approval at every sale
+  else if (d.minPrice !== null && !Number.isNaN(d.minPrice) && d.wholesalePrice !== null && !Number.isNaN(d.wholesalePrice) && d.minPrice > d.wholesalePrice) e.minPrice = "minAboveWholesale";
   if (d.warrantyMonths !== null && (!Number.isInteger(d.warrantyMonths) || d.warrantyMonths < 0 || d.warrantyMonths > 240)) e.warrantyMonths = "invalidAmount";
   if (pack.levels?.some((l) => l.name === d.unit)) e.packaging = "packSameAsUnit";
   if (Number.isNaN(d.costPrice)) e.costPrice = "invalidAmount";
@@ -437,6 +446,17 @@ function jewelryCost(d, profile) {
   d.costPrice = Math.round(net * d.costPerGram * 10000) / 10000;
 }
 
+/*
+ * Cost price only with costs.edit: without it a new product starts at cost 0 and an edited one keeps its cost
+ * (jewelry: the saved cost per gram, so a weight change still gives the right cost).
+ */
+function costRules(user, d, old, profile) {
+  if (can(user, "costs.edit")) return;
+  d.costPrice = old ? num(old.cost_price) : 0;
+  if (d.costPerGram !== undefined) d.costPerGram = old && old.cost_per_gram != null ? num(old.cost_per_gram) : null;
+  jewelryCost(d, profile);
+}
+
 /* Changes to costs, prices, reorder level and status are kept in the product's change history (audit log). */
 const TRACKED = [["costPrice", "cost_price"], ["sellingPrice", "selling_price"], ["wholesalePrice", "wholesale_price"], ["minStock", "min_stock"]];
 function changesOf(old, d) {
@@ -457,6 +477,7 @@ function changesOf(old, d) {
   if (d.itemStatus && (old.item_status || "active") !== d.itemStatus) out.push({ field: "itemStatus", from: old.item_status || "active", to: d.itemStatus });
   const oldMin = old.min_price === null || old.min_price === undefined ? null : num(old.min_price);
   if (oldMin !== d.minPrice) out.push({ field: "minPrice", from: oldMin, to: d.minPrice });
+  if ((old.price_edit || "permission") !== d.priceEdit) out.push({ field: "priceEdit", from: old.price_edit || "permission", to: d.priceEdit });
   return out;
 }
 
@@ -466,6 +487,7 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
   if (req.business.profile.batches) d.trackBatches = true;     // e.g. cosmetics: every product tracks batches & expiry
   rollRules(d, req.business.profile);
   jewelryCost(d, req.business.profile);
+  costRules(req.user, d, null, req.business.profile);
   const fabric = readFabric(req.body || {}, req.business.profile);
   const image = await imageFrom(req);
   const bid = req.business.id;
@@ -489,6 +511,7 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
           group, d.description, d.sku, d.barcode, image, d.unit, d.packaging ?? null, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0]
       );
       await saveBarcodes(conn, bid, r.insertId, d.barcodes || []);
+      await conn.query("UPDATE products SET price_edit = ? WHERE id = ?", [d.priceEdit, r.insertId]);
       if (d.costPerGram !== undefined) await conn.query("UPDATE products SET cost_per_gram = ? WHERE id = ?", [d.costPerGram, r.insertId]);
       await saveFabric(conn, r.insertId, fabric);
       if (d.itemKind || d.station) await conn.query("UPDATE products SET item_kind = ?, station = ? WHERE id = ?", [d.itemKind || "goods", d.station ?? null, r.insertId]);
@@ -498,7 +521,7 @@ router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(a
         await moveStock(conn, { businessId: bid, userId: req.user.id, product, qtyChange: d.openingStock, type: "opening", refType: "stock", reason: "opening", note: "Opening stock" });
       }
       await audit(conn, { businessId: bid, userId: req.user.id, action: "product.created", entity: "product", entityId: r.insertId,
-        meta: { costPrice: d.costPrice, sellingPrice: d.sellingPrice, wholesalePrice: d.wholesalePrice, status: d.isActive ? "active" : "archived" }, ip: req.ip });
+        meta: { costPrice: d.costPrice, sellingPrice: d.sellingPrice, wholesalePrice: d.wholesalePrice, minPrice: d.minPrice, priceEdit: d.priceEdit, status: d.isActive ? "active" : "archived" }, ip: req.ip });
       return r.insertId;
     });
     res.status(201).json({ id: productId });
@@ -518,6 +541,7 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
   try {
     const oldImage = await withTx(async (conn) => {
       const p = await ensureOwned(conn, "products", id(req.params.id), bid, true);
+      costRules(req.user, d, p, req.business.profile);
       await checkCodes(conn, req.business, d, p);
       // the tracking method can change only while nothing is in stock (devices must match the stock)
       if ((p.tracking || "qty") !== d.tracking && num(p.stock_qty) !== 0) throw conflict("trackingNeedsZeroStock");
@@ -543,6 +567,7 @@ router.put("/:id", requirePerm("products.edit"), imageUpload.single("image"), ah
           d.description, d.sku, d.barcode, next, d.unit, d.packaging === undefined ? p.packaging : d.packaging, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock, d.trackBatches ? 1 : 0, d.isActive ? 1 : 0, p.id, bid]
       );
       await saveBarcodes(conn, bid, p.id, d.barcodes);
+      await conn.query("UPDATE products SET price_edit = ? WHERE id = ?", [d.priceEdit, p.id]);
       if (d.costPerGram !== undefined) await conn.query("UPDATE products SET cost_per_gram = ? WHERE id = ?", [d.costPerGram, p.id]);
       await saveFabric(conn, p.id, fabric);
       if (d.trackBatches && !p.track_batches) await startBatchTracking(conn, bid, p.id);
@@ -581,15 +606,15 @@ router.post("/:id/variants", requirePerm("products.edit"), ah(async (req, res) =
       const d = { sku: optText(raw?.sku, 80), barcode: optText(raw?.barcode, 80), barcodes: [] };
       try { await checkCodes(conn, req.business, d); } catch (err) { throw new HttpError(400, "validation", Object.fromEntries(Object.entries(err.errors || {}).map(([k, x]) => [`variants.${i}.${k}`, x])), err.extra); }
       const selling = raw?.sellingPrice === undefined || raw?.sellingPrice === "" ? num(parent.selling_price) : money(raw.sellingPrice);
-      const cost = raw?.costPrice === undefined || raw?.costPrice === "" ? num(parent.cost_price) : money(raw.costPrice);
+      const cost = raw?.costPrice === undefined || raw?.costPrice === "" || !can(req.user, "costs.edit") ? num(parent.cost_price) : money(raw.costPrice);
       if (Number.isNaN(selling) || Number.isNaN(cost)) throw badRequest({ [`variants.${i}.sellingPrice`]: "invalidAmount" });
       const [r] = await conn.query(
         `INSERT INTO products (business_id, category_id, brand_id, subcategory, name, generic_name, dosage_form, manufacturer, supplier_id, rx_required, storage_instructions,
-                               product_type, model_number, collection, season, country_of_origin, notes, specs, tracking, item_kind, station, menu_options, min_price, warranty_months, warranty_provider, warranty_terms,
+                               product_type, model_number, collection, season, country_of_origin, notes, specs, tracking, item_kind, station, menu_options, min_price, price_edit, warranty_months, warranty_provider, warranty_terms,
                                size, shade, fragrance, formula, pack_size, variant_of, description, sku, barcode, image_path, unit, packaging,
                                cost_price, selling_price, wholesale_price, min_stock, track_batches, is_active)
          SELECT business_id, category_id, brand_id, subcategory, name, generic_name, dosage_form, manufacturer, supplier_id, rx_required, storage_instructions,
-                product_type, model_number, collection, season, country_of_origin, notes, specs, tracking, item_kind, station, menu_options, min_price, warranty_months, warranty_provider, warranty_terms,
+                product_type, model_number, collection, season, country_of_origin, notes, specs, tracking, item_kind, station, menu_options, min_price, price_edit, warranty_months, warranty_provider, warranty_terms,
                 ?, ?, fragrance, ?, ?, ?, description, ?, ?, NULL, unit, packaging, ?, ?, wholesale_price, min_stock, track_batches, 1
            FROM products WHERE id = ?`,
         [v.size, v.shade, v.formula, v.pack_size, group, d.sku, d.barcode, cost, selling, parent.id]);
@@ -631,7 +656,7 @@ router.get("/:id/details", requirePerm("products.view"), ah(async (req, res) => 
   ]);
   res.json({
     barcodes: barcodes.map((x) => ({ barcode: x.barcode, label: x.pack_label || "", qty: num(x.pack_qty) })),
-    variants: variants.map((v) => shape(v, null)),
+    variants: variants.map((v) => shape(v, null, req.user)),
     batches: batches.map((b) => ({ id: b.id, batchNo: b.batch_no, expiryDate: b.expiry_date, qty: num(b.qty), location: b.location }))
   });
 }));
@@ -645,7 +670,11 @@ router.get("/:id/changes", requirePerm("products.view"), ah(async (req, res) => 
       WHERE a.business_id = ? AND a.entity = 'product' AND a.entity_id = ? AND a.action IN ('product.created', 'product.changed')
       ORDER BY a.id DESC LIMIT 200`, [bid, id(req.params.id)]);
   const meta = (m) => (typeof m === "string" ? JSON.parse(m) : m) || {};
-  res.json({ changes: rows.map((r) => ({ action: r.action, at: r.created_at, user: r.user_name, ...meta(r.meta) })) });
+  // cost changes stay hidden from users without costs.view
+  const costs = can(req.user, "costs.view");
+  const visible = (m) => (costs ? m : { ...m, costPrice: undefined, changes: m.changes?.filter((c) => c.field !== "costPrice") });
+  res.json({ changes: rows.map((r) => ({ action: r.action, at: r.created_at, user: r.user_name, ...visible(meta(r.meta)) }))
+    .filter((c) => c.action !== "product.changed" || !c.changes || c.changes.length) });
 }));
 
 /* POST /api/products/:id/adjust  { qtyChange: +/-, reason } — authorized adjustments only */
@@ -678,7 +707,8 @@ router.get("/:id/movements", requirePerm("products.view"), ah(async (req, res) =
   res.json({ movements: rows.map((m) => ({ type: m.type, change: num(m.qty_change), note: m.note, at: m.created_at, user: m.user_name })) });
 }));
 
-/* POST /api/products/import  { rows: [{name, size, shade, fragrance, formula, packSize, sku, barcode, category, unit, costPrice, sellingPrice, wholesalePrice, minStock, openingStock}] } */
+/* POST /api/products/import  { rows: [{name, size, shade, fragrance, formula, packSize, sku, barcode, category, unit, costPrice, sellingPrice, wholesalePrice, minPrice, priceEdit, minStock, openingStock}] }
+ * (costPrice is used only with costs.edit) */
 router.post("/import", requirePerm("products.edit"), ah(async (req, res) => {
   const rows = Array.isArray(req.body?.rows) ? req.body.rows.slice(0, 2000) : [];
   if (!rows.length) throw badRequest({ rows: "required" });
@@ -690,11 +720,12 @@ router.post("/import", requirePerm("products.edit"), ah(async (req, res) => {
     let n = 0;
     for (const [i, r] of rows.entries()) {
       const d = readProduct(r, { creating: true });
+      if (!can(req.user, "costs.edit")) d.costPrice = 0;
       try { await checkCodes(conn, req.business, d); } catch (err) { throw new HttpError(400, "importErrors", null, { rows: [{ row: i + 2, errors: err.errors }] }); }
       const [ins] = await conn.query(
-        `INSERT INTO products (business_id, category_id, name, size, shade, fragrance, formula, pack_size, sku, barcode, unit, cost_price, selling_price, wholesale_price, min_stock)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-        [bid, await categoryId(conn, bid, d.category), d.name, d.size, d.shade, d.fragrance, d.formula, d.packSize, d.sku, d.barcode, d.unit, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minStock]
+        `INSERT INTO products (business_id, category_id, name, size, shade, fragrance, formula, pack_size, sku, barcode, unit, cost_price, selling_price, wholesale_price, min_price, price_edit, min_stock)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [bid, await categoryId(conn, bid, d.category), d.name, d.size, d.shade, d.fragrance, d.formula, d.packSize, d.sku, d.barcode, d.unit, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minPrice, d.priceEdit, d.minStock]
       );
       if (d.openingStock > 0) {
         await moveStock(conn, { businessId: bid, userId: req.user.id, product: { id: ins.insertId, name: d.name, stock_qty: 0, unit: d.unit, cost_price: d.costPrice }, qtyChange: d.openingStock, type: "opening", refType: "stock", reason: "opening", note: "Imported opening stock" });

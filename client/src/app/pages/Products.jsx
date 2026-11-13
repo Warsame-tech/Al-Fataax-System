@@ -29,6 +29,8 @@ export const EMPTY = {
   genericName: "", dosageForm: "", manufacturer: "", supplierId: "", rxRequired: false, storageInstructions: "",
   // electronics (profile.electronics / serials / warranties)
   productType: "", modelNumber: "", countryOfOrigin: "", notes: "", tracking: "qty", minPrice: "", warrantyMonths: "", warrantyProvider: "", warrantyTerms: "",
+  // pricing (every business type): who may change the price at a sale
+  priceEdit: "permission",
   // clothing (profile.fashion)
   collection: "", season: "",
   // jewelry (profile.jewelry)
@@ -45,6 +47,9 @@ const unitFull = (t, u) => (t(`ui.products.unitNames.${u}`).startsWith("ui.") ? 
  * A business type can have its own list (profile.units, e.g. cosmetics: pcs, bottle, tube, box, carton). */
 export const UNITS = ["pcs", "bottle", "box", "pack", "carton", "kg", "g", "liter", "ml", "meter", "yard", "roll", "pair", "dozen"];
 
+/* who may change the selling price at a sale (server: lib/pricing.js) */
+const PRICE_EDIT = ["permission", "editable", "fixed"];
+
 const NO_FILTERS = { q: "", brandId: "", categoryId: "", subcategory: "", status: "", stockAt: "", supplierId: "", active: "", expiry: "", variantOf: "", productType: "" };
 const PAGE_SIZE = 25;
 
@@ -55,7 +60,7 @@ const variantTemplate = (p) => ({
   trackBatches: Boolean(p.trackBatches), variantOf: p.id,
   // electronics: same type, model, maker, supplier, tracking, warranty and specs (the variant changes the ones that differ)
   productType: p.productType || "", modelNumber: p.modelNumber || "", manufacturer: p.manufacturer || "", supplierId: p.supplierId ? String(p.supplierId) : "",
-  countryOfOrigin: p.countryOfOrigin || "", tracking: p.tracking || "qty", collection: p.collection || "", season: p.season || "", minPrice: p.minPrice ?? "", warrantyMonths: p.warrantyMonths ?? "",
+  countryOfOrigin: p.countryOfOrigin || "", tracking: p.tracking || "qty", collection: p.collection || "", season: p.season || "", minPrice: p.minPrice ?? "", priceEdit: p.priceEdit || "permission", warrantyMonths: p.warrantyMonths ?? "",
   warrantyProvider: p.warrantyProvider || "", warrantyTerms: p.warrantyTerms || "", specs: { ...(p.specs || {}) }
 });
 
@@ -87,16 +92,16 @@ const metersOf = (yd, lockedCost) => {
 };
 
 /* Unit "Roll": cost and prices per yard of the roll, the margin on each, shortest cut and remnant length (yards). */
-function RollSection({ yd, setYd, costEditable, costPerMeter, err }) {
+function RollSection({ yd, setYd, costEditable, showCost = true, costPerMeter, err }) {
   const { t } = useLanguage();
   const m = useMoney();
   const set = (k) => (e) => setYd((x) => ({ ...x, [k]: e.target.value }));
-  const cost = costEditable ? Number(yd.costYard) : r4(costPerMeter * YARD_M);
+  const cost = !showCost ? 0 : costEditable ? Number(yd.costYard) : r4(costPerMeter * YARD_M);
   const margin = (k) => (yd[k] !== "" && Number(yd[k]) > 0 && cost > 0 ? fill(t("ui.fabric.marginLine"), { pct: Math.round(((Number(yd[k]) - cost) / Number(yd[k])) * 1000) / 10 }) : null);
   return (
     <>
       <p className="form-sub ff--full"><Icon name="roll" /> {t("ui.fabric.rollSection")}</p>
-      {costEditable
+      {!showCost ? null : costEditable
         ? <Field label={t("ui.fabric.costPerYard")} error={err.costPrice} hint={t("ui.fabric.costPerYardHint")}><input className="input" type="number" min="0" step="any" value={yd.costYard} onChange={set("costYard")} placeholder={t("ui.fabric.costPerYard")} /></Field>
         : <Field label={t("ui.fabric.costPerYard")} hint={t("ui.fabric.avgCostYardHint")}><input className="input packaging__total" readOnly tabIndex={-1} value={`${m(cost)} / yd`} /></Field>}
       <Field label={t("ui.fabric.pricePerYard")} error={err.sellingPrice || err.yardPrice} hint={margin("priceYard")}><input className="input" type="number" min="0" step="any" value={yd.priceYard} onChange={set("priceYard")} placeholder={t("ui.fabric.pricePerYard")} /></Field>
@@ -104,7 +109,7 @@ function RollSection({ yd, setYd, costEditable, costPerMeter, err }) {
       <Field label={`${t("ui.fabric.rollPerYard")} ${t("ui.common.optional")}`} error={err.rollRate} hint={margin("rollYard") || t("ui.fabric.rollPerYardHint")}><input className="input" type="number" min="0" step="any" value={yd.rollYard} onChange={set("rollYard")} placeholder={t("ui.fabric.rollPerYard")} /></Field>
       <Field label={`${t("ui.fabric.minCutYd")} ${t("ui.common.optional")}`} error={err.minCut} hint={t("ui.fabric.minCutYdHint")}><input className="input" type="number" min="0" step="any" value={yd.minCutYd} onChange={set("minCutYd")} placeholder="yd" /></Field>
       <Field label={`${t("ui.fabric.remnantYd")} ${t("ui.common.optional")}`} error={err.remnantLength} hint={t("ui.fabric.remnantYdHint")}><input className="input" type="number" min="0" step="any" value={yd.remnantYd} onChange={set("remnantYd")} placeholder="yd" /></Field>
-      {(cost > 0 || Number(yd.priceYard) > 0) && <p className="muted ff--full">{fill(t("ui.fabric.perMeterLine"), { cost: m(r4(cost / YARD_M)), price: m(r4((Number(yd.priceYard) || 0) / YARD_M)) })}</p>}
+      {showCost && (cost > 0 || Number(yd.priceYard) > 0) && <p className="muted ff--full">{fill(t("ui.fabric.perMeterLine"), { cost: m(r4(cost / YARD_M)), price: m(r4((Number(yd.priceYard) || 0) / YARD_M)) })}</p>}
     </>
   );
 }
@@ -152,11 +157,12 @@ export default function Products() {
   };
 
   const exportCsv = () => downloadCsv("products.csv",
-    ["name", "size", "shade", "fragrance", "formula", "packSize", "sku", "barcode", "brand", "category", "subcategory", "unit", "costPrice", "sellingPrice", "wholesalePrice", "lowStockAlertLevel", "stock", "status"],
-    products.map((p) => [p.baseName ?? p.name, p.size, p.shade, p.fragrance, p.formula, p.packSize, p.sku, p.barcode, p.brand, p.category, p.subcategory, p.unit, p.costPrice, p.sellingPrice,
-      p.wholesalePrice ?? "", p.minStock, p.stock, p.isActive ? "active" : "archived"]));
+    ["name", "size", "shade", "fragrance", "formula", "packSize", "sku", "barcode", "brand", "category", "subcategory", "unit", ...(can("costs.view") ? ["costPrice"] : []), "sellingPrice", "wholesalePrice", "minPrice", "priceEdit", "lowStockAlertLevel", "stock", "status"],
+    products.map((p) => [p.baseName ?? p.name, p.size, p.shade, p.fragrance, p.formula, p.packSize, p.sku, p.barcode, p.brand, p.category, p.subcategory, p.unit, ...(can("costs.view") ? [p.costPrice] : []), p.sellingPrice,
+      p.wholesalePrice ?? "", p.minPrice ?? "", p.priceEdit, p.minStock, p.stock, p.isActive ? "active" : "archived"]));
   const hidden = (k) => profile.hiddenFields?.includes(k);
-  const lead = 7 + (showVariant ? 1 : 0) + (hidden("wholesalePrice") ? 0 : 1) + (profile.medicine ? 2 : 0) + (profile.electronics ? 2 : 0) + (profile.jewelry ? 2 : 0);   // columns before "Current stock" (totals row)
+  const costView = can("costs.view");   // cost price and stock value columns
+  const lead = (costView ? 7 : 6) + (showVariant ? 1 : 0) + (hidden("wholesalePrice") ? 0 : 1) + (profile.medicine ? 2 : 0) + (profile.electronics ? 2 : 0) + (profile.jewelry ? 2 : 0);   // columns before "Current stock" (totals row)
 
   return (
     <div className="page">
@@ -236,11 +242,11 @@ export default function Products() {
               {profile.electronics && <><th>{t("ui.products.productType")}</th><th>{t("ui.products.modelNumber")}</th></>}
               {profile.jewelry && <><th>{t("ui.jewelry.metalPurity")}</th><th className="num">{t("ui.jewelry.netWeight")}</th></>}
               <Th by="sku">{t("ui.products.sku")}</Th><Th by="brand">{L("brand")}</Th><Th by="category">{L("category")}</Th>
-              <Th by="cost" num>{L("costPrice")}</Th><Th by="price" num>{L("sellingPrice")}</Th>
+              {costView && <Th by="cost" num>{L("costPrice")}</Th>}<Th by="price" num>{L("sellingPrice")}</Th>
               {!hidden("wholesalePrice") && <th className="num">{t("ui.products.wholesalePrice")}</th>}<Th by="stock" num>{t("ui.stock.current")}</Th><th>{L("unit")}</th>
               <th className="num">{L("lowStockShort")}</th>
               {profile.batches && <Th by="expiry">{t("ui.products.nextExpiry")}</Th>}
-              <Th by="value" num>{t("ui.products.stockValue")}</Th><th />
+              {costView && <Th by="value" num>{t("ui.products.stockValue")}</Th>}<th />
             </tr></thead>
             <tbody>
               {products.map((p) => (
@@ -281,7 +287,7 @@ export default function Products() {
                   {/* fabric rolls: per yard, as entered (stock and costs are kept per meter) */}
                   {(() => { const y = yardsOf(p); const roll = p.tracking === "roll"; const cell = (v, ydv) => (roll ? (ydv === "" ? "—" : <><Money value={ydv} /><small className="cell-sub">/ yd</small></>) : v === null ? "—" : <Money value={v} />);
                     return <>
-                      <td className="num">{cell(p.costPrice, y.costYard)}</td>
+                      {costView && <td className="num">{cell(p.costPrice, y.costYard)}</td>}
                       <td className="num">{cell(p.sellingPrice, y.priceYard)}</td>
                       {!hidden("wholesalePrice") && <td className="num">{cell(p.wholesalePrice, y.wholesaleYard)}</td>}
                     </>; })()}
@@ -293,7 +299,7 @@ export default function Products() {
                   <td>{unitName(t, p.tracking === "roll" ? "roll" : p.unit)}</td>
                   <td className="num">{qty(p.minStock)}</td>
                   {profile.batches && <td>{p.trackBatches ? <ExpiryCell value={p.nextExpiry} soonDays={profile.expirySoonDays} /> : <span className="muted">{t("ui.products.notTracked")}</span>}</td>}
-                  <td className="num"><Money value={Math.round(p.stock * p.costPrice * 10000) / 10000} /></td>
+                  {costView && <td className="num"><Money value={Math.round(p.stock * p.costPrice * 10000) / 10000} /></td>}
                   <td className="row-actions">
                     <button type="button" className="icon-btn" title={t("ui.products.history")} onClick={() => setHistory(p)}><Icon name="history" /></button>
                     {can("stock.adjust") && p.isActive && <Link className="icon-btn" title={t("ui.stock.adjust")} to={`/app/m/stock?tab=adjust&product=${p.id}`}><Icon name="swap" /></Link>}
@@ -314,7 +320,7 @@ export default function Products() {
                   <td colSpan={lead}><strong>{fill(t("ui.products.totalProducts"), { n: list.data.summary.count })}</strong>{list.data.total > PAGE_SIZE && <small className="cell-sub">{t("ui.products.totalAllPages")}</small>}</td>
                   <td className="num"><strong>{qty(list.data.summary.units)}</strong></td>
                   <td colSpan={profile.batches ? 3 : 2} />
-                  <td className="num"><strong><Money value={list.data.summary.stockValue} /></strong></td>
+                  {costView && <td className="num"><strong><Money value={list.data.summary.stockValue} /></strong></td>}
                   <td />
                 </tr>
               </tfoot>
@@ -353,6 +359,8 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
   const profile = useProfile();
   const { business } = useAuth();
   const L = (k) => productLabel(t, profile, k);
+  const costView = can("costs.view");
+  const costEdit = can("costs.edit");   // the server keeps the saved cost for everyone else
   const isNew = !product.id;
   const [f, setF] = useState(isNew ? { ...EMPTY, ...product } : {
     ...EMPTY, ...product, name: product.baseName ?? product.name, size: product.size || "", shade: product.shade || "", fragrance: product.fragrance || "",
@@ -362,7 +370,7 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
     genericName: product.genericName || "", dosageForm: product.dosageForm || "", manufacturer: product.manufacturer || "",
     supplierId: product.supplierId ? String(product.supplierId) : "", rxRequired: Boolean(product.rxRequired), storageInstructions: product.storageInstructions || "",
     productType: product.productType || "", modelNumber: product.modelNumber || "", countryOfOrigin: product.countryOfOrigin || "", notes: product.notes || "",
-    tracking: product.tracking || "qty", minPrice: product.minPrice ?? "", warrantyMonths: product.warrantyMonths ?? "",
+    tracking: product.tracking || "qty", minPrice: product.minPrice ?? "", priceEdit: product.priceEdit || "permission", warrantyMonths: product.warrantyMonths ?? "",
     warrantyProvider: product.warrantyProvider || "", warrantyTerms: product.warrantyTerms || "",
     collection: product.collection || "", season: product.season || "",
     metal: product.metal || "", purity: product.purity || "", grossWeight: product.grossWeight ?? "", stoneWeight: product.stoneWeight ?? "",
@@ -651,9 +659,11 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
             <Field label={t("ui.jewelry.grossWeight")} error={err.grossWeight}><input className="input" type="number" min="0" step={wStep} value={f.grossWeight} onChange={set("grossWeight")} placeholder={t("ui.jewelry.grams")} /></Field>
             <Field label={`${t("ui.jewelry.stoneWeight")} ${t("ui.common.optional")}`} error={err.stoneWeight}><input className="input" type="number" min="0" step={wStep} value={f.stoneWeight} onChange={set("stoneWeight")} placeholder={t("ui.jewelry.grams")} /></Field>
             <Field label={t("ui.jewelry.netWeight")} hint={t("ui.jewelry.netHint")}><input className="input packaging__total" readOnly tabIndex={-1} value={`${jNet.toFixed(jRates.data?.weightDecimals ?? 3)} g`} /></Field>
-            <Field label={t("ui.jewelry.costPerGram")} error={err.costPerGram || err.pricingMode} hint={t("ui.jewelry.costPerGramHint")}>
-              <input className="input" type="number" min="0" step="any" value={f.costPerGram} onChange={set("costPerGram")} placeholder={t("ui.jewelry.costPerGram")} />
-            </Field>
+            {costView && (
+              <Field label={t("ui.jewelry.costPerGram")} error={err.costPerGram || err.pricingMode} hint={costEdit ? t("ui.jewelry.costPerGramHint") : t("ui.pricing.costLocked")}>
+                <input className="input" type="number" min="0" step="any" value={f.costPerGram} onChange={set("costPerGram")} placeholder={t("ui.jewelry.costPerGram")} disabled={!costEdit} />
+              </Field>
+            )}
             {f.pricingMode === "weight" && (
               <>
                 <Field label={`${t("ui.jewelry.making")} ${t("ui.common.optional")}`} error={err.makingCharge}>
@@ -703,18 +713,25 @@ export function ProductForm({ product, onClose, onSaved, onOpen }) {
           </Field>
         )}
         {profile.packaging && <PackagingEditor pack={pack} setPack={setPack} unit={f.unit} sellingPrice={f.sellingPrice} errors={err} />}
-        {fabricRoll ? <RollSection yd={yd} setYd={setYd} costEditable={!rollLocked} costPerMeter={Number(f.costPrice) || 0} err={err} /> : (<>
-        {profile.jewelry
+        {/* prices (every business type): cost (costs.view / costs.edit), retail, wholesale, minimum, and who may change the price at a sale */}
+        <p className="form-sub ff--full"><Icon name="tag" /> {t("ui.pricing.section")}</p>
+        {fabricRoll ? <RollSection yd={yd} setYd={setYd} costEditable={!rollLocked && costEdit} showCost={costView} costPerMeter={Number(f.costPrice) || 0} err={err} /> : (<>
+        {!costView ? null : profile.jewelry
           ? <Field label={L("costPrice")} error={err.costPrice} hint={jCost !== null ? fill(t("ui.jewelry.costFormula"), { net: jNet.toFixed(jRates.data?.weightDecimals ?? 3), rate: m(Number(f.costPerGram) || 0) }) : t("ui.jewelry.costFromGram")}>
               <input className="input packaging__total" readOnly tabIndex={-1} value={jCost !== null ? m(jCost) : f.costPrice === "" ? "—" : m(Number(f.costPrice) || 0)} />
             </Field>
-          : profile.fabric && f.tracking === "roll" && !isNew
-            ? <Field label={L("costPrice")} hint={t("ui.fabric.avgCostHint")}><input className="input packaging__total" readOnly tabIndex={-1} value={`${m(Number(f.costPrice) || 0)} / m`} /></Field>
+          : (profile.fabric && f.tracking === "roll" && !isNew) || !costEdit
+            ? <Field label={L("costPrice")} hint={costEdit ? t("ui.fabric.avgCostHint") : t("ui.pricing.costLocked")}><input className="input packaging__total" readOnly tabIndex={-1} value={f.tracking === "roll" ? `${m(Number(f.costPrice) || 0)} / m` : m(Number(f.costPrice) || 0)} /></Field>
             : <Field label={L("costPrice")} error={err.costPrice} hint={profile.fabric && f.tracking === "roll" ? t("ui.fabric.defaultCostHint") : undefined}><input className="input" type="number" min="0" step="any" value={f.costPrice} onChange={set("costPrice")} placeholder={L("costPrice")} /></Field>}
         <Field label={profile.jewelry && f.pricingMode === "weight" ? t("ui.jewelry.fallbackPrice") : L("sellingPrice")} error={err.sellingPrice}><input className="input" type="number" min="0" step="any" value={f.sellingPrice} onChange={set("sellingPrice")} placeholder={L("sellingPrice")} /></Field>
         {!profile.hiddenFields?.includes("wholesalePrice") && <Field label={`${t("ui.products.wholesalePrice")} ${t("ui.common.optional")}`} error={err.wholesalePrice}><input className="input" type="number" min="0" step="any" value={f.wholesalePrice} onChange={set("wholesalePrice")} placeholder={t("ui.products.wholesalePrice")} /></Field>}
         </>)}
-        {profile.electronics && <Field label={`${t("ui.products.minPrice")} ${t("ui.common.optional")}`} error={err.minPrice} hint={t("ui.products.minPriceHint")}><input className="input" type="number" min="0" step="any" value={f.minPrice} onChange={set("minPrice")} placeholder={t("ui.products.minPrice")} /></Field>}
+        <Field label={`${t("ui.products.minPrice")} ${t("ui.common.optional")}`} error={err.minPrice} hint={fabricRoll ? `${t("ui.products.minPriceHint")} (/ m)` : t("ui.products.minPriceHint")}><input className="input" type="number" min="0" step="any" value={f.minPrice} onChange={set("minPrice")} placeholder={t("ui.products.minPrice")} /></Field>
+        <Field label={t("ui.pricing.priceEdit")} error={err.priceEdit} hint={t(`ui.pricing.priceEditHints.${f.priceEdit || "permission"}`)}>
+          <select className="input" value={f.priceEdit || "permission"} onChange={set("priceEdit")}>
+            {PRICE_EDIT.map((x) => <option key={x} value={x}>{t(`ui.pricing.priceEditOptions.${x}`)}</option>)}
+          </select>
+        </Field>
         <Field label={L("lowStockAlert")} error={err.minStock} hint={t("ui.products.lowStockAlertHint")}><input className="input" type="number" min="0" step="any" value={f.minStock} onChange={set("minStock")} placeholder={L("lowStockAlert")} /></Field>
         {profile.warranties && (
           <>
@@ -950,16 +967,18 @@ function HistoryModal({ product, lang, onClose }) {
   const { t } = useLanguage();
   const profile = useProfile();
   const m = useMoney();
+  const can = usePerm();
   const L = (k) => productLabel(t, profile, k);
   const [tab, setTab] = useState("movements");
   const moves = useApi(`/api/products/${product.id}/movements`);
   const changes = useApi(tab === "changes" ? `/api/products/${product.id}/changes` : null);
   const details = useApi(tab === "batches" ? `/api/products/${product.id}/details` : null);
   const FIELD = { costPrice: L("costPrice"), sellingPrice: L("sellingPrice"), wholesalePrice: t("ui.products.wholesalePrice"), minStock: L("lowStockAlert"),
-    status: t("ui.products.productStatus"), trackBatches: t("ui.products.trackBatches") };
+    status: t("ui.products.productStatus"), trackBatches: t("ui.products.trackBatches"), minPrice: t("ui.products.minPrice"), priceEdit: t("ui.pricing.priceEdit") };
   const value = (field, v) => {
     if (v === null || v === undefined || v === "") return "—";
     if (field === "status") return t(`ui.products.statusValues.${v}`);
+    if (field === "priceEdit") return t(`ui.pricing.priceEditOptions.${v}`);
     if (field === "trackBatches") return t(v ? "ui.common.yes" : "ui.common.no");
     if (field === "minStock") return qty(v);
     return m(v);
@@ -1000,7 +1019,7 @@ function HistoryModal({ product, lang, onClose }) {
                   <td>{date(c.at, lang, true)}</td>
                   <td>
                     {c.action === "product.created"
-                      ? <>{t("ui.products.created")}: {L("costPrice")} {value("costPrice", c.costPrice)} · {L("sellingPrice")} {value("sellingPrice", c.sellingPrice)}</>
+                      ? <>{t("ui.products.created")}: {can("costs.view") && <>{L("costPrice")} {value("costPrice", c.costPrice)} · </>}{L("sellingPrice")} {value("sellingPrice", c.sellingPrice)}</>
                       : (c.changes || []).map((x, j) => <div key={j}><strong>{FIELD[x.field] || x.field}</strong>: {value(x.field, x.from)} → {value(x.field, x.to)}{c.source ? <small className="muted"> · {c.source}</small> : null}</div>)}
                   </td>
                   <td>{c.user || "—"}</td>

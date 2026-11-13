@@ -68,5 +68,24 @@ export const DATA_STEPS = [
                          SET pi.received_qty = pi.qty WHERE p.status IN ('received', 'cancelled', 'returned') AND pi.received_qty = 0`);
       await db.query("UPDATE purchases SET ordered_total = total WHERE ordered_total IS NULL");
     }
+  },
+  {
+    // New pricing permissions for existing roles, so nobody loses what they could do before:
+    // "give discounts and change prices" → change prices; approving discounts → approving prices below the minimum;
+    // product editors could see and change costs; roles that saw costs elsewhere (purchases, reports, stock) still see them.
+    name: "pricing_permissions_v1",
+    async run(db) {
+      const [roles] = await db.query("SELECT id, permissions FROM roles");
+      for (const r of roles) {
+        let perms;
+        try { perms = JSON.parse(r.permissions || "[]"); } catch { perms = []; }
+        const set = new Set(perms);
+        if (set.has("sales.discount")) set.add("prices.edit");
+        if (set.has("discounts.approve")) set.add("prices.approve");
+        if (set.has("products.edit")) { set.add("costs.view"); set.add("costs.edit"); }
+        if (["purchases.view", "reports.view", "stock.view"].some((p) => set.has(p))) set.add("costs.view");
+        if (set.size !== perms.length) await db.query("UPDATE roles SET permissions = ? WHERE id = ?", [JSON.stringify([...set]), r.id]);
+      }
+    }
   }
 ];

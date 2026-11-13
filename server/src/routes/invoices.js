@@ -14,6 +14,8 @@ import { defaultLocationId } from "../lib/stock.js";
 import { currentRates } from "../lib/jewelry.js";
 import { receiveCustomerPayment, readPayment } from "./parties.js";
 import { vatFor } from "../lib/vat.js";
+import { PRICE_TIERS, priceTierOf, priceChanges } from "../lib/pricing.js";
+import { readApproval } from "../lib/promotions.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -40,7 +42,7 @@ export function readDiscount(value, subtotal) {
 
 /*
  * Creates a wholesale invoice in one transaction.
- * body: { customerId, billPhone?, billAddress?, items:[{productId, qty, unitPrice?}], priceList: retail|wholesale,
+ * body: { customerId, billPhone?, billAddress?, items:[{productId, qty, unitPrice?}], priceList?: retail|wholesale (default: the customer's), priceApprovalToken?,
  *         discount? ("5" or "10%"), discountLabel?, issueDate?, dueDate?, notes?, amountPaid?, method?, bankAccountId? }
  */
 export async function createInvoice(conn, ctx, body) {
@@ -55,10 +57,15 @@ export async function createInvoice(conn, ctx, body) {
   const dueDate = isDate(body.dueDate) ? body.dueDate : null;
   if (dueDate && dueDate < issueDate) throw badRequest({ dueDate: "beforeIssue" });
 
+  // the customer's price type picks the price list; choosing the other one is a price change (prices.edit)
+  const tier = await priceTierOf(conn, businessId, customerId);
+  const priceList = PRICE_TIERS.includes(body.priceList) ? body.priceList : tier;
+  if (priceList !== tier && !can(role, "prices.edit")) throw badRequest({ priceList: "priceLocked" });
+
   const products = await lockProducts(conn, businessId, items.map((i) => i.productId).filter(Boolean));
   const rates = [...products.values()].some((p) => p.pricing_mode === "weight") ? await currentRates(conn, businessId) : null;
   await attachRolls(conn, businessId, items);
-  const lines = priceLines(items, products, { allowCustomPrice: can(role, "sales.discount"), priceList: body.priceList === "wholesale" ? "wholesale" : "retail", rates });
+  const lines = priceLines(items, products, { user: role, userId, priceList, rates, priceApprover: readApproval(body.priceApprovalToken, businessId, "price") });
   const subtotal = round2(lines.reduce((s, l) => s + l.lineTotal, 0));
   const disc = readDiscount(body.discount, subtotal);
   if (disc.error) throw badRequest({ discount: disc.error });
@@ -85,8 +92,9 @@ export async function createInvoice(conn, ctx, body) {
     const food = await consumeForSale(conn, { businessId, userId, product: l.product, qty: l.qty, locationId: loc, refType: "invoice", refId: r.insertId, note: number });
     if (food) { l.unitCost = food.unitCost; l.priceDetail = food.detail; }
     const [it] = await conn.query(
-      `INSERT INTO invoice_items (business_id, invoice_id, product_id, qty, unit_price, unit_cost, line_total, sell_unit, sell_qty, sell_price, price_detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [businessId, r.insertId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null, l.priceDetail ? JSON.stringify(l.priceDetail) : null]
+      `INSERT INTO invoice_items (business_id, invoice_id, product_id, qty, unit_price, unit_cost, line_total, sell_unit, sell_qty, sell_price, price_detail, list_price, price_approved_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [businessId, r.insertId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null, l.priceDetail ? JSON.stringify(l.priceDetail) : null,
+        l.priceChanged || l.belowMin ? l.listPrice : null, l.approvedBy || null]
     );
     const devices = await sellDevices(conn, { businessId, userId, product: l.product, line: l, index: i, locationId: loc, refType: "invoice", refId: r.insertId, itemId: it.insertId, customerId });
     if (isRoll(l.product)) await cutFromRoll(conn, { businessId, product: l.product, rollId: l.rollId, meters: l.qty, locationId: loc, refType: "invoice", refId: r.insertId, itemId: it.insertId, userId, field: `items.${i}.rollId` });
@@ -97,7 +105,11 @@ export async function createInvoice(conn, ctx, body) {
   if (amountPaid > 0) {
     await receiveCustomerPayment(conn, { businessId, userId, customerId, amount: amountPaid, method: body.method, bankAccountId: id(body.bankAccountId), reference: number, invoiceId: r.insertId, at: ctx.at || null });
   }
-  await audit(conn, { businessId, userId, action: "invoice.created", entity: "invoice", entityId: r.insertId, meta: { total, amountPaid } });
+  await audit(conn, { businessId, userId, action: "invoice.created", entity: "invoice", entityId: r.insertId, meta: { total, amountPaid, priceList } });
+  const changed = priceChanges(lines);
+  if (changed.length || priceList !== tier) {
+    await audit(conn, { businessId, userId, action: "price.changed", entity: "invoice", entityId: r.insertId, meta: { ref: number, priceList, ...(priceList !== tier ? { customerPriceList: tier } : {}), lines: changed } });
+  }
   return { id: r.insertId, number, total };
 }
 

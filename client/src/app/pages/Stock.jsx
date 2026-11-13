@@ -446,7 +446,7 @@ function AdjustStock({ locationsApi, initialProduct, initialLocation }) {
     : f.mode === "count" ? (f.counted === "" ? null : r4(Number(f.counted) - before))
     : (Number(f.qty) > 0 ? (f.direction === "subtract" ? -Number(f.qty) : Number(f.qty)) : null);
   const after = change === null ? null : r4(before + change);
-  const valueChange = change === null || !product ? null : Math.round(change * product.costPrice * 100) / 100;
+  const valueChange = change === null || !product || product.costPrice === null ? null : Math.round(change * product.costPrice * 100) / 100;
   const reason = f.mode === "count" ? (f.reason || "correction") : f.reason;
   const isTracked = tracked(product);
   const [picking, setPicking] = useState(false);
@@ -777,8 +777,9 @@ function Valuation({ locationsApi }) {
   const [loc, setLoc] = useState("");
   const v = useApi(`/api/stock/valuation${loc ? `?locationId=${loc}` : ""}`);
   const d = v.data;
-  const exportCsv = () => downloadCsv("stock-valuation.csv", ["location", "product", "sku", "qty", "unit", "costPrice", "costValue", "sellingPrice", "retailValue"],
-    (d?.items || []).map((i) => [i.location, i.name, i.sku, i.qty, i.unit, i.costPrice, i.costValue, i.sellingPrice, i.retailValue]));
+  const costs = !d?.costsHidden;   // without costs.view: retail values only
+  const exportCsv = () => downloadCsv("stock-valuation.csv", ["location", "product", "sku", "qty", "unit", ...(costs ? ["costPrice", "costValue"] : []), "sellingPrice", "retailValue"],
+    (d?.items || []).map((i) => [i.location, i.name, i.sku, i.qty, i.unit, ...(costs ? [i.costPrice, i.costValue] : []), i.sellingPrice, i.retailValue]));
   return (
     <>
       <div className="toolbar">
@@ -791,19 +792,19 @@ function Valuation({ locationsApi }) {
       {v.loading && !d ? <Loading /> : !d ? null : (
         <>
           <div className="acct-grid">
-            <div className="acct-card acct-card--total"><small>{t("ui.stock.costValue")}</small><span className="money">{m(d.totals.costValue)}</span></div>
+            {costs && <div className="acct-card acct-card--total"><small>{t("ui.stock.costValue")}</small><span className="money">{m(d.totals.costValue)}</span></div>}
             <div className="acct-card"><small>{t("ui.stock.retailValue")}</small><span className="money">{m(d.totals.retailValue)}</span></div>
             <div className="acct-card"><small>{t("ui.stock.units")}</small><span className="money">{qty(d.totals.units)}</span></div>
-            {d.byLocation.length > 1 && d.byLocation.map((b) => (
+            {costs && d.byLocation.length > 1 && d.byLocation.map((b) => (
               <div key={b.locationId} className="acct-card"><small>{b.location}</small><span className="money">{m(b.costValue)}</span><small>{fill(t("ui.stock.unitsShort"), { n: qty(b.units) })}</small></div>
             ))}
           </div>
           <p className="muted stock-note"><Icon name="info" /> {t("ui.stock.valuationNote")}</p>
           {d.items.length === 0 ? <EmptyState icon="wallet" text={t("ui.common.noResults")} /> : (
             <div className="table-wrap"><table className="table">
-              <thead><tr><th>{t("ui.common.product")}</th><th>{t("ui.stock.location")}</th><th className="num">{t("ui.common.qty")}</th><th>{t("ui.products.unit")}</th><th className="num">{t("ui.products.costPrice")}</th><th className="num">{t("ui.stock.costValue")}</th><th className="num">{t("ui.stock.retailValue")}</th></tr></thead>
+              <thead><tr><th>{t("ui.common.product")}</th><th>{t("ui.stock.location")}</th><th className="num">{t("ui.common.qty")}</th><th>{t("ui.products.unit")}</th>{costs && <><th className="num">{t("ui.products.costPrice")}</th><th className="num">{t("ui.stock.costValue")}</th></>}<th className="num">{t("ui.stock.retailValue")}</th></tr></thead>
               <tbody>{d.items.map((i) => (
-                <tr key={`${i.productId}-${i.locationId}`}><td><strong>{i.name}</strong></td><td>{i.location}</td><td className="num">{qty(i.qty)}</td><td>{i.unit}</td><td className="num"><Money value={i.costPrice} /></td><td className="num"><Money value={i.costValue} /></td><td className="num"><Money value={i.retailValue} /></td></tr>
+                <tr key={`${i.productId}-${i.locationId}`}><td><strong>{i.name}</strong></td><td>{i.location}</td><td className="num">{qty(i.qty)}</td><td>{i.unit}</td>{costs && <><td className="num"><Money value={i.costPrice} /></td><td className="num"><Money value={i.costValue} /></td></>}<td className="num"><Money value={i.retailValue} /></td></tr>
               ))}</tbody>
             </table></div>
           )}

@@ -1,14 +1,16 @@
 import { Router } from "express";
 import { pool } from "../config/db.js";
 import { requireAuth, audit } from "../middleware/auth.js";
-import { requirePerm } from "../lib/permissions.js";
+import { can, requirePerm } from "../lib/permissions.js";
 import { ah, text, optText, id, money, withTx, ensureOwned, badRequest, num, round2, METHODS, today } from "../lib/http.js";
 import { moneyMove } from "../lib/ledger.js";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 function readParty(body) {
-  const d = { name: text(body.name, 150), phone: optText(body.phone, 30), email: optText(body.email, 190), address: optText(body.address, 255), notes: optText(body.notes, 255) };
+  const d = { name: text(body.name, 150), phone: optText(body.phone, 30), email: optText(body.email, 190), address: optText(body.address, 255), notes: optText(body.notes, 255),
+    // customers: retail or wholesale prices on their sales and invoices (lib/pricing.js)
+    priceTier: body.priceTier === "wholesale" ? "wholesale" : "retail" };
   const e = {};
   if (!d.name) e.name = "required";
   if (d.email && !EMAIL.test(d.email)) e.email = "invalidEmail";
@@ -121,24 +123,34 @@ function partyRouter(kind) {
         WHERE x.business_id = ? ${q ? "AND (x.name LIKE ? OR x.phone LIKE ?)" : ""} ORDER BY x.name LIMIT 500`,
       q ? [req.business.id, `%${q}%`, `%${q}%`] : [req.business.id]
     );
-    res.json({ [kind]: rows.map((r) => ({ id: r.id, name: r.name, phone: r.phone, email: r.email, address: r.address, notes: r.notes ?? null, balance: num(r.balance), overdue: num(r.overdue) })) });
+    res.json({ [kind]: rows.map((r) => ({ id: r.id, name: r.name, phone: r.phone, email: r.email, address: r.address, notes: r.notes ?? null,
+      ...(isCustomer ? { priceTier: r.price_tier || "retail" } : {}), balance: num(r.balance), overdue: num(r.overdue) })) });
   }));
 
   router.post("/", requirePerm(`${perm}.edit`), ah(async (req, res) => {
     const d = readParty(req.body || {});
-    const cols = isCustomer ? "(business_id, name, phone, email, address, notes) VALUES (?, ?, ?, ?, ?, ?)" : "(business_id, name, phone, email, address) VALUES (?, ?, ?, ?, ?)";
-    const vals = isCustomer ? [req.business.id, d.name, d.phone, d.email, d.address, d.notes] : [req.business.id, d.name, d.phone, d.email, d.address];
+    // wholesale prices for a customer is a price decision (prices.edit), not just customer details
+    if (isCustomer && d.priceTier !== "retail" && !can(req.user, "prices.edit")) throw badRequest({ priceTier: "priceLocked" });
+    const cols = isCustomer ? "(business_id, name, phone, email, address, notes, price_tier) VALUES (?, ?, ?, ?, ?, ?, ?)" : "(business_id, name, phone, email, address) VALUES (?, ?, ?, ?, ?)";
+    const vals = isCustomer ? [req.business.id, d.name, d.phone, d.email, d.address, d.notes, d.priceTier] : [req.business.id, d.name, d.phone, d.email, d.address];
     const [r] = await pool.query(`INSERT INTO ${table} ${cols}`, vals);
-    await audit(null, { businessId: req.business.id, userId: req.user.id, action: `${kind.slice(0, -1)}.created`, entity: kind.slice(0, -1), entityId: r.insertId, ip: req.ip });
+    await audit(null, { businessId: req.business.id, userId: req.user.id, action: `${kind.slice(0, -1)}.created`, entity: kind.slice(0, -1), entityId: r.insertId,
+      meta: isCustomer ? { priceTier: d.priceTier } : null, ip: req.ip });
     res.status(201).json({ id: r.insertId });
   }));
 
   router.put("/:id", requirePerm(`${perm}.edit`), ah(async (req, res) => {
     const d = readParty(req.body || {});
     const row = await ensureOwned(pool, table, id(req.params.id), req.business.id);
-    const set = isCustomer ? "name = ?, phone = ?, email = ?, address = ?, notes = ?" : "name = ?, phone = ?, email = ?, address = ?";
-    const vals = isCustomer ? [d.name, d.phone, d.email, d.address, d.notes] : [d.name, d.phone, d.email, d.address];
+    if (isCustomer && req.body?.priceTier === undefined) d.priceTier = row.price_tier || "retail";   // not sent: kept
+    if (isCustomer && (row.price_tier || "retail") !== d.priceTier && !can(req.user, "prices.edit")) throw badRequest({ priceTier: "priceLocked" });
+    const set = isCustomer ? "name = ?, phone = ?, email = ?, address = ?, notes = ?, price_tier = ?" : "name = ?, phone = ?, email = ?, address = ?";
+    const vals = isCustomer ? [d.name, d.phone, d.email, d.address, d.notes, d.priceTier] : [d.name, d.phone, d.email, d.address];
     await pool.query(`UPDATE ${table} SET ${set} WHERE id = ? AND business_id = ?`, [...vals, row.id, req.business.id]);
+    // a customer moved to another price list changes what they pay: kept in the activity log
+    if (isCustomer && (row.price_tier || "retail") !== d.priceTier) {
+      await audit(null, { businessId: req.business.id, userId: req.user.id, action: "customer.priceTier", entity: "customer", entityId: row.id, meta: { from: row.price_tier || "retail", to: d.priceTier }, ip: req.ip });
+    }
     res.json({ code: "saved" });
   }));
 

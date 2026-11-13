@@ -4,7 +4,7 @@ import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { apiRequest } from "../services/api.js";
 import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, Modal, Field, FormError, EmptyState, Loading, SearchBox, DateRange, daysAgo, isoDate } from "./ui.jsx";
-import { date, fill } from "./format.js";
+import { date, fill, qty } from "./format.js";
 
 /*
  * Promotions (lib/promotions.js): % or amount off items, special price, buy N get M free, order discounts from a total;
@@ -22,8 +22,9 @@ export function PromotionsPage() {
     <div className="page">
       <PageHeader icon="percent" title={t("app.modules.promotions")} />
       <Tabs value={tab} onChange={setTab} tabs={[{ id: "list", label: t("ui.promo.title"), icon: "percent" }, { id: "history", label: t("ui.promo.history"), icon: "history" },
+        ...(can(["reports.view", "audit.view", "prices.approve"]) ? [{ id: "prices", label: t("ui.pricing.changesTab"), icon: "tag" }] : []),
         ...(can("settings.edit") ? [{ id: "rules", label: t("ui.promo.rules"), icon: "lock" }] : [])]} />
-      {tab === "list" ? <PromoList /> : tab === "history" ? <DiscountHistory /> : <DiscountRules />}
+      {tab === "list" ? <PromoList /> : tab === "history" ? <DiscountHistory /> : tab === "prices" ? <PriceChanges /> : <DiscountRules />}
     </div>
   );
 }
@@ -146,6 +147,43 @@ function DiscountRules() {
       {saved && <p className="form-status form-status--success ff--full">{t("ui.common.saved")}</p>}
       <div className="form-actions ff--full"><button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.common.save")}</button></div>
     </form>
+  );
+}
+
+/* Selling prices changed at a sale or on an invoice: list price → price used, who changed it, who approved a price below the minimum. */
+function PriceChanges() {
+  const { t, lang } = useLanguage();
+  const m = useMoney();
+  const [range, setRange] = useState({ from: daysAgo(29), to: isoDate(new Date()) });
+  const d = useApi(`/api/promotions/price-changes?${new URLSearchParams(range)}`);
+  return (
+    <>
+      <div className="toolbar"><DateRange value={range} onChange={setRange} /></div>
+      {!d.data ? <Loading /> : (
+        <>
+          <div className="shift-summary"><span>{fill(t("ui.pricing.changesSummary"), d.data.summary)}</span></div>
+          {!d.data.changes.length ? <EmptyState icon="tag" text={t("ui.pricing.changesEmpty")} /> : (
+            <div className="table-wrap"><table className="table">
+              <thead><tr><th>{t("ui.pricing.document")}</th><th>{t("ui.common.date")}</th><th>{t("ui.common.product")}</th><th>{t("ui.common.customer")}</th>
+                <th className="num">{t("ui.pricing.listPrice")}</th><th className="num">{t("ui.pricing.price")}</th><th className="num">{t("ui.pricing.difference")}</th><th>{t("ui.pricing.by")}</th><th>{t("ui.pricing.approved")}</th></tr></thead>
+              <tbody>{d.data.changes.map((x, i) => (
+                <tr key={`${x.kind}-${x.id}-${i}`} className={x.status === "cancelled" ? "is-muted" : ""}>
+                  <td><Link to={x.kind === "sale" ? `/app/sales/${x.id}` : `/app/invoices/${x.id}`}>{x.number}</Link></td>
+                  <td>{date(x.at, lang, true)}</td>
+                  <td>{x.product}<small className="cell-sub">{qty(x.qty)} {x.unit}</small></td>
+                  <td>{x.customer || "—"}</td>
+                  <td className="num">{m(x.listPrice)}</td>
+                  <td className="num"><strong>{m(x.price)}</strong></td>
+                  <td className={"num " + (x.difference < 0 ? "is-neg" : "is-pos")}>{x.difference > 0 ? "+" : ""}{m(x.difference)}</td>
+                  <td>{x.user}</td>
+                  <td>{x.approvedBy || "—"}</td>
+                </tr>
+              ))}</tbody>
+            </table></div>
+          )}
+        </>
+      )}
+    </>
   );
 }
 

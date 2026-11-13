@@ -882,6 +882,15 @@ COLUMNS.push(
   { table: "products", column: "yard_price", ddl: "ALTER TABLE products ADD COLUMN yard_price DECIMAL(14,4) NULL AFTER cost_per_gram, ADD COLUMN wholesale_yard_price DECIMAL(14,4) NULL AFTER yard_price, ADD COLUMN roll_rate DECIMAL(14,4) NULL AFTER wholesale_yard_price, ADD COLUMN min_cut DECIMAL(14,4) NULL AFTER roll_rate, ADD COLUMN remnant_length DECIMAL(14,4) NULL AFTER min_cut, ADD COLUMN shade_code VARCHAR(40) NULL AFTER remnant_length, ADD COLUMN gsm DECIMAL(10,2) NULL AFTER shade_code" }
 );
 
+// pricing: who may change a product's selling price (fixed | editable | permission), the customer's price type
+// (retail | wholesale), and on each sold line the list price before a change and who approved a price below the minimum
+COLUMNS.push(
+  { table: "products", column: "price_edit", ddl: "ALTER TABLE products ADD COLUMN price_edit VARCHAR(12) NOT NULL DEFAULT 'permission' AFTER min_price" },
+  { table: "customers", column: "price_tier", ddl: "ALTER TABLE customers ADD COLUMN price_tier VARCHAR(10) NOT NULL DEFAULT 'retail' AFTER notes" },
+  { table: "sale_items", column: "list_price", ddl: "ALTER TABLE sale_items ADD COLUMN list_price DECIMAL(14,4) NULL AFTER price_detail, ADD COLUMN price_approved_by INT UNSIGNED NULL AFTER list_price" },
+  { table: "invoice_items", column: "list_price", ddl: "ALTER TABLE invoice_items ADD COLUMN list_price DECIMAL(14,4) NULL AFTER price_detail, ADD COLUMN price_approved_by INT UNSIGNED NULL AFTER list_price" }
+);
+
 const INDEXES = [
   { table: "products", name: "idx_products_category", ddl: "ALTER TABLE products ADD INDEX idx_products_category (business_id, category_id)" },
   { table: "products", name: "idx_products_brand", ddl: "ALTER TABLE products ADD INDEX idx_products_brand (business_id, brand_id)" },

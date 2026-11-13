@@ -12,6 +12,7 @@ import { unitsOf, unitsPer, packPrice } from "../packaging.js";
 import { DevicePicker, deviceText } from "../Devices.jsx";
 import { isRoll, YARD, RollPicker, lengthText, fabricPrice, rollAvailable } from "../Fabric.jsx";
 import { ShiftBanner } from "../Shifts.jsx";
+import { canChangePrice, isBelowMin } from "../pricing.js";
 
 /* serial / IMEI products (electronics): a line is the exact devices chosen or scanned */
 const tracked = (p) => ["serial", "imei", "serial_imei"].includes(p?.tracking);
@@ -21,7 +22,18 @@ const tracked = (p) => ["serial", "imei", "serial_imei"].includes(p?.tracking);
 const rollPer = (l) => (l.unit === "yard" ? YARD : l.unit === "roll" ? l.roll?.remaining || 1 : 1);
 const r4 = (v) => Math.round(Number(v) * 10000) / 10000;
 const perOf = (l) => (isRoll(l.product) ? rollPer(l) : l.unit ? unitsPer(l.product, l.unit) || 1 : 1);
-const priceOf = (l) => (isRoll(l.product) ? fabricPrice(l.product, l.roll, l.unit) : l.unit ? packPrice(l.product, l.unit) : l.product.sellingPrice);
+/* the price list's price for the customer's price type (retail / wholesale) — the same rules as the server */
+const listPriceOf = (l, tier = "retail") => {
+  const p = l.product;
+  if (isRoll(p)) return fabricPrice(p, l.roll, l.unit, tier);
+  const wholesale = tier === "wholesale" && p.wholesalePrice !== null && p.wholesalePrice !== undefined;
+  const base = wholesale ? p.wholesalePrice : p.sellingPrice;
+  if (!l.unit) return base;
+  return wholesale ? r4(base * (unitsPer(p, l.unit) || 1)) : packPrice(p, l.unit, base);
+};
+/* a line's price: the one typed by the seller (l.price, when the product's price mode allows it) or the list price */
+const hasOwnPrice = (l) => l.price !== undefined && l.price !== null && l.price !== "";
+const priceOf = (l, tier) => (hasOwnPrice(l) ? Number(l.price) : listPriceOf(l, tier));
 const maxOf = (l) => Math.floor(((isRoll(l.product) ? rollAvailable(l.roll) : l.product.stock) / perOf(l)) * 10000 + 1e-6) / 10000;
 const keyOf = (l) => (l.rollId ? `${l.product.id}:${l.rollId}` : String(l.product.id));
 const ROLL_UNITS = ["meter", "yard", "roll"];
@@ -54,6 +66,7 @@ const SCAN_CARD_MS = 6000;
 
 function Register() {
   const { t } = useLanguage();
+  const can = usePerm();
   const unitLabel = (u) => (t(`ui.products.units.${u}`).startsWith("ui.") ? u : t(`ui.products.units.${u}`));
   const m = useMoney();
   const [q, setQ] = useState("");
@@ -109,10 +122,13 @@ function Register() {
   /* switching a line to another pack starts it at 1 of that pack (if the stock allows it) */
   const setUnit = (key, unit) => setCart((c) => c.map((l) => {
     if (keyOf(l) !== key) return l;
-    const next = { ...l, unit: unit === l.product.unit ? null : unit };
+    const next = { ...l, unit: unit === l.product.unit ? null : unit, price: undefined };   // a typed price was for the old unit
     return { ...next, qty: Math.min(1, maxOf(next)) };
   }).filter((l) => l.qty > 0));
   const removeLine = (key) => setCart((c) => c.filter((l) => keyOf(l) !== key));
+  /* the seller changes a line's price (products whose price mode allows it for this user — app/pricing.js) */
+  const [pricing, setPricing] = useState(null);     // key of the line whose price is being typed
+  const setPrice = (key, v) => setCart((c) => c.map((l) => (keyOf(l) === key ? { ...l, price: v } : l)));
   /* the devices of a tracked line (from the picker or a scanned serial / IMEI) */
   const [picking, setPicking] = useState(null);
   const setDevices = (p, devices) => {
@@ -170,10 +186,12 @@ function Register() {
     codeRef.current?.focus();
   }, [t]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const subtotal = useMemo(() => Math.round(cart.reduce((s, l) => s + l.qty * priceOf(l), 0) * 10000) / 10000, [cart]);
-  const itemCount = cart.reduce((s, l) => s + l.qty, 0);
   const customerList = customers.data?.customers || [];
   const customer = customerList.find((c) => String(c.id) === String(customerId)) || null;
+  const tier = customer?.priceTier === "wholesale" ? "wholesale" : "retail";   // walk-in: retail
+  const subtotal = useMemo(() => Math.round(cart.reduce((s, l) => s + l.qty * priceOf(l, tier), 0) * 10000) / 10000, [cart, tier]);
+  const itemCount = cart.reduce((s, l) => s + l.qty, 0);
+  const belowMin = cart.some((l) => isBelowMin(l.product, priceOf(l, tier), perOf(l)));
 
   const cartVat = vatOf(addVat, subtotal);
   const reset = () => {
@@ -189,8 +207,9 @@ function Register() {
       <aside className="pos2__left">
         <select className="input pos2__customer" value={customerId} onChange={(e) => setCustomerId(e.target.value)} aria-label={t("ui.common.customer")}>
           <option value="">{t("ui.pos.walkInDefault")}</option>
-          {customerList.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+          {customerList.map((c) => <option key={c.id} value={c.id}>{c.name}{c.priceTier === "wholesale" ? ` · ${t("ui.pricing.tierShort.wholesale")}` : ""}</option>)}
         </select>
+        {tier === "wholesale" && <span className="tier-pill"><Icon name="tag" /> {fill(t("ui.pricing.usingTier"), { tier: t("ui.pricing.tierShort.wholesale") })}</span>}
 
         <div className="pos2__code">
           <Icon name="barcode" />
@@ -205,7 +224,7 @@ function Register() {
               onClick={() => setActive(keyOf(l))} aria-current={active === keyOf(l) ? "true" : undefined}>
               <div className="pos2__line-top">
                 <span className="pos2__line-name">{l.product.name}{l.product.rxRequired && <span className="rx-tag" title={t("ui.products.rxRequired")}>Rx</span>}</span>
-                <span className="pos2__line-total">{m(l.qty * priceOf(l))}</span>
+                <span className="pos2__line-total">{m(l.qty * priceOf(l, tier))}</span>
               </div>
               {l.roll && (() => {
                 // fabric: what stays on the roll after this cut, and a warning when another line of this fabric is from a different dye lot
@@ -224,16 +243,16 @@ function Register() {
                     <select value={l.unit || l.product.unit} onChange={(e) => setUnit(keyOf(l), e.target.value)} aria-label={t("ui.pos.sellUnit")}>
                       {ROLL_UNITS.map((u) => <option key={u} value={u}>{u === "roll" ? t("ui.fabric.wholeRoll") : unitLabel(u)}</option>)}
                     </select>
-                    <small>{fill(t("ui.pos.atPrice"), { price: m(priceOf(l)) })}</small>
+                    <small>{fill(t("ui.pos.atPrice"), { price: m(priceOf(l, tier)) })}</small>
                   </span>
                 ) : unitsOf(l.product, "sell").length > 1 ? (
                   <span className="pos2__unit" onClick={(e) => e.stopPropagation()}>
                     <select value={l.unit || l.product.unit} onChange={(e) => setUnit(keyOf(l), e.target.value)} aria-label={t("ui.pos.sellUnit")}>
                       {unitsOf(l.product, "sell").map((u) => <option key={u.name} value={u.name}>{u.name === l.product.unit ? unitLabel(u.name) : `${u.name} (${qty(u.per)})`}</option>)}
                     </select>
-                    <small>{fill(t("ui.pos.atPrice"), { price: m(priceOf(l)) })}</small>
+                    <small>{fill(t("ui.pos.atPrice"), { price: m(priceOf(l, tier)) })}</small>
                   </span>
-                ) : <small>{fill(t("ui.pos.unitsAt"), { qty: qty(l.qty), price: m(l.product.sellingPrice) })}</small>}
+                ) : <small>{fill(t("ui.pos.unitsAt"), { qty: qty(l.qty), price: m(priceOf(l, tier)) })}</small>}
                 {tracked(l.product) ? (
                   <div className="qty-ctl">
                     <button type="button" className="pos2__devbtn" onClick={(e) => { e.stopPropagation(); setPicking(l.product); }}><Icon name="smartphone" /> {fill(t("ui.devices.count"), { n: l.qty })}</button>
@@ -246,6 +265,21 @@ function Register() {
                   <button type="button" className="qty-ctl__x" onClick={() => removeLine(keyOf(l))} aria-label={t("ui.common.remove")}><Icon name="x" /></button>
                 </div>}
               </div>
+              {/* price: changed by the seller when the product's price mode allows it; below the minimum it needs approval */}
+              {(canChangePrice(can, l.product) || hasOwnPrice(l) || isBelowMin(l.product, priceOf(l, tier), perOf(l))) && (
+                <div className="pos2__price" onClick={(e) => e.stopPropagation()}>
+                  {pricing === keyOf(l) && canChangePrice(can, l.product) ? (
+                    <input type="number" min="0" step="any" autoFocus value={hasOwnPrice(l) ? l.price : listPriceOf(l, tier)} aria-label={t("ui.pricing.editPrice")}
+                      onChange={(e) => setPrice(keyOf(l), e.target.value)} onBlur={() => setPricing(null)} onKeyDown={(e) => e.key === "Enter" && setPricing(null)} />
+                  ) : canChangePrice(can, l.product) && (
+                    <button type="button" className="link-btn" onClick={() => setPricing(keyOf(l))}><Icon name="tag" /> {t("ui.pricing.editPrice")}</button>
+                  )}
+                  {hasOwnPrice(l) && Number(l.price) !== listPriceOf(l, tier) && (
+                    <small>{fill(t("ui.pricing.changed"), { price: m(listPriceOf(l, tier)) })} <button type="button" className="link-btn" onClick={() => setPrice(keyOf(l), undefined)} aria-label={t("ui.common.cancel")}><Icon name="x" /></button></small>
+                  )}
+                  {isBelowMin(l.product, priceOf(l, tier), perOf(l)) && <small className="roll-warn"><Icon name="alert" /> {fill(t("ui.pricing.belowMin"), { price: m(r4(l.product.minPrice * perOf(l))) })}</small>}
+                </div>
+              )}
               {l.devices?.length > 0 && <ul className="pos2__devices">{l.devices.map((d) => <li key={d.id}>{deviceText(d)}</li>)}</ul>}
             </li>
           ))}
@@ -262,7 +296,7 @@ function Register() {
 
         <DraftBar draft={draft} compact canSave={cart.length > 0}
           title={`${customer?.name || t("ui.pos.walkInDefault")} · ${fill(t("ui.pos.itemsCount"), { n: qty(itemCount) })} · ${m(subtotal)}`}
-          getData={() => ({ customerId, addVat, cart: cart.map((l) => ({ product: l.product, qty: l.qty, unit: l.unit || null, deviceIds: l.deviceIds, devices: l.devices, rollId: l.rollId, roll: l.roll })) })}
+          getData={() => ({ customerId, addVat, cart: cart.map((l) => ({ product: l.product, qty: l.qty, unit: l.unit || null, deviceIds: l.deviceIds, devices: l.devices, rollId: l.rollId, roll: l.roll, price: l.price })) })}
           onLoad={(d) => { setCustomerId(d.customerId || ""); setAddVat(Boolean(d.addVat)); setCart(d.cart || []); setActive(null); }} />
 
         <button type="button" className="pos2__pay" disabled={!cart.length} onClick={() => setPaying(true)}>
@@ -297,7 +331,7 @@ function Register() {
                 <span className="pcard__img">{p.imagePath ? <img src={fileUrl(p.imagePath)} alt="" loading="lazy" /> : <Icon name="package" />}</span>
                 <strong className="pcard__name">{p.name}</strong>
                 <small className="pcard__qty">{fill(t("ui.pos.qtyLabel"), { qty: qty(p.stock) })}</small>
-                <span className="pcard__price">{m(p.sellingPrice)}</span>
+                <span className="pcard__price">{m(tier === "wholesale" && p.wholesalePrice !== null && p.wholesalePrice !== undefined ? p.wholesalePrice : p.sellingPrice)}</span>
               </button>
             ))}
             {list.length === 0 && <EmptyState icon="package" text={t("ui.common.noResults")} />}
@@ -316,8 +350,8 @@ function Register() {
       {camera && <CameraScanner onCode={onCameraCode} onClose={() => { setCamera(false); codeRef.current?.focus(); }} />}
 
       {paying && (
-        <PaymentModal cart={cart} subtotal={subtotal} customer={customer} addVat={addVat} setAddVat={setAddVat}
-          previewItems={cart.map((l) => ({ productId: l.product.id, qty: r4(l.qty * perOf(l)), lineTotal: r4(l.qty * priceOf(l)) }))}
+        <PaymentModal cart={cart} subtotal={subtotal} customer={customer} addVat={addVat} setAddVat={setAddVat} priceBelowMin={belowMin}
+          previewItems={cart.map((l) => ({ productId: l.product.id, qty: r4(l.qty * perOf(l)), lineTotal: r4(l.qty * priceOf(l, tier)) }))}
           onClose={() => setPaying(false)} onDone={(result) => { setPaying(false); setDone(result); draft.finish(); }} />
       )}
 
@@ -347,7 +381,7 @@ function Register() {
  * on credit for the chosen customer.
  * Restaurant bills reuse it: fee (delivery) is added to the total, and submit(body) pays the food order instead of /api/sales.
  */
-export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer, addVat, setAddVat, onClose, onDone, submit = null, previewItems = null }) {
+export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer, addVat, setAddVat, onClose, onDone, submit = null, previewItems = null, priceBelowMin = false }) {
   const { t } = useLanguage();
   const can = usePerm();
   const m = useMoney();
@@ -362,6 +396,10 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
   const rules = useApi("/api/promotions/rules");
   const [approval, setApproval] = useState(null);  // { token, approver } a manager approved this discount
   const [asking, setAsking] = useState(false);
+  // prices below a product's minimum: the seller needs prices.approve, or a manager approves them here
+  const [priceApproval, setPriceApproval] = useState(null);
+  const [askingPrice, setAskingPrice] = useState(false);
+  const needsPriceApproval = priceBelowMin && !can("prices.approve") && !priceApproval;
   useEffect(() => {
     if (!previewItems?.length) return;
     apiRequest("/api/promotions/preview", { method: "POST", body: { items: previewItems } }).then(setPromo).catch(() => {});
@@ -383,7 +421,7 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
   const cashPaid = r2(payments.filter((p) => p.kind === "cash").reduce((s, p) => s + (Number(p.amount) || 0), 0));
   const change = remaining < 0 ? -remaining : 0;
   const changeOk = change === 0 || cashPaid >= change;
-  const canConfirm = cart.length > 0 && changeOk && (remaining <= 0 || customer) && !sub.busy && !tooHigh && !needsApproval;
+  const canConfirm = cart.length > 0 && changeOk && (remaining <= 0 || customer) && !sub.busy && !tooHigh && !needsApproval && !needsPriceApproval;
 
   const METHODS = (methodsApi.data?.methods || []).map((pm) => ({ key: `pm-${pm.id}`, paymentMethodId: pm.id, kind: pm.kind, label: pm.label }));
 
@@ -398,10 +436,12 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
 
   const confirm = async () => {
     const body = {
-      ...(submit ? {} : { items: cart.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}), ...(l.rollId ? { rollId: l.rollId } : {}) })) }),
+      ...(submit ? {} : { items: cart.map((l) => ({ productId: l.product.id, qty: l.qty, ...(l.unit ? { unit: l.unit } : {}), ...(l.deviceIds ? { deviceIds: l.deviceIds } : {}), ...(l.rollId ? { rollId: l.rollId } : {}),
+        ...(hasOwnPrice(l) ? { unitPrice: Number(l.price) } : {}) })) }),
       customerId: customer?.id || null,
       discount: disc || 0,
       ...(approval ? { approvalToken: approval.token } : {}),
+      ...(priceApproval ? { priceApprovalToken: priceApproval.token } : {}),
       vat: addVat,
       payments: payments.filter((p) => Number(p.amount) > 0).map((p) => ({ paymentMethodId: p.paymentMethodId, amount: Number(p.amount) }))
     };
@@ -412,10 +452,20 @@ export function PaymentModal({ cart, subtotal, fee = 0, feeLabel = "", customer,
   return (
     <Modal title={t("ui.pos.payTitle")} onClose={onClose} wide>
       {asking && <ManagerApproval onClose={() => setAsking(false)} onApproved={(a) => { setApproval(a); setAsking(false); }} />}
+      {askingPrice && <ManagerApproval what="price" onClose={() => setAskingPrice(false)} onApproved={(a) => { setPriceApproval(a); setAskingPrice(false); }} />}
       <div className="paybox">
         <div className="paybox__left">
           <dl className="paybox__sum">
             <div><dt>{t("ui.common.subtotal")}</dt><dd>{m(subtotal)}</dd></div>
+            {priceBelowMin && (
+              <div className="paybox__disc">
+                <dt>{t("ui.pricing.belowMinTitle")}</dt>
+                <dd>
+                  {needsPriceApproval && <button type="button" className="btn btn--outline btn--sm" onClick={() => setAskingPrice(true)}><Icon name="lock" /><span>{t("ui.pricing.askApproval")}</span></button>}
+                  {priceApproval && <small className="paybox__approved"><Icon name="check" /> {fill(t("ui.pricing.approvedBy"), { name: priceApproval.approver })}</small>}
+                </dd>
+              </div>
+            )}
             {promoOff > 0 && <div className="paybox__promo"><dt>{t("ui.promo.promotions")}<small>{promoNames.join(", ")}</small></dt><dd>− {m(promoOff)}</dd></div>}
             <div className="paybox__disc">
               <dt>{t("ui.common.discount")}</dt>
@@ -554,16 +604,20 @@ function History() {
   );
 }
 
-/** A manager types their username and password to approve one discount above the approval level. */
-function ManagerApproval({ onClose, onApproved }) {
+/**
+ * A manager types their username and password to approve one discount above the approval level,
+ * or (what = "price") prices below the minimum selling price.
+ */
+export function ManagerApproval({ what = "discount", onClose, onApproved }) {
   const { t } = useLanguage();
   const [f, setF] = useState({ username: "", password: "" });
   const sub = useSubmit();
-  const save = async (e) => { e.preventDefault(); const r = await sub.run(() => apiRequest("/api/promotions/approval", { method: "POST", body: f })); if (r) onApproved(r); };
+  const save = async (e) => { e.preventDefault(); const r = await sub.run(() => apiRequest("/api/promotions/approval", { method: "POST", body: { ...f, what } })); if (r) onApproved(r); };
+  const price = what === "price";
   return (
-    <Modal title={t("ui.promo.askApproval")} onClose={onClose}>
+    <Modal title={t(price ? "ui.pricing.askApproval" : "ui.promo.askApproval")} onClose={onClose}>
       <form onSubmit={save} className="form-grid">
-        <p className="modal__help">{t("ui.promo.approvalHelp")}</p>
+        <p className="modal__help">{t(price ? "ui.pricing.approvalHelp" : "ui.promo.approvalHelp")}</p>
         <Field label={t("ui.promo.managerUser")} error={sub.fieldErrors.username}><input className="input" autoComplete="off" value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} /></Field>
         <Field label={t("ui.promo.managerPassword")} error={sub.fieldErrors.password}><input className="input" type="password" autoComplete="off" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
         <FormError error={sub.formError} />

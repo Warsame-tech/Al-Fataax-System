@@ -70,12 +70,12 @@ export async function discountRules(db, businessId) {
   try { r = JSON.parse(s?.discount_rules || "{}") || {}; } catch { /* defaults */ }
   return { maxPct: r.maxPct === undefined || r.maxPct === null ? 100 : Number(r.maxPct), approvalPct: r.approvalPct === undefined || r.approvalPct === null ? 100 : Number(r.approvalPct) };
 }
-/** A manager's approval of one discount (10 minutes). */
-export const signApproval = (businessId, userId) => jwt.sign({ kind: "discount-approval", bid: businessId, uid: userId }, env.jwtSecret, { expiresIn: "10m" });
-export function readApproval(token, businessId) {
+/** A manager's approval of one discount, or (what = "price") of prices below the minimum selling price (10 minutes). */
+export const signApproval = (businessId, userId, what = "discount") => jwt.sign({ kind: `${what}-approval`, bid: businessId, uid: userId }, env.jwtSecret, { expiresIn: "10m" });
+export function readApproval(token, businessId, what = "discount") {
   try {
     const p = jwt.verify(String(token || ""), env.jwtSecret);
-    return p.kind === "discount-approval" && p.bid === businessId ? p.uid : null;
+    return p.kind === `${what}-approval` && p.bid === businessId ? p.uid : null;
   } catch { return null; }
 }
 /**

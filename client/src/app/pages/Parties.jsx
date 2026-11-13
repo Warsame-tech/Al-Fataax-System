@@ -35,7 +35,7 @@ export default function Parties({ kind }) {
               <div className="party-card__main">
                 <span className="party-card__avatar">{p.name.slice(0, 1).toUpperCase()}</span>
                 <div>
-                  <strong>{p.name}</strong>
+                  <strong>{p.name}{p.priceTier === "wholesale" && <span className="track-tag tier-tag">{t("ui.pricing.tierShort.wholesale")}</span>}</strong>
                   <small>{[p.phone, p.email].filter(Boolean).join(" · ") || "—"}</small>
                 </div>
               </div>
@@ -61,9 +61,11 @@ export default function Parties({ kind }) {
 
 function PartyForm({ kind, party, onClose, onSaved }) {
   const { t } = useLanguage();
+  const can = usePerm();
   const isNew = !party.id;
   const isCustomer = kind === "customers";
-  const [f, setF] = useState({ name: party.name || "", phone: party.phone || "", email: party.email || "", address: party.address || "", notes: party.notes || "" });
+  const [f, setF] = useState({ name: party.name || "", phone: party.phone || "", email: party.email || "", address: party.address || "", notes: party.notes || "",
+    ...(isCustomer ? { priceTier: party.priceTier || "retail" } : {}) });
   const sub = useSubmit();
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
   const save = async (e) => {
@@ -78,6 +80,14 @@ function PartyForm({ kind, party, onClose, onSaved }) {
         <Field label={t("ui.common.phone")}><input className="input" type="tel" value={f.phone} onChange={set("phone")} /></Field>
         <Field label={t("ui.common.email")} error={sub.fieldErrors.email}><input className="input" type="email" value={f.email} onChange={set("email")} /></Field>
         <Field label={t("ui.common.address")} full><input className="input" value={f.address} onChange={set("address")} /></Field>
+        {isCustomer && (
+          // the price type picks retail or wholesale prices on this customer's sales and invoices (changing it: prices.edit)
+          <Field label={t("ui.pricing.priceTier")} error={sub.fieldErrors.priceTier} full hint={can("prices.edit") ? t("ui.pricing.priceTierHint") : t("ui.pricing.tierLocked")}>
+            <div className="seg">{["retail", "wholesale"].map((x) => (
+              <button key={x} type="button" aria-pressed={f.priceTier === x} disabled={!can("prices.edit")} onClick={() => setF((v) => ({ ...v, priceTier: x }))}>{t(`ui.pricing.tiers.${x}`)}</button>
+            ))}</div>
+          </Field>
+        )}
         {isCustomer && <Field label={t("ui.common.notes")} full><input className="input" value={f.notes} onChange={set("notes")} /></Field>}
         <FormError error={sub.formError} />
         <div className="form-actions ff--full">

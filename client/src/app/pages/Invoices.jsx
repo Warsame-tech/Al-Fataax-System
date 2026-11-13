@@ -4,7 +4,9 @@ import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest } from "../../services/api.js";
 import { PageHeader, useApi, usePerm, useSubmit, useMoney, Modal, Field, FormError, Money, EmptyState, Loading, SearchBox, PaymentFields, StatusBadge, DateRange, daysAgo, isoDate } from "../ui.jsx";
-import LineItems, { sellItems } from "./LineItems.jsx";
+import LineItems, { sellItems, linesBelowMin } from "./LineItems.jsx";
+import { ManagerApproval } from "./Pos.jsx";
+import { canChangePrice } from "../pricing.js";
 import { date, fill } from "../format.js";
 import SearchSelect from "../SearchSelect.jsx";
 import { VAT_RATE, vatOf } from "../vat.js";
@@ -75,7 +77,7 @@ export function InvoiceForm() {
   const m = useMoney();
   const navigate = useNavigate();
   const customers = useApi("/api/customers");
-  const [f, setF] = useState({ vat: false, customerId: "", billPhone: "", billAddress: "", priceList: "wholesale", issueDate: isoDate(new Date()), dueDate: isoDate(new Date(Date.now() + 14 * 86400000)), discount: "", discountLabel: "", notes: "", amountPaid: "", method: "cash", bankAccountId: "" });
+  const [f, setF] = useState({ vat: false, customerId: "", billPhone: "", billAddress: "", priceList: "retail", issueDate: isoDate(new Date()), dueDate: isoDate(new Date(Date.now() + 14 * 86400000)), discount: "", discountLabel: "", notes: "", amountPaid: "", method: "cash", bankAccountId: "" });
   const [lines, setLines] = useState([]);
   const [newCustomer, setNewCustomer] = useState(null);   // typed name for the "New customer" form
   const draft = useDraft("invoice");
@@ -87,12 +89,20 @@ export function InvoiceForm() {
   const disc = discountOf(f.discount, subtotal);
   const vat = vatOf(f.vat, Math.max(0, subtotal - (disc.amount || 0)));
   const total = Math.max(0, subtotal - (disc.amount || 0)) + vat;
-  const allowPrice = can("sales.discount");
+  const allowDiscount = can("sales.discount");
+  // a line's price may be changed by the product's price mode (app/pricing.js); below the minimum needs a manager
+  const allowPrice = (p) => canChangePrice(can, p);
+  const [approval, setApproval] = useState(null);   // { token, approver } prices below the minimum approved
+  const [asking, setAsking] = useState(false);
+  const below = linesBelowMin(lines);
+  const needsApproval = below.length > 0 && !can("prices.approve") && !approval;
+  const customer = list.find((c) => String(c.id) === String(f.customerId)) || null;
 
-  /* choosing a customer fills their business phone and address (editable for this invoice) */
+  /* choosing a customer fills their business phone and address (editable for this invoice) and their price type's prices */
   const pickCustomer = (cid, fromList = list) => {
     const c = fromList.find((x) => String(x.id) === String(cid));
     setF((x) => ({ ...x, customerId: cid, billPhone: c?.phone || "", billAddress: c?.address || "" }));
+    changePriceList(c?.priceTier === "wholesale" ? "wholesale" : "retail");
   };
   const changePriceList = (pl) => {
     setF((x) => ({ ...x, priceList: pl }));
@@ -105,7 +115,7 @@ export function InvoiceForm() {
 
   const save = async (e) => {
     e.preventDefault();
-    const body = { ...f, items: sellItems(lines, allowPrice) };
+    const body = { ...f, items: sellItems(lines, allowPrice), ...(approval ? { priceApprovalToken: approval.token } : {}) };
     const r = await sub.run(() => apiRequest("/api/invoices", { method: "POST", body }));
     if (r) { await draft.finish(); navigate(`/app/invoices/${r.id}`, { replace: true }); }
   };
@@ -130,22 +140,29 @@ export function InvoiceForm() {
           <Field label={t("ui.invoices.dueDate")} error={sub.fieldErrors.dueDate}><input className="input" type="date" value={f.dueDate} min={f.issueDate} onChange={set("dueDate")} /></Field>
           <Field label={`${t("ui.invoices.businessPhone")} ${t("ui.common.optional")}`}><input className="input" type="tel" value={f.billPhone} onChange={set("billPhone")} placeholder={t("ui.invoices.phonePh")} /></Field>
           <Field label={`${t("ui.invoices.businessAddress")} ${t("ui.common.optional")}`}><input className="input" value={f.billAddress} onChange={set("billAddress")} placeholder={t("ui.invoices.addressPh")} /></Field>
-          <Field label={t("ui.invoices.priceList")}>
-            <div className="seg">{["retail", "wholesale"].map((pl) => <button key={pl} type="button" aria-pressed={f.priceList === pl} onClick={() => changePriceList(pl)}>{t(`ui.invoices.${pl}`)}</button>)}</div>
+          {/* the customer's price type picks the list; using the other one is a price change (prices.edit) */}
+          <Field label={t("ui.invoices.priceList")} hint={customer ? `${t("ui.pricing.fromCustomer")}: ${t(`ui.pricing.tiers.${customer.priceTier || "retail"}`)}` : undefined} error={sub.fieldErrors.priceList}>
+            <div className="seg">{["retail", "wholesale"].map((pl) => <button key={pl} type="button" aria-pressed={f.priceList === pl} disabled={!can("prices.edit") && f.priceList !== pl} onClick={() => changePriceList(pl)}>{t(`ui.invoices.${pl}`)}</button>)}</div>
           </Field>
         </section>
 
         <section className="panel-card">
           <LineItems lines={lines} onChange={setLines} mode="sell" priceList={f.priceList} allowPrice={allowPrice} errors={sub.fieldErrors} />
+          {below.length > 0 && (
+            <p className={"form-status " + (needsApproval ? "form-status--error" : "form-status--info")} role="status">
+              {approval ? <><Icon name="check" /> {fill(t("ui.pricing.approvedBy"), { name: approval.approver })}</> : needsApproval ? t("ui.pricing.needsApproval") : null}
+              {needsApproval && <> <button type="button" className="btn btn--outline btn--sm" onClick={() => setAsking(true)}><Icon name="lock" /><span>{t("ui.pricing.askApproval")}</span></button></>}
+            </p>
+          )}
         </section>
 
         <section className="panel-card form-grid form-grid--2">
           <Field label={`${t("ui.common.discount")} ${t("ui.common.optional")}`} error={sub.fieldErrors.discount === "invalidDiscount" ? undefined : sub.fieldErrors.discount}
-            hint={!allowPrice ? t("ui.pos.noDiscount") : disc.error ? null : disc.percent !== undefined ? fill(t("ui.invoices.discountIs"), { amount: m(disc.amount) }) : t("ui.invoices.discountHint")}>
-            <input className={"input" + (disc.error ? " has-error" : "")} value={f.discount} disabled={!allowPrice} onChange={set("discount")} placeholder={t("ui.invoices.discountPh")} inputMode="decimal" />
+            hint={!allowDiscount ? t("ui.pos.noDiscount") : disc.error ? null : disc.percent !== undefined ? fill(t("ui.invoices.discountIs"), { amount: m(disc.amount) }) : t("ui.invoices.discountHint")}>
+            <input className={"input" + (disc.error ? " has-error" : "")} value={f.discount} disabled={!allowDiscount} onChange={set("discount")} placeholder={t("ui.invoices.discountPh")} inputMode="decimal" />
           </Field>
           <Field label={`${t("ui.invoices.discountLabel")} ${t("ui.common.optional")}`}>
-            <input className="input" value={f.discountLabel} disabled={!allowPrice || !f.discount} onChange={set("discountLabel")} placeholder={t("ui.invoices.discountLabelPh")} maxLength={80} />
+            <input className="input" value={f.discountLabel} disabled={!allowDiscount || !f.discount} onChange={set("discountLabel")} placeholder={t("ui.invoices.discountLabelPh")} maxLength={80} />
           </Field>
           {(disc.error || sub.fieldErrors.discount === "invalidDiscount") && <p className="form-status form-status--error ff--full">{t("ui.errors.invalidDiscount")}</p>}
           <div className="ff ff--full">
@@ -169,9 +186,10 @@ export function InvoiceForm() {
             <div><dt>{t("ui.common.balance")}</dt><dd>{m(Math.max(0, total - (Number(f.amountPaid) || 0)))}</dd></div>
           </dl>
           <FormError error={sub.formError} />
-          <button type="submit" className="btn btn--primary btn--lg" disabled={sub.busy || !lines.length || disc.error}><Icon name="check" /><span>{t("ui.invoices.create")}</span></button>
+          <button type="submit" className="btn btn--primary btn--lg" disabled={sub.busy || !lines.length || disc.error || needsApproval}><Icon name="check" /><span>{t("ui.invoices.create")}</span></button>
         </div>
       </form>
+      {asking && <ManagerApproval what="price" onClose={() => setAsking(false)} onApproved={(a) => { setApproval(a); setAsking(false); }} />}
       {newCustomer !== null && (
         <NewCustomerForm name={newCustomer} onClose={() => setNewCustomer(null)} onSaved={async (created) => {
           setNewCustomer(null);
@@ -187,7 +205,8 @@ export function InvoiceForm() {
 /* Register a customer without leaving the invoice. */
 function NewCustomerForm({ name, onClose, onSaved }) {
   const { t } = useLanguage();
-  const [f, setF] = useState({ name: name || "", phone: "", address: "", email: "" });
+  const can = usePerm();
+  const [f, setF] = useState({ name: name || "", phone: "", address: "", email: "", priceTier: "retail" });
   const sub = useSubmit();
   const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
   const save = async (e) => {
@@ -202,6 +221,11 @@ function NewCustomerForm({ name, onClose, onSaved }) {
         <Field label={`${t("ui.invoices.businessPhone")} ${t("ui.common.optional")}`}><input className="input" type="tel" value={f.phone} onChange={set("phone")} /></Field>
         <Field label={`${t("ui.common.email")} ${t("ui.common.optional")}`} error={sub.fieldErrors.email}><input className="input" type="email" value={f.email} onChange={set("email")} /></Field>
         <Field label={`${t("ui.invoices.businessAddress")} ${t("ui.common.optional")}`} full><input className="input" value={f.address} onChange={set("address")} /></Field>
+        {can("prices.edit") && (
+          <Field label={t("ui.pricing.priceTier")} error={sub.fieldErrors.priceTier} full hint={t("ui.pricing.priceTierHint")}>
+            <div className="seg">{["retail", "wholesale"].map((x) => <button key={x} type="button" aria-pressed={f.priceTier === x} onClick={() => setF((v) => ({ ...v, priceTier: x }))}>{t(`ui.pricing.tiers.${x}`)}</button>)}</div>
+          </Field>
+        )}
         <FormError error={sub.formError} />
         <div className="form-actions ff--full sheet-actions">
           <button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button>

@@ -240,7 +240,8 @@ CREATE TABLE IF NOT EXISTS products (
   warranty_terms  VARCHAR(255) NULL,
   notes           TEXT NULL,
   specs           TEXT NULL,                         -- technical specifications (JSON, by product type)
-  min_price       DECIMAL(14,4) NULL,                -- lowest price a sale may use
+  min_price       DECIMAL(14,4) NULL,                -- lowest price a sale may use without a manager's approval
+  price_edit      VARCHAR(12) NOT NULL DEFAULT 'permission', -- fixed (nobody changes it at a sale) | editable (anyone selling) | permission (prices.edit)
   track_batches   TINYINT(1) NOT NULL DEFAULT 0,     -- batch number + expiry per stock entry (product_batches)
   is_active       TINYINT(1) NOT NULL DEFAULT 1,
   created_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -327,6 +328,7 @@ CREATE TABLE IF NOT EXISTS customers (
   email       VARCHAR(190) NULL,
   address     VARCHAR(255) NULL,
   notes       VARCHAR(255) NULL,
+  price_tier  VARCHAR(10)  NOT NULL DEFAULT 'retail',   -- retail | wholesale: the prices sales and invoices use
   created_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_customers_name (business_id, name),
   CONSTRAINT fk_customers_business FOREIGN KEY (business_id) REFERENCES businesses(id)
@@ -449,6 +451,8 @@ CREATE TABLE IF NOT EXISTS sale_items (
   sell_qty    DECIMAL(14,4) NULL,
   sell_price  DECIMAL(14,4) NULL,
   price_detail TEXT NULL,                  -- jewelry: rate, purity, weights and charges used (JSON)
+  list_price  DECIMAL(14,4) NULL,          -- the price list's price (per sell unit) when the seller changed it
+  price_approved_by INT UNSIGNED NULL,     -- who allowed a price below the minimum selling price
   INDEX idx_sale_items_sale (sale_id),
   INDEX idx_sale_items_product (business_id, product_id),
   CONSTRAINT fk_sale_items_business FOREIGN KEY (business_id) REFERENCES businesses(id),
@@ -502,6 +506,8 @@ CREATE TABLE IF NOT EXISTS invoice_items (
   sell_qty    DECIMAL(14,4) NULL,
   sell_price  DECIMAL(14,4) NULL,
   price_detail TEXT NULL,                  -- jewelry: rate, purity, weights and charges used (JSON)
+  list_price  DECIMAL(14,4) NULL,          -- the price list's price (per sell unit) when the seller changed it
+  price_approved_by INT UNSIGNED NULL,     -- who allowed a price below the minimum selling price
   INDEX idx_inv_items_invoice (invoice_id),
   INDEX idx_inv_items_product (business_id, product_id),
   CONSTRAINT fk_inv_items_business FOREIGN KEY (business_id) REFERENCES businesses(id),

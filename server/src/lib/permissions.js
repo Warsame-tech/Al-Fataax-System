@@ -13,9 +13,12 @@
  * of each group is the one that opens the module ("can see it"). */
 export const PERMISSION_GROUPS = [
   { module: "overview", perms: ["dashboard.finance"] },
-  { module: "pos", perms: ["sales.create", "sales.view", "sales.discount", "sales.cancel", "discounts.approve", "promotions.manage"] },
+  // prices.edit: change a selling price at the till / on an invoice (products whose price mode is "permission");
+  // prices.approve: sell below a product's minimum selling price, and approve it for others
+  { module: "pos", perms: ["sales.create", "sales.view", "sales.discount", "sales.cancel", "discounts.approve", "promotions.manage", "prices.edit", "prices.approve"] },
   { module: "invoices", perms: ["invoices.view", "invoices.create", "invoices.cancel", "payments.receive"] },
-  { module: "products", perms: ["products.view", "products.edit"] },
+  // costs.view / costs.edit: see and change cost prices (ordinary cashiers have neither)
+  { module: "products", perms: ["products.view", "products.edit", "costs.view", "costs.edit"] },
   { module: "stock", perms: ["stock.view", "stock.add", "stock.adjust", "stock.transfer", "stock.locations", "branches.transfer"] },
   { module: "customers", perms: ["customers.view", "customers.edit"] },
   { module: "suppliers", perms: ["suppliers.view", "suppliers.edit"] },
@@ -37,11 +40,13 @@ export const ALL_PERMISSIONS = [...ROLE_PERMISSIONS, ...OWNER_ONLY];
 const BASE = Object.fromEntries(PERMISSION_GROUPS.flatMap((g) => g.perms.slice(1).map((p) => [p, g.perms[0]])));
 // POS: viewing history doesn't need to sell, but cancelling / discounting does.
 BASE["sales.view"] = undefined;
+// editing costs needs seeing them (which needs products.view)
+BASE["costs.edit"] = "costs.view";
 
 /** Cleans a role's permission list: known keys only, never owner-only, plus required base permissions. */
 export function normalizePermissions(list) {
   const set = new Set((Array.isArray(list) ? list : []).filter((p) => ROLE_PERMISSIONS.includes(p)));
-  for (const p of [...set]) if (BASE[p]) set.add(BASE[p]);
+  for (let size = -1; size !== set.size;) { size = set.size; for (const p of [...set]) if (BASE[p]) set.add(BASE[p]); }
   return ROLE_PERMISSIONS.filter((p) => set.has(p));
 }
 
@@ -50,8 +55,10 @@ const OM = ["owner", "manager"];
 const LEGACY = {
   "dashboard.finance": OM,
   "sales.create": ["manager", "cashier"], "sales.view": ["manager", "cashier"], "sales.discount": OM, "sales.cancel": OM, "discounts.approve": OM, "promotions.manage": OM,
+  "prices.edit": OM, "prices.approve": OM,
   "invoices.view": ["manager", "cashier"], "invoices.create": ["manager", "cashier"], "invoices.cancel": OM, "payments.receive": ["manager", "cashier"],
   "products.view": ["manager", "cashier", "stockkeeper"], "products.edit": ["manager", "stockkeeper"],
+  "costs.view": ["manager", "stockkeeper"], "costs.edit": OM,
   "stock.view": ["manager", "stockkeeper"], "stock.add": ["manager", "stockkeeper"], "stock.adjust": OM, "stock.transfer": OM, "stock.locations": OM, "branches.transfer": [],
   "customers.view": ["manager", "cashier"], "customers.edit": ["manager", "cashier"],
   "suppliers.view": ["manager", "stockkeeper"], "suppliers.edit": ["manager", "stockkeeper"],

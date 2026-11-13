@@ -13,8 +13,9 @@ import { defaultLocationId } from "../lib/stock.js";
 import { currentRates, weightPrice, unsellable } from "../lib/jewelry.js";
 import { isRoll, toMeters, YARD, attachRolls, cutFromRoll, returnCuts, cutsByItem, returnLength } from "../lib/rolls.js";
 import { viaRecipe, consumeForSale, restoreConsumption } from "../lib/food.js";
-import { activePromotions, applyPromotions, checkDiscount } from "../lib/promotions.js";
+import { activePromotions, applyPromotions, checkDiscount, readApproval } from "../lib/promotions.js";
 import { branchSql, branchLocation } from "../lib/branches.js";
+import { canChangePrice, priceTierOf, priceChanges } from "../lib/pricing.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -47,7 +48,12 @@ export function fabricPrice(p, roll, unit, per, priceList) {
   return meter;
 }
 
-export function priceLines(items, products, { allowCustomPrice, priceList = "retail", rates = null }) {
+/*
+ * Prices (lib/pricing.js): the line starts at the price list's price; a different unitPrice is allowed by the product's
+ * price mode (fixed / editable / permission). Below the minimum selling price the user needs prices.approve or a manager's
+ * approval (priceApprover: the approving user from the approval token). Each line keeps listPrice, priceChanged, belowMin, approvedBy.
+ */
+export function priceLines(items, products, { user, userId = null, priceList = "retail", rates = null, priceApprover = null }) {
   const lines = [];
   const errors = {};
   items.forEach((it, i) => {
@@ -89,24 +95,25 @@ export function priceLines(items, products, { allowCustomPrice, priceList = "ret
     const pack = unit ? packOf(p, unit) : null;
     const listPrice = roll ? fabricPrice(p, it.roll, unit, per, priceList) : pack && pack.price !== null && priceList !== "wholesale" ? num(pack.price) : round2(basePrice * per);
     let unitPrice = listPrice;
-    if (it.unitPrice !== undefined && it.unitPrice !== null && it.unitPrice !== "" && Number(it.unitPrice) !== listPrice) {
-      if (!allowCustomPrice) { errors[`items.${i}.unitPrice`] = "forbidden"; return; }
+    if (it.unitPrice !== undefined && it.unitPrice !== null && it.unitPrice !== "" && Math.abs(Number(it.unitPrice) - listPrice) > 0.00005) {
+      if (!canChangePrice(user, p)) { errors[`items.${i}.unitPrice`] = (p.price_edit || "permission") === "fixed" ? "priceFixed" : "priceLocked"; return; }
       unitPrice = money(it.unitPrice);
       if (Number.isNaN(unitPrice)) { errors[`items.${i}.unitPrice`] = "invalidAmount"; return; }
     }
     if (!roll) baseQty = Math.round(qty * per * 10000) / 10000;
     // serial / IMEI products are sold as whole units, each one a chosen device
     if (isTracked(p) && (unit || !Number.isInteger(baseQty))) { errors[`items.${i}.qty`] = "wholeUnits"; return; }
-    // minimum selling price (per base unit), when the product has one
-    if (p.min_price !== null && p.min_price !== undefined && unitPrice / per < num(p.min_price) - 0.00005) {
-      errors[`items.${i}.unitPrice`] = "belowMinPrice"; return;
-    }
+    // minimum selling price (per base unit): below it only with prices.approve or a manager's approval
+    const belowMin = p.min_price !== null && p.min_price !== undefined && unitPrice / per < num(p.min_price) - 0.00005;
+    const approvedBy = !belowMin ? null : can(user, "prices.approve") ? userId : priceApprover;
+    if (belowMin && !approvedBy) { errors[`items.${i}.unitPrice`] = "belowMinPrice"; return; }
     const warrantyMonths = it.warrantyMonths === undefined || it.warrantyMonths === null || it.warrantyMonths === "" ? null : Number(it.warrantyMonths);
     if (warrantyMonths !== null && (!Number.isInteger(warrantyMonths) || warrantyMonths < 0 || warrantyMonths > 240)) { errors[`items.${i}.warrantyMonths`] = "invalidAmount"; return; }
     lines.push({
       deviceIds: it.deviceIds, rollId: roll ? it.rollId : null, warrantyMonths, priceDetail: live ? { ...live.detail, unitPrice: unitPrice } : null,
       product: p, qty: baseQty, unitPrice: unit ? (roll ? Math.round((unitPrice / per) * 10000) / 10000 : round2(unitPrice / per)) : unitPrice, unitCost: num(p.cost_price), lineTotal: round2(qty * unitPrice),
-      sell: unit ? { unit, qty, price: unitPrice } : null
+      sell: unit ? { unit, qty, price: unitPrice } : null,
+      listPrice, priceChanged: unitPrice !== listPrice, belowMin, approvedBy
     });
   });
   if (Object.keys(errors).length) throw badRequest(errors);
@@ -196,7 +203,9 @@ export async function createSale(conn, ctx, body) {
   const products = await lockProducts(conn, businessId, items.map((i) => i.productId).filter(Boolean));
   const rates = [...products.values()].some((p) => p.pricing_mode === "weight") ? await currentRates(conn, businessId) : null;
   await attachRolls(conn, businessId, items);
-  const lines = priceLines(items, products, { allowCustomPrice: can(role, "sales.discount"), rates });
+  // the customer's price type picks retail or wholesale prices (walk-in: retail)
+  const priceList = await priceTierOf(conn, businessId, customerId);
+  const lines = priceLines(items, products, { user: role, userId, priceList, rates, priceApprover: readApproval(body.priceApprovalToken, businessId, "price") });
   // promotions (lib/promotions.js): item promotions lower their lines, an order promotion adds to the discount
   const promos = await activePromotions(conn, businessId);
   const promo = applyPromotions(promos, lines.map((l) => ({ productId: l.product.id, categoryId: l.product.category_id, qty: l.qty, unitPrice: l.qty ? l.lineTotal / l.qty : 0, lineTotal: l.lineTotal })));
@@ -248,8 +257,9 @@ export async function createSale(conn, ctx, body) {
     if (food) { l.unitCost = food.unitCost; l.priceDetail = food.detail; }
     if (l.promo) l.priceDetail = { ...(l.priceDetail || {}), promo: l.promo };
     const [it] = await conn.query(
-      `INSERT INTO sale_items (business_id, sale_id, product_id, qty, unit_price, unit_cost, discount, line_total, sell_unit, sell_qty, sell_price, price_detail) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [businessId, saleId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.discount || 0, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null, l.priceDetail ? JSON.stringify(l.priceDetail) : null]
+      `INSERT INTO sale_items (business_id, sale_id, product_id, qty, unit_price, unit_cost, discount, line_total, sell_unit, sell_qty, sell_price, price_detail, list_price, price_approved_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [businessId, saleId, l.product.id, l.qty, l.unitPrice, l.unitCost, l.discount || 0, l.lineTotal, l.sell?.unit || null, l.sell?.qty ?? null, l.sell?.price ?? null, l.priceDetail ? JSON.stringify(l.priceDetail) : null,
+        l.priceChanged || l.belowMin ? l.listPrice : null, l.approvedBy || null]
     );
     const devices = await sellDevices(conn, { businessId, userId, product: l.product, line: l, index: i, locationId: loc, refType: "sale", refId: saleId, itemId: it.insertId, customerId });
     if (isRoll(l.product)) await cutFromRoll(conn, { businessId, product: l.product, rollId: l.rollId, meters: l.qty, locationId: loc, refType: "sale", refId: saleId, itemId: it.insertId, userId, field: `items.${i}.rollId` });
@@ -264,7 +274,9 @@ export async function createSale(conn, ctx, body) {
     );
     await moneyMove(conn, { businessId, userId, direction: "in", method: pay.method, bankAccountId: pay.bankAccountId, account: pay.account, amount: pay.amount, refType: "customer_payment", refId: p.insertId, description: receiptNo, at: ctx.at || null });
   }
-  await audit(conn, { businessId, userId, action: "sale.created", entity: "sale", entityId: saleId, meta: { total, method, ...(discount ? { discount, approvedBy } : {}), ...(promoDetail ? { promo: promoDetail } : {}) } });
+  await audit(conn, { businessId, userId, action: "sale.created", entity: "sale", entityId: saleId, meta: { total, method, priceList, ...(discount ? { discount, approvedBy } : {}), ...(promoDetail ? { promo: promoDetail } : {}) } });
+  const changed = priceChanges(lines);
+  if (changed.length) await audit(conn, { businessId, userId, action: "price.changed", entity: "sale", entityId: saleId, meta: { ref: receiptNo, priceList, lines: changed } });
   return { id: saleId, receiptNo, total, paid, change };
 }
 
