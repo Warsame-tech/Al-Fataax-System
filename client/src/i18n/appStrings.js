@@ -367,6 +367,22 @@ const en = {
     staffHelp: "Staff tied to a branch only see and record that branch's work. Staff on All branches can switch between branches.",
     worksIn: "Works in", allBranches: "All branches", switch: "Branch"
   },
+  bulk: {
+    title: "Bulk add products", open: "Bulk add",
+    help: "Type or paste many products at once. Copy rows in Excel and paste them into any cell (a header row is matched by name). Check finds what to correct; Register saves every correct row.",
+    supplier: "Supplier", variants: "Variants", searchPh: "Search name, SKU, barcode, category…", onlyErrors: "Only rows with errors ({n})", count: "{n} products typed",
+    pasteExcel: "Paste from Excel", clear: "Clear table", clearConfirm: "Clear every row of the table?", addRow: "Add row", addRows: "Add {n} rows", duplicate: "Duplicate row",
+    check: "Check", register: "Register", registerN: "Register {n} products", nothing: "The table is empty. Type or paste products first.",
+    checkOk: "Everything is correct: {n} products are ready to register.", checkErrors: "{n} rows need correcting — see the red notes under them.",
+    pasted: "{n} rows pasted.", tooMany: "At most {max} rows at a time.",
+    confirmTitle: "Register products", willRegister: "{n} products will be registered", fromRows: "from {rows} rows of the table.", noneValid: "No row is ready yet: correct the rows marked in red.",
+    errorRowsStay: "{n} rows have errors. They will not be saved now and stay in the table for correcting.",
+    savedAll: "{n} products registered.", savedSome: "{n} products registered.", openProducts: "Open products",
+    pasteHelp: "Copy the rows in Excel or Google Sheets and paste them here. With a header row the columns are matched by name; without one they are read in this order:",
+    pastePh: "Paste here (Ctrl+V)", addToTable: "Add to the table",
+    err: { supplierNotFound: "no supplier with this name — add it in Suppliers first", duplicateInList: "also used in row {row}", usedBy: "already used by {name}",
+      barcodeOneVariant: "a barcode belongs to one product — put each variant on its own row", required: "required" }
+  },
   pricing: {
     section: "Prices", priceEdit: "Price at a sale",
     priceEditOptions: { fixed: "Fixed price", editable: "Editable price", permission: "Permission-based price" },
@@ -1043,6 +1059,22 @@ const so = {
     newLocation: "Goob dukaan oo cusub", keepLocation: "Hay goobta hadda",
     staffHelp: "Shaqaalaha laan ku xiran waxay arkaan oo diiwaangeliyaan shaqada laantaas oo keliya. Shaqaalaha Laamaha oo dhan way u kala gudbi karaan laamaha.",
     worksIn: "Wuxuu ka shaqeeyaa", allBranches: "Laamaha oo dhan", switch: "Laan"
+  },
+  bulk: {
+    title: "Alaab badan hal mar ku dar", open: "Hal mar ku dar",
+    help: "Qor ama ku dheji alaab badan hal mar. Safafka Excel ka koobiye oo ku dheji unug kasta (safka cinwaanka magaca ayaa lagu aqoonsadaa). Hubi wuxuu muujiyaa waxa la saxayo; Diiwaangeli wuxuu kaydiyaa saf kasta oo sax ah.",
+    supplier: "Alaab-qeybiye", variants: "Noocyada", searchPh: "Raadi magac, SKU, baarkood, qayb…", onlyErrors: "Kaliya safafka khaladka leh ({n})", count: "{n} alaab ayaa la qoray",
+    pasteExcel: "Ka dheji Excel", clear: "Nadiifi shaxda", clearConfirm: "Ma tirtirtaa dhammaan safafka shaxda?", addRow: "Ku dar saf", addRows: "Ku dar {n} saf", duplicate: "Nuqul ka samee safka",
+    check: "Hubi", register: "Diiwaangeli", registerN: "Diiwaangeli {n} alaab", nothing: "Shaxdu waa madhan tahay. Marka hore qor ama ku dheji alaab.",
+    checkOk: "Wax walba waa sax: {n} alaab ayaa diyaar u ah diiwaangelin.", checkErrors: "{n} saf ayaa u baahan sixid — eeg qoraalka cas ee hoostooda.",
+    pasted: "{n} saf ayaa la dhejiyay.", tooMany: "Ugu badnaan {max} saf hal mar.",
+    confirmTitle: "Diiwaangeli alaabta", willRegister: "{n} alaab ayaa la diiwaangelin doonaa", fromRows: "laga soo qaatay {rows} saf ee shaxda.", noneValid: "Weli saf diyaar ah ma jiro: sax safafka cas.",
+    errorRowsStay: "{n} saf ayaa khalad leh. Hadda lama kaydin doono, shaxda ayay ku hadhayaan si loo saxo.",
+    savedAll: "{n} alaab ayaa la diiwaangeliyay.", savedSome: "{n} alaab ayaa la diiwaangeliyay.", openProducts: "Fur alaabta",
+    pasteHelp: "Safafka Excel ama Google Sheets ka koobiye oo halkan ku dheji. Haddii uu jiro safka cinwaanka, tiirarka magacooda ayaa lagu aqoonsadaa; haddii kale waxaa loo akhriyaa sidan:",
+    pastePh: "Halkan ku dheji (Ctrl+V)", addToTable: "Ku dar shaxda",
+    err: { supplierNotFound: "alaab-qeybiye magacan leh ma jiro — marka hore ku dar Alaab-qeybiyeyaasha", duplicateInList: "sidoo kale waxaa lagu isticmaalay safka {row}", usedBy: "waxaa horay u isticmaalay {name}",
+      barcodeOneVariant: "baarkood wuxuu u yahay hal alaab — nooc kasta saf gooni ah u samee", required: "waa loo baahan yahay" }
   },
   pricing: {
     section: "Qiimaha", priceEdit: "Qiimaha marka la iibinayo",

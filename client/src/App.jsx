@@ -11,13 +11,14 @@ import ModulePage from "./app/ModulePage.jsx";
 import InvoiceView from "./app/InvoiceView.jsx";
 import { InvoiceForm } from "./app/pages/Invoices.jsx";
 import Receipt from "./app/pages/Receipt.jsx";
+import BulkProducts from "./app/BulkProducts.jsx";
 import AdminApp from "./admin/AdminApp.jsx";
 import OnlineOrder, { OrderTracking } from "./pages/OnlineOrder.jsx";
 
 /*
  * Route map.
  *   Public site:  /  (one page: sections), /signin, /register
- *   Business app: /app (dashboard), /app/m/:id (modules), /app/invoices/:id
+ *   Business app: /app (dashboard), /app/m/:id (modules), /app/invoices/:id, /app/products/bulk (bulk product registration)
  *   Online ordering (food businesses, no sign-in): /order/:code, /order/:code/track/:tracking
  * The API enforces authentication and tenant isolation on every request;
  * RequireAuth only handles navigation.
@@ -36,6 +37,7 @@ export default function App() {
         <Route index element={<Dashboard />} />
         <Route path="m/:id" element={<ModulePage />} />
         <Route path="invoices/new" element={<InvoiceForm />} />
+        <Route path="products/bulk" element={<BulkProducts />} />
         <Route path="invoices/preview" element={<InvoiceView preview />} />
         <Route path="sales/:id" element={<Receipt />} />
         <Route path="invoices/:id" element={<InvoiceView />} />

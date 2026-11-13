@@ -173,6 +173,7 @@ export default function Products() {
           {can("settings.edit") && <button type="button" className="btn btn--outline" onClick={() => setSettings(true)}><Icon name="settings" /><span>{t("ui.products.settings")}</span></button>}
           <button type="button" className="btn btn--outline" onClick={exportCsv}><Icon name="download" /><span>{t("ui.common.exportCsv")}</span></button>
           {can("products.edit") && <button type="button" className="btn btn--outline" onClick={() => setImporting(true)}><Icon name="upload" /><span>{t("ui.products.import")}</span></button>}
+          {can("products.edit") && <Link className="btn btn--outline" to="/app/products/bulk"><Icon name="layers" /><span>{t("ui.bulk.open")}</span></Link>}
           {can("products.edit") && <button type="button" className="btn btn--primary" onClick={() => setEditing(EMPTY)}><Icon name="plus" /><span>{t("ui.products.add")}</span></button>}
         </>
       } />

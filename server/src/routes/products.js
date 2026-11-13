@@ -738,4 +738,135 @@ router.post("/import", requirePerm("products.edit"), ah(async (req, res) => {
   res.status(201).json({ created });
 }));
 
+/*
+ * Bulk registration (Products → Bulk add): many products typed or pasted from Excel into one table.
+ *   POST /api/products/bulk/check { rows }  every row checked, nothing saved → { rows: [{ row, products, errors }], summary }
+ *   POST /api/products/bulk       { rows }  the rows without errors are saved (one transaction); rows with errors are
+ *                                           returned with their errors so they can be corrected and sent again
+ * A row: { name, sku, barcode, category, brand, unit, costPrice, sellingPrice, wholesalePrice, minPrice, supplier, variants, description }.
+ * variants: "S, M, L" → one product per variant in one variant group (the variant goes in the profile's variant field,
+ * the SKU gets "-S", "-M"…; a barcode belongs to one product, so it needs a row per variant).
+ * Codes are checked against the business's products and against the other rows (unless duplicates are allowed).
+ * Cost price only with costs.edit (otherwise 0); the supplier must be one of the business's suppliers.
+ */
+const BULK_MAX = 1000;
+const VARIANT_COL = { size: "size", shade: "shade", fragrance: "fragrance", formula: "formula", packSize: "pack_size" };
+const PRICE_FIELDS = ["costPrice", "sellingPrice", "wholesalePrice", "minPrice"];
+/* numbers pasted from Excel: "$1,250.50" → "1250.50" */
+const cleanNumber = (v) => (v === null || v === undefined ? "" : String(v).trim() === "" ? "" : String(v).replace(/[^\d.-]/g, ""));
+
+async function checkBulk(db, req, rawRows) {
+  const bid = req.business.id;
+  const profile = req.business.profile;
+  const variantField = profile.variants[0] || "size";
+  const costEdit = can(req.user, "costs.edit");
+  const [suppliers] = await db.query("SELECT id, name FROM suppliers WHERE business_id = ?", [bid]);
+  const supplierByName = new Map(suppliers.map((s) => [s.name.trim().toLowerCase(), s.id]));
+  const results = rawRows.map((raw, row) => {
+    const r = raw && typeof raw === "object" ? raw : {};
+    const errors = {};
+    const base = Object.fromEntries(PRICE_FIELDS.map((k) => [k, cleanNumber(r[k])]));
+    if (base.sellingPrice === "") errors.sellingPrice = "required";
+    if (!costEdit) base.costPrice = "";
+    let supplierId = null;
+    const supplierName = text(r.supplier, 150);
+    if (supplierName) {
+      supplierId = supplierByName.get(supplierName.toLowerCase()) || null;
+      if (!supplierId) errors.supplier = "supplierNotFound";
+    }
+    const variants = [...new Set(String(r.variants ?? "").split(/[,;|\n]/).map((v) => v.trim().slice(0, 60)).filter(Boolean))].slice(0, 50);
+    if (variants.length > 1 && text(r.barcode, 80)) errors.barcode = "barcodeOneVariant";
+    const products = [];
+    for (const v of variants.length ? variants : [null]) {
+      const body = {
+        name: r.name, sku: r.sku ? `${text(r.sku, 70)}${v && variants.length > 1 ? `-${v}` : ""}` : "", barcode: r.barcode, category: r.category, brand: r.brand,
+        unit: r.unit, description: r.description, ...base, ...(v ? { [variantField]: v } : {})
+      };
+      try {
+        const d = readProduct(body, { creating: true });
+        if (!costEdit) d.costPrice = 0;
+        if (profile.batches) d.trackBatches = true;
+        products.push({ ...d, supplierId, variantField, variantValue: v });
+      } catch (err) { Object.assign(errors, err.errors || { name: "invalid" }); break; }
+    }
+    return { row, products: Object.keys(errors).length ? [] : products, errors };
+  });
+  // SKU / barcode: not twice in the list, and not already used by a product of the business
+  if (!req.business.allowDuplicateCodes) {
+    const seen = { sku: new Map(), barcode: new Map() };
+    for (const res of results) {
+      for (const d of res.products) {
+        for (const k of ["sku", "barcode"]) {
+          if (!d[k]) continue;
+          const key = d[k].toLowerCase();
+          if (seen[k].has(key) && seen[k].get(key) !== res.row) { res.errors[k] = "duplicateInList"; res.dupOf = seen[k].get(key) + 1; }
+          else seen[k].set(key, res.row);
+        }
+      }
+    }
+    const skus = [...seen.sku.keys()];
+    const codes = [...seen.barcode.keys()];
+    const [takenSku] = skus.length ? await db.query(`SELECT p.sku code, ${productNameSql("p")} name FROM products p WHERE p.business_id = ? AND p.sku IN (?)`, [bid, skus]) : [[]];
+    const [takenBar] = codes.length ? await db.query(
+      `SELECT p.barcode code, ${productNameSql("p")} name FROM products p WHERE p.business_id = ? AND p.barcode IN (?)
+       UNION SELECT xb.barcode, ${productNameSql("p")} FROM product_barcodes xb JOIN products p ON p.id = xb.product_id WHERE xb.business_id = ? AND xb.barcode IN (?)`, [bid, codes, bid, codes]) : [[]];
+    const usedSku = new Map(takenSku.map((x) => [String(x.code).toLowerCase(), x.name]));
+    const usedBar = new Map(takenBar.map((x) => [String(x.code).toLowerCase(), x.name]));
+    for (const res of results) {
+      for (const d of res.products) {
+        if (d.sku && usedSku.has(d.sku.toLowerCase())) { res.errors.sku = "duplicate"; res.usedBy = usedSku.get(d.sku.toLowerCase()); }
+        if (d.barcode && usedBar.has(d.barcode.toLowerCase())) { res.errors.barcode = "barcodeTaken"; res.usedBy = usedBar.get(d.barcode.toLowerCase()); }
+      }
+      if (Object.keys(res.errors).length) res.products = [];
+    }
+  }
+  return results.map((res) => ({ row: res.row, count: res.products.length, products: res.products, errors: res.errors, ...(res.usedBy ? { usedBy: res.usedBy } : {}), ...(res.dupOf ? { dupOf: res.dupOf } : {}) }));
+}
+
+function readBulkRows(req) {
+  const rows = Array.isArray(req.body?.rows) ? req.body.rows : [];
+  if (!rows.length) throw badRequest({ rows: "required" });
+  if (rows.length > BULK_MAX) throw new HttpError(400, "validation", { rows: "tooMany" }, { max: BULK_MAX });
+  return rows;
+}
+const bulkSummary = (results) => ({ rows: results.length, okRows: results.filter((r) => r.count > 0).length,
+  errorRows: results.filter((r) => Object.keys(r.errors).length).length, products: results.reduce((s, r) => s + r.count, 0) });
+
+router.post("/bulk/check", requirePerm("products.edit"), ah(async (req, res) => {
+  const results = await checkBulk(pool, req, readBulkRows(req));
+  res.json({ rows: results.map(({ products, ...r }) => r), summary: bulkSummary(results) });
+}));
+
+router.post("/bulk", requirePerm("products.edit"), ah(async (req, res) => {
+  const rows = readBulkRows(req);
+  const bid = req.business.id;
+  const out = await withTx(async (conn) => {
+    const results = await checkBulk(conn, req, rows);   // checked again inside the transaction (codes may have been taken meanwhile)
+    const cache = { category: new Map(), brand: new Map() };
+    const cached = async (kind, name, fn) => { if (!name) return null; if (!cache[kind].has(name)) cache[kind].set(name, await fn(conn, bid, name)); return cache[kind].get(name); };
+    let created = 0;
+    for (const r of results) {
+      let group = null;
+      for (const d of r.products) {
+        const col = VARIANT_COL[d.variantField] || "size";
+        const [ins] = await conn.query(
+          `INSERT INTO products (business_id, category_id, brand_id, supplier_id, name, ${col}, description, sku, barcode, unit,
+                                 cost_price, selling_price, wholesale_price, min_price, track_batches, variant_of)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [bid, await cached("category", d.category, categoryId), await cached("brand", d.brand, brandId), d.supplierId, d.name, d.variantValue, d.description,
+            d.sku, d.barcode, d.unit, d.costPrice, d.sellingPrice, d.wholesalePrice, d.minPrice, d.trackBatches ? 1 : 0, group]);
+        if (r.products.length > 1 && group === null) group = ins.insertId;   // the first variant heads the group
+        await audit(conn, { businessId: bid, userId: req.user.id, action: "product.created", entity: "product", entityId: ins.insertId,
+          meta: { costPrice: d.costPrice, sellingPrice: d.sellingPrice, wholesalePrice: d.wholesalePrice, minPrice: d.minPrice, status: "active", source: "bulk" }, ip: req.ip });
+        created++;
+      }
+    }
+    if (created) await audit(conn, { businessId: bid, userId: req.user.id, action: "product.bulkCreated", meta: { count: created, rows: results.filter((r) => r.count).length }, ip: req.ip });
+    return { created, results };
+  });
+  // rows still to correct (and which rows were saved, so the table can drop them)
+  res.status(201).json({ created: out.created, saved: out.results.filter((r) => r.count).map((r) => r.row),
+    rows: out.results.filter((r) => Object.keys(r.errors).length).map(({ products, ...r }) => r) });
+}));
+
 export default router;
