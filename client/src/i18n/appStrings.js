@@ -63,7 +63,7 @@ const en = {
     minAboveWholesale: "The minimum price can't be above the wholesale price.", priceFixed: "This product has a fixed price. It can't be changed at a sale.",
     belowCost: "This price is below the cost price. It can't be sold this low.", paidBelowCost: "The amount paid can't be below the purchase cost.",
     paidLessForbidden: "Only staff who can give discounts can take less than the total.",
-    priceLocked: "You don't have permission to change prices.", lineLocked: "This line can't change (serial / IMEI, roll or recipe). Cancel the invoice and make a new one.", useNewInvoice: "Products sold with serial numbers / IMEIs, from rolls or through recipes can't be added by an edit. Make a new invoice.", lockedLineRemoved: "Lines sold with serial numbers / IMEIs, from rolls or through recipes can't be removed by an edit. Cancel the invoice instead.", customerHasPayments: "This invoice has payments, so its customer can't change.", draftNoTracked: "Products with serial numbers / IMEIs or from rolls can't be in a draft.", draftNoPayment: "A draft can't be paid. Post it first.", notDraft: "This invoice isn't a draft.", cancelledNoEdit: "A cancelled invoice can't be edited.", invoiceChanged: "Someone changed this invoice meanwhile. Reload it.", noChanges: "Nothing was changed.", invoiceEditNeedsApproval: "These changes need a manager's approval.", cannotApproveEdit: "This user can't approve invoice changes.", cannotApprovePrice: "This user can't approve prices below the minimum.",
+    priceLocked: "You don't have permission to change prices.", adminPasswordWeak: "Use at least 10 characters with letters and numbers.", lineLocked: "This line can't change (serial / IMEI, roll or recipe). Cancel the invoice and make a new one.", useNewInvoice: "Products sold with serial numbers / IMEIs, from rolls or through recipes can't be added by an edit. Make a new invoice.", lockedLineRemoved: "Lines sold with serial numbers / IMEIs, from rolls or through recipes can't be removed by an edit. Cancel the invoice instead.", customerHasPayments: "This invoice has payments, so its customer can't change.", draftNoTracked: "Products with serial numbers / IMEIs or from rolls can't be in a draft.", draftNoPayment: "A draft can't be paid. Post it first.", notDraft: "This invoice isn't a draft.", cancelledNoEdit: "A cancelled invoice can't be edited.", invoiceChanged: "Someone changed this invoice meanwhile. Reload it.", noChanges: "Nothing was changed.", invoiceEditNeedsApproval: "These changes need a manager's approval.", cannotApproveEdit: "This user can't approve invoice changes.", cannotApprovePrice: "This user can't approve prices below the minimum.",
     trackingNeedsZeroStock: "The tracking method can only change while the product has no stock.",
     trackedNoReverse: "Serial / IMEI stock is corrected with Adjust (choose the devices).", devicesAdjustOnly: "Use Add / Subtract with the devices.",
     moreThanOutstanding: "More than is outstanding ({outstanding}).", moreThanReceived: "More than was received ({left}).", nothingReceived: "Enter at least one received quantity.",
@@ -748,7 +748,18 @@ const en = {
     health: "System health", database: "Database", size: "Database size", uptime: "API uptime", users: "Users", transactions: "Transactions",
     lastActivity: "Last activity", owner: "Owner", registered: "Registered", trial: "Trial", suspend: "Suspend", activate: "Activate",
     deactivate: "Deactivate", reasonRequired: "Give a reason (shown in the audit log).", usage: "Usage", activity: "Recent activity",
-    privacy: "For privacy, admins see business summaries only — not individual financial records.", businessUser: "Business"
+    privacy: "For privacy, admins see business summaries only — not individual financial records.", businessUser: "Business",
+    menu: {
+      dashboard: "Dashboard", businesses: "Businesses", trials: "Trials", users: "Users", activity: "Activity & security", account: "My account",
+      overview: "Overview", health: "System health", all: "All businesses", active: "Active", suspended: "Suspended", deactivated: "Deactivated", newest: "New (30 days)", types: "Business types",
+      trialsActive: "Active trials", trialsEnding: "Ending in 7 days", trialsExpired: "Expired", allUsers: "All users", disabledUsers: "Disabled users", admins: "Super admins",
+      allActivity: "All activity", adminActions: "Super admin actions", logins: "Sign-ins", password: "Change password", menu: "Menu"
+    },
+    type: "Business type", count: "Businesses", latest: "Latest sign-up", view: "View", daysLeft: "Days left", ends: "Ends", starts: "Starts", extend: "Extend",
+    extendTitle: "Extend the trial of {name}", extendDays: "Days to add", extended: "Trial extended.", noTrials: "No trials here.",
+    lastLogin: "Last sign-in", never: "Never", role: "Role", you: "you", email: "Email",
+    currentPassword: "Current password", newPassword: "New password", repeatPassword: "Repeat the new password", passwordRules: "At least 10 characters, with letters and numbers.",
+    passwordSaved: "Your password was changed.", mismatch: "The two new passwords are not the same.", uptimeLong: "{d} d {h} h {m} min", nodeVersion: "Node.js version"
   }
 };
 
@@ -813,7 +824,7 @@ const so = {
     minAboveWholesale: "Qiimaha ugu yar kama badnaan karo qiimaha jumlada.", priceFixed: "Alaabtan qiimaheedu waa go'an. Lama beddeli karo marka la iibinayo.",
     belowCost: "Qiimahan wuu ka hooseeyaa qiimaha iibsiga. Sidan hoose looma iibin karo.", paidBelowCost: "Lacagta la bixiyay kama hoosayn karto qiimaha iibsiga.",
     paidLessForbidden: "Kaliya shaqaalaha dhimis bixin kara ayaa qaadan kara lacag ka yar wadarta.",
-    priceLocked: "Ma lihid ogolaansho aad ku beddesho qiimaha.", lineLocked: "Safkan isma beddeli karo (serial / IMEI, duub ama cunto-karis). Jooji qaansheegta oo samee mid cusub.", useNewInvoice: "Alaabta serial / IMEI, duub ama cunto-karis lagu iibiyo laguma dari karo beddel. Samee qaansheeg cusub.", lockedLineRemoved: "Safafka serial / IMEI, duub ama cunto-karis lagama saari karo beddel. Halkii jooji qaansheegta.", customerHasPayments: "Qaansheegtan lacag ayaa lagu bixiyay, sidaa darteed macmiilkeeda isma beddeli karo.", draftNoTracked: "Alaabta serial / IMEI leh ama duubka ka timaada qabyo kuma jiri karto.", draftNoPayment: "Qabyo lacag laguma bixin karo. Marka hore diiwaangeli.", notDraft: "Qaansheegtan qabyo ma aha.", cancelledNoEdit: "Qaansheeg la joojiyay wax lagama beddeli karo.", invoiceChanged: "Qof kale ayaa qaansheegtan beddelay. Dib u soo deji.", noChanges: "Waxba lama beddelin.", invoiceEditNeedsApproval: "Isbeddeladan waxay u baahan yihiin ansixinta maamule.", cannotApproveEdit: "Isticmaalahan ma ansixin karo isbeddelka qaansheegta.", cannotApprovePrice: "Isticmaalahan ma ansixin karo qiimaha ka hooseeya kan ugu yar.",
+    priceLocked: "Ma lihid ogolaansho aad ku beddesho qiimaha.", adminPasswordWeak: "Isticmaal ugu yaraan 10 xaraf oo xarfo iyo tiro leh.", lineLocked: "Safkan isma beddeli karo (serial / IMEI, duub ama cunto-karis). Jooji qaansheegta oo samee mid cusub.", useNewInvoice: "Alaabta serial / IMEI, duub ama cunto-karis lagu iibiyo laguma dari karo beddel. Samee qaansheeg cusub.", lockedLineRemoved: "Safafka serial / IMEI, duub ama cunto-karis lagama saari karo beddel. Halkii jooji qaansheegta.", customerHasPayments: "Qaansheegtan lacag ayaa lagu bixiyay, sidaa darteed macmiilkeeda isma beddeli karo.", draftNoTracked: "Alaabta serial / IMEI leh ama duubka ka timaada qabyo kuma jiri karto.", draftNoPayment: "Qabyo lacag laguma bixin karo. Marka hore diiwaangeli.", notDraft: "Qaansheegtan qabyo ma aha.", cancelledNoEdit: "Qaansheeg la joojiyay wax lagama beddeli karo.", invoiceChanged: "Qof kale ayaa qaansheegtan beddelay. Dib u soo deji.", noChanges: "Waxba lama beddelin.", invoiceEditNeedsApproval: "Isbeddeladan waxay u baahan yihiin ansixinta maamule.", cannotApproveEdit: "Isticmaalahan ma ansixin karo isbeddelka qaansheegta.", cannotApprovePrice: "Isticmaalahan ma ansixin karo qiimaha ka hooseeya kan ugu yar.",
     trackingNeedsZeroStock: "Habka raacidda waxaa la beddeli karaa kaliya marka alaabtu kayd la'aan tahay.",
     trackedNoReverse: "Kaydka serial / IMEI waxaa lagu saxaa Hagaaji (dooro qalabka).", devicesAdjustOnly: "Isticmaal Ku dar / Ka jar adiga oo dooranaya qalabka.",
     moreThanOutstanding: "Ka badan inta la sugayo ({outstanding}).", moreThanReceived: "Ka badan inta la helay ({left}).", nothingReceived: "Geli ugu yaraan hal tiro la helay.",
@@ -1498,7 +1509,18 @@ const so = {
     health: "Caafimaadka nidaamka", database: "Keydka xogta", size: "Cabbirka keydka", uptime: "Waqtiga API-ga", users: "Isticmaalayaal", transactions: "Macaamillo",
     lastActivity: "Dhaqdhaqaaqii ugu dambeeyay", owner: "Milkiile", registered: "La diiwaan geliyay", trial: "Tijaabo", suspend: "Hakii", activate: "Firfircooni",
     deactivate: "Xir", reasonRequired: "Qor sababta (waxay ka muuqan doontaa diiwaanka).", usage: "Isticmaalka", activity: "Dhaqdhaqaaqa dhowaa",
-    privacy: "Asturnaanta awgeed, maamulayaashu waxay arkaan kaliya soo koobidda ganacsiga — ma aha diiwaannada maaliyadeed ee gaarka ah.", businessUser: "Ganacsi"
+    privacy: "Asturnaanta awgeed, maamulayaashu waxay arkaan kaliya soo koobidda ganacsiga — ma aha diiwaannada maaliyadeed ee gaarka ah.", businessUser: "Ganacsi",
+    menu: {
+      dashboard: "Guddiga", businesses: "Ganacsiyada", trials: "Tijaabooyinka", users: "Isticmaalayaasha", activity: "Dhaqdhaqaaqa & amniga", account: "Xisaabtayda",
+      overview: "Guudmar", health: "Caafimaadka nidaamka", all: "Dhammaan ganacsiyada", active: "Firfircoon", suspended: "La hakiyay", deactivated: "La joojiyay", newest: "Cusub (30 maalmood)", types: "Noocyada ganacsiga",
+      trialsActive: "Tijaabooyin socda", trialsEnding: "Dhammaanaya 7 maalmood gudahood", trialsExpired: "Dhacay", allUsers: "Dhammaan isticmaalayaasha", disabledUsers: "Isticmaalayaal la xiray", admins: "Super admin-yada",
+      allActivity: "Dhammaan dhaqdhaqaaqa", adminActions: "Ficillada super admin-ka", logins: "Galitaanka", password: "Beddel furaha", menu: "Menu"
+    },
+    type: "Nooca ganacsiga", count: "Ganacsiyada", latest: "Is-diiwaangelintii ugu dambaysay", view: "Eeg", daysLeft: "Maalmo haray", ends: "Dhammaanaya", starts: "Bilaabmay", extend: "Kordhi",
+    extendTitle: "Kordhi tijaabada {name}", extendDays: "Maalmaha lagu darayo", extended: "Tijaabada waa la kordhiyay.", noTrials: "Halkan tijaabo ma jirto.",
+    lastLogin: "Galitaankii ugu dambeeyay", never: "Weligii", role: "Doorka", you: "adiga", email: "Iimayl",
+    currentPassword: "Furaha hadda", newPassword: "Furaha cusub", repeatPassword: "Ku celi furaha cusub", passwordRules: "Ugu yaraan 10 xaraf, xarfo iyo tirooyin leh.",
+    passwordSaved: "Furahaaga waa la beddelay.", mismatch: "Labada fure ee cusub isma eka.", uptimeLong: "{d} maalin {h} saac {m} daqiiqo", nodeVersion: "Nooca Node.js"
   }
 };
 
