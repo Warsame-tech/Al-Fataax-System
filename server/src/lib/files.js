@@ -68,9 +68,10 @@ async function sendFile(req, res, next) {
     if (!/^[a-f0-9]{32}$/.test(req.params.key)) return res.status(404).end();
     const bid = Number(req.params.bid) || 0;
     const db = bid ? await poolFor(bid) : corePool;
-    const [[f]] = bid
-      ? await db.query("SELECT mime, data FROM stored_files WHERE file_key = ? AND (business_id = ? OR business_id IS NULL)", [req.params.key, bid])
-      : await db.query("SELECT mime, data FROM stored_files WHERE file_key = ?", [req.params.key]);
+    const byBusiness = "SELECT mime, data FROM stored_files WHERE file_key = ? AND (business_id = ? OR business_id IS NULL)";
+    let [[f]] = bid ? await db.query(byBusiness, [req.params.key, bid]) : await db.query("SELECT mime, data FROM stored_files WHERE file_key = ?", [req.params.key]);
+    // a logo the super admin uploaded is kept in the central database
+    if (!f && bid && db !== corePool) [[f]] = await corePool.query(byBusiness, [req.params.key, bid]);
     if (!f) return res.status(404).end();
     res.set({
       "Content-Type": f.mime,

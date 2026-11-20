@@ -27,6 +27,47 @@ function Copy({ text }) {
   return <button type="button" className="link-btn" onClick={copy}><Icon name={done ? "check" : "copy"} /> {t(done ? "ui.tenancy.detail.copied" : "ui.tenancy.detail.copy")}</button>;
 }
 
+/* A logo box: choose an image (PNG, JPG or WEBP, up to 2 MB), see it, or take it away */
+export function LogoPicker({ file, current, onChange, onRemove, error }) {
+  const { t } = useLanguage();
+  const [preview, setPreview] = useState(null);
+  const [bad, setBad] = useState(null);
+  useEffect(() => {
+    if (!file) { setPreview(null); return undefined; }
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+  const pick = (e) => {
+    const f = e.target.files?.[0];
+    e.target.value = "";
+    if (!f) return;
+    if (!/^image\/(png|jpe?g|webp)$/.test(f.type)) { setBad("invalidLogo"); return; }
+    if (f.size > 2 * 1024 * 1024) { setBad("logoTooLarge"); return; }
+    setBad(null);
+    onChange(f);
+  };
+  const shown = preview || current;
+  return (
+    <div className={"logo-pick" + (error || bad ? " has-error" : "")}>
+      <span className="ff__label">{t("ui.tenancy.register.logo")}</span>
+      <div className="logo-pick__row">
+        <label className="logo-pick__box">
+          {shown ? <img src={shown} alt="" /> : <span className="logo-pick__empty"><Icon name="image" /><small>{t("ui.tenancy.register.logoAdd")}</small></span>}
+          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={pick} />
+        </label>
+        <div className="logo-pick__side">
+          <label className="btn btn--outline btn--sm logo-pick__btn"><Icon name="upload" /><span>{t(shown ? "ui.tenancy.register.logoChange" : "ui.tenancy.register.logoChoose")}</span>
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={pick} /></label>
+          {shown && <button type="button" className="link-btn" onClick={() => { setBad(null); onRemove(); }}>{t("ui.tenancy.register.logoRemove")}</button>}
+          <small className="muted">{t("ui.tenancy.register.logoHelp")}</small>
+          {(bad || error) && <small className="ff__error">{t(`ui.errors.${bad || error}`)}</small>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ===================== register a business ===================== */
 const STEPS = ["business", "owner", "plan", "database", "review"];
 const STEP_FIELDS = { business: ["name", "slug", "type", "phone", "email", "address"], owner: ["ownerName", "username", "ownerEmail", "ownerPhone", "password"],
@@ -40,6 +81,7 @@ export function RegisterBusiness() {
   const [f, setF] = useState({ name: "", slug: "", type: "", phone: "", email: "", address: "", ownerName: "", username: "", ownerEmail: "", ownerPhone: "", password: "",
     planId: "", cycle: "monthly", trialDays: "", branchName: "", maxBranches: "", dbMode: "" });
   const [slugTouched, setSlugTouched] = useState(false);
+  const [logoFile, setLogoFile] = useState(null);
   const [slugState, setSlugState] = useState(null);
   const sub = useSubmit();
   const s = setup.data;
@@ -75,6 +117,11 @@ export function RegisterBusiness() {
   const create = async () => {
     const body = { ...f, planId: f.planId || null, maxBranches: f.maxBranches === "" ? null : Number(f.maxBranches), trialDays: f.trialDays === "" ? null : Number(f.trialDays) };
     const r = await sub.run(() => apiRequest("/api/admin/businesses", { method: "POST", body }));
+    if (r && logoFile) {   // the logo goes up right after the business exists (its sign-in page shows it)
+      const fd = new FormData();
+      fd.append("logo", logoFile);
+      await apiRequest(`/api/admin/businesses/${r.businessId}/logo`, { method: "POST", body: fd }).catch(() => {});
+    }
     if (r) navigate(`/admin/businesses/${r.businessId}/setup`, { state: { owner: r.owner } });
   };
 
@@ -112,6 +159,7 @@ export function RegisterBusiness() {
             <Field label={t("ui.tenancy.register.phone")} error={fe.phone}><input className="input" type="tel" value={f.phone} onChange={set("phone")} maxLength={30} /></Field>
             <Field label={t("ui.tenancy.register.email")} error={fe.email}><input className="input" type="email" value={f.email} onChange={set("email")} maxLength={190} /></Field>
             <Field label={t("ui.tenancy.register.address")}><input className="input" value={f.address} onChange={set("address")} maxLength={255} /></Field>
+            <div className="ff--full"><LogoPicker file={logoFile} onChange={setLogoFile} onRemove={() => setLogoFile(null)} /></div>
           </div>
         )}
 
@@ -163,7 +211,7 @@ export function RegisterBusiness() {
           <div className="reg-review">
             <p className="muted">{t("ui.tenancy.register.reviewHelp")}</p>
             <dl className="sub-card__facts">
-              <div><dt>{t("ui.tenancy.register.name")}</dt><dd><b>{f.name}</b> · {typeName(f.type)}</dd></div>
+              <div><dt>{t("ui.tenancy.register.name")}</dt><dd className="reg-review__name">{logoFile && <LogoThumb file={logoFile} />}<span><b>{f.name}</b> · {typeName(f.type)}</span></dd></div>
               <div><dt>{t("ui.tenancy.register.slug")}</dt><dd>{slugState?.url || absLink(`/b/${f.slug}`)}</dd></div>
               <div><dt>{t("ui.tenancy.register.phone")}</dt><dd>{f.phone}{f.email ? ` · ${f.email}` : ""}</dd></div>
               <div><dt>{t("ui.tenancy.register.ownerName")}</dt><dd>{f.ownerName} · <code>{f.username}</code></dd></div>
@@ -184,6 +232,12 @@ export function RegisterBusiness() {
       </section>
     </div>
   );
+}
+
+function LogoThumb({ file }) {
+  const [url, setUrl] = useState(null);
+  useEffect(() => { const u = URL.createObjectURL(file); setUrl(u); return () => URL.revokeObjectURL(u); }, [file]);
+  return url ? <img className="reg-review__logo" src={url} alt="" /> : null;
 }
 
 /* ===================== the setup job, live ===================== */

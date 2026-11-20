@@ -460,6 +460,8 @@ const en = {
       dbMode: "Where its data is kept", dedicated: "Its own database (recommended)", dedicatedHelp: "A separate MySQL database ({db}) with its own restricted user; the password is stored encrypted.",
       shared: "The shared central database", sharedHelp: "Like the businesses registered earlier. Works where the database server can't create databases.",
       keyMissing: "The server has no TENANT_DB_KEY: in production an own database can't be created until it is set.",
+      logo: "Business logo (optional)", logoAdd: "Add logo", logoChoose: "Choose a logo", logoChange: "Change logo", logoRemove: "Remove",
+      logoHelp: "PNG, JPG or WEBP, up to 2 MB. It is shown on the business's sign-in page, invoices and receipts.",
       next: "Next", back: "Back", create: "Register and set up", creating: "Registering…", reviewHelp: "Check the details. Setting up takes a few seconds; the business is active only when every step has succeeded."
     },
     prov: {
@@ -1370,6 +1372,8 @@ const so = {
       dbMode: "Halka xogtiisa lagu kaydinayo", dedicated: "Kayd xog u gaar ah (lagu taliyay)", dedicatedHelp: "Kayd MySQL oo gooni ah ({db}) leh isticmaale xaddidan; furaha waa la sir-qariyay.",
       shared: "Kaydka xogta dhexe ee la wadaago", sharedHelp: "Sida ganacsiyadii hore loo diiwaan geliyay. Wuu shaqeeyaa marka server-ku uusan samayn karin kayd cusub.",
       keyMissing: "Server-ku ma laha TENANT_DB_KEY: production-ka kayd gaar ah lama samayn karo ilaa la dejiyo.",
+      logo: "Astaanta ganacsiga (ikhtiyaari)", logoAdd: "Ku dar astaan", logoChoose: "Dooro astaan", logoChange: "Beddel astaanta", logoRemove: "Ka saar",
+      logoHelp: "PNG, JPG ama WEBP, ilaa 2 MB. Waxay ka muuqataa bogga gelitaanka ganacsiga, qaansheegyada iyo rasiidhada.",
       next: "Xiga", back: "Dib", create: "Diiwaan geli oo diyaari", creating: "Waa la diiwaan gelinayaa…", reviewHelp: "Hubi xogta. Diyaarintu waxay qaadataa dhowr ilbiriqsi; ganacsigu wuxuu firfircoonaanayaa marka tallaabo kasta guulaysato."
     },
     prov: {

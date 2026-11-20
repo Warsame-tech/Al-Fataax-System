@@ -11,7 +11,7 @@ import AdminDashboard from "./AdminDashboard.jsx";
 import { Subscriptions, Payments, Plans, GivePlan, RecordPayment } from "./AdminBilling.jsx";
 import { Tickets, Messages } from "./AdminSupport.jsx";
 import { Announcements, Reports, Security, AdminsPage, SettingsPage, ExportPage, AccountPage, ShownOnce } from "./AdminPlatform.jsx";
-import { RegisterBusiness, ProvisioningRoute, Hosting, Databases, Backups, BranchOverview, BranchLimit, BusinessModules } from "./AdminTenancy.jsx";
+import { RegisterBusiness, ProvisioningRoute, Hosting, Databases, Backups, BranchOverview, BranchLimit, BusinessModules, LogoPicker } from "./AdminTenancy.jsx";
 
 /*
  * Super Admin (platform owner) area — separate sign-in and session from businesses.
@@ -274,7 +274,7 @@ function Businesses() {
           <tbody>
             {rows.map((b) => (
               <tr key={b.id}>
-                <td><Link to={`/admin/businesses/${b.id}`} className="biz-cell">{b.logoPath ? <img src={fileUrl(b.logoPath)} alt="" /> : <span>{b.name.slice(0, 1)}</span>}<span><strong>{b.name}</strong><small className="cell-sub">{b.slug}{b.database === "dedicated" ? ` · ${t("ui.tenancy.detail.dedicated")}` : ""}</small></span></Link></td>
+                <td><Link to={`/admin/businesses/${b.id}`} className="biz-cell">{b.logoPath ? <img className="biz-cell__logo" src={fileUrl(b.logoPath)} alt="" /> : <span className="biz-cell__logo biz-cell__initial">{b.name.slice(0, 1).toUpperCase()}</span>}<span className="biz-cell__text"><strong>{b.name}</strong><small className="cell-sub">{b.slug}{b.database === "dedicated" ? ` · ${t("ui.tenancy.detail.dedicated")}` : ""}</small></span></Link></td>
                 <td>{b.owner}</td><td>{b.phone}</td><td>{date(b.createdAt, lang)}</td>
                 <td className="num">{b.users}</td><td className="num">{b.transactions}</td>
                 <td>{b.trial ? `${t(`ui.status.${b.trial.status}`)} · ${date(b.trial.endDate, lang)}` : "—"}</td>
@@ -412,9 +412,18 @@ const TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics",
 function EditBusiness({ business: b, onClose, onDone }) {
   const { t } = useLanguage();
   const [f, setF] = useState({ name: b.name, ownerName: b.owner, phone: b.phone || "", email: b.email || "", address: b.address || "", type: b.type });
+  const [logo, setLogo] = useState({ file: null, removed: false });
   const sub = useSubmit();
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
-  const save = async (e) => { e.preventDefault(); if (await sub.run(() => apiRequest(`/api/admin/businesses/${b.id}`, { method: "PUT", body: f }))) onDone(); };
+  const save = async (e) => {
+    e.preventDefault();
+    const ok = await sub.run(async () => {
+      await apiRequest(`/api/admin/businesses/${b.id}`, { method: "PUT", body: f });
+      if (logo.file) { const fd = new FormData(); fd.append("logo", logo.file); await apiRequest(`/api/admin/businesses/${b.id}/logo`, { method: "POST", body: fd }); }
+      else if (logo.removed && b.logoPath) await apiRequest(`/api/admin/businesses/${b.id}/logo`, { method: "DELETE" });
+    });
+    if (ok) onDone();
+  };
   return (
     <Modal title={t("ui.platform.editDetails")} onClose={onClose} wide>
       <form onSubmit={save} className="form-grid form-grid--2">
@@ -424,6 +433,8 @@ function EditBusiness({ business: b, onClose, onDone }) {
         <Field label={t("ui.admin.email")} error={sub.fieldErrors.email}><input className="input" type="email" value={f.email} onChange={set("email")} /></Field>
         <Field label={t("ui.common.address")}><input className="input" value={f.address} onChange={set("address")} /></Field>
         <Field label={t("ui.admin.type")}><select className="input" value={f.type} onChange={set("type")}>{TYPES.map((x) => <option key={x} value={x}>{t(`register.types.${x}`)}</option>)}</select></Field>
+        <div className="ff--full"><LogoPicker file={logo.file} current={logo.removed ? null : b.logoPath ? fileUrl(b.logoPath) : null} error={sub.fieldErrors.logo}
+          onChange={(file) => setLogo({ file, removed: false })} onRemove={() => setLogo({ file: null, removed: true })} /></div>
         <p className="muted ff--full">{t("ui.platform.typeChangeNote")}</p>
         <FormError error={sub.formError} />
         <div className="form-actions ff--full"><button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button><button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.common.save")}</button></div>

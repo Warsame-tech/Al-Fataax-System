@@ -9,7 +9,6 @@ import { signIn } from "../services/authService.js";
 import { apiRequest, fileUrl, getTenant, setTenant } from "../services/api.js";
 import faatixMark from "../assets/faatix-logo.png";
 import faatixLight from "../assets/faatix-logo-light.png";
-import { fill } from "../app/format.js";
 import "../styles/signin.css";
 
 const REMEMBER_KEY = "faatix.rememberUser";
@@ -93,18 +92,13 @@ export default function SignIn() {
 
       {/* one card in the middle, like the super admin sign-in — Faatix blue and orange instead of navy */}
       <section className="signin__card" aria-labelledby="signin-title">
+        {/* the business's logo on top, its name under it (Faatix's logo without a business link) */}
         <div className="signin__head">
           {tenant.loading ? <span className="signin__mark"><span className="signin__mark-wait" /></span>
-            : biz ? (
-              <span className="signin__biz">
-                <span className={`signin__mark${logo ? "" : " signin__mark--initials"}`}>{logo ? <img src={logo} alt="" /> : initials(biz.name)}</span>
-                <strong>{biz.name}</strong>
-              </span>
-            ) : <img className="signin__faatix" src={faatixMark} alt="Faatix" />}
+            : biz ? <span className={`signin__mark${logo ? "" : " signin__mark--initials"}`}>{logo ? <img src={logo} alt="" /> : initials(biz.name)}</span>
+            : <img className="signin__faatix" src={faatixMark} alt="Faatix" />}
+          {biz ? <h1 id="signin-title" className="signin__name">{biz.name}</h1> : <h1 id="signin-title" className="visually-hidden">{t("signin.welcome")}</h1>}
         </div>
-        <span className="signin__badge"><Icon name={biz ? "store" : "lock"} />{t(biz ? "signin.businessPortal" : "signin.secure")}</span>
-        <h1 id="signin-title">{t("signin.welcome")}</h1>
-        <p className="signin__sub">{biz ? fill(t("signin.continueTo"), { name: biz.name }) : t("signin.continue")}</p>
 
         {tenant.missing && <p className="signin__note" role="status"><Icon name="info" /> {t("signin.linkNotFound")}</p>}
         {biz && biz.status !== "active" && <p className="signin__note signin__note--warn" role="status"><Icon name="alert" /> {t(biz.status === "notReady" ? "signin.businessNotReady" : "signin.businessSuspended")}</p>}

@@ -18,6 +18,7 @@
  *   GET    /backups · POST /backups · GET /backups/:id/download · DELETE /backups/:id   (perm backups)
  *   GET    /branches-overview                   every business's branches, users and sales (30 days), limits
  *   PATCH  /businesses/:id/branch-limit         a branch limit for one business (perm businesses)
+ *   POST   /businesses/:id/logo (multipart "logo") · DELETE /businesses/:id/logo   the business's logo (perm businesses or provision)
  *   POST   /databases/:businessId/move          move a shared business into its own database (perm databases)
  *   GET    /businesses/:id/modules · PUT /businesses/:id/modules { disabled: [...] }   switch modules off / on (perm businesses)
  */
@@ -29,13 +30,15 @@ import { corePool } from "../config/db.js";
 import { env } from "../config/env.js";
 import { SCHEMA_VERSION } from "../config/migrate.js";
 import { ah, id, text, optText, num, badRequest, conflict } from "../lib/http.js";
-import { requireAdminPerm, adminAudit, platformSettings } from "../lib/platform.js";
+import { requireAdminPerm, adminAudit, platformSettings, adminCan } from "../lib/platform.js";
+const ADMIN_LOGO = ["businesses", "provision"];
 import { withTenant, registryOf, forgetSlugs, mirrorToTenant, forgetTenant } from "../lib/tenancy.js";
 import { slugify, slugProblem, freeSlug } from "../lib/slugs.js";
 import { runJob, dbNameFor, migrateBusinessDb, migrateAllBusinessDbs } from "../lib/provisioning.js";
 import { makeBackup, backupPath, BACKUP_DIR } from "../lib/backups.js";
 import { startMove } from "../lib/provisioning.js";
 import { SWITCHABLE, forgetModules } from "../lib/modules.js";
+import { imageUpload, imageType, saveImage, removeImage } from "../lib/files.js";
 
 const db = corePool;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -291,6 +294,32 @@ export function tenancyRoutes(router) {
     if (r.error) throw conflict(r.error);
     await adminAudit(db, { adminId: req.admin.id, businessId: bid, action: "admin.business_move_started", entity: "job", entityId: r.jobId, ip: req.ip });
     res.status(201).json({ jobId: r.jobId });
+  }));
+
+  /* ===================== the business's logo (registration and the business page) ===================== */
+  const canLogo = (req, res, next) => (req.admin && (ADMIN_LOGO.some((p) => adminCan(req.admin, p))) ? next() : res.status(403).json({ code: "forbidden" }));
+  router.post("/businesses/:id/logo", canLogo, imageUpload.single("logo"), ah(async (req, res) => {
+    const bid = id(req.params.id) || 0;
+    const [[b]] = await db.query("SELECT id, logo_path FROM businesses WHERE id = ?", [bid]);
+    if (!b) return res.status(404).json({ code: "notFound" });
+    if (!req.file || !imageType(req.file.buffer)) throw badRequest({ logo: "invalidLogo" });
+    const logo = await saveImage(db, bid, req.file, "logo");   // central database: served as /files/<business>/<key>
+    await db.query("UPDATE businesses SET logo_path = ? WHERE id = ?", [logo, bid]);
+    await mirrorToTenant(bid);
+    forgetSlugs();
+    if (b.logo_path && b.logo_path !== logo) removeImage(b.logo_path, db);
+    await adminAudit(db, { adminId: req.admin.id, businessId: bid, action: "admin.logo_changed", ip: req.ip });
+    res.json({ logoPath: logo });
+  }));
+  router.delete("/businesses/:id/logo", canLogo, ah(async (req, res) => {
+    const bid = id(req.params.id) || 0;
+    const [[b]] = await db.query("SELECT id, logo_path FROM businesses WHERE id = ?", [bid]);
+    if (!b) return res.status(404).json({ code: "notFound" });
+    await db.query("UPDATE businesses SET logo_path = NULL WHERE id = ?", [bid]);
+    await mirrorToTenant(bid);
+    forgetSlugs();
+    await adminAudit(db, { adminId: req.admin.id, businessId: bid, action: "admin.logo_removed", ip: req.ip });
+    res.json({ code: "saved" });
   }));
 
   /* ===================== modules per business ===================== */
