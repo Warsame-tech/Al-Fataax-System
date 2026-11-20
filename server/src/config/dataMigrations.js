@@ -102,5 +102,25 @@ export const DATA_STEPS = [
         if (set.size !== perms.length) await db.query("UPDATE roles SET permissions = ? WHERE id = ?", [JSON.stringify([...set]), r.id]);
       }
     }
+  },
+  {
+    // Super admin roles: the super admins that already exist become owners (they could do everything before).
+    name: "platform_admin_roles_v1",
+    async run(db) {
+      await db.query("UPDATE platform_admins SET role = 'owner'");
+    }
+  },
+  {
+    // Starting plans (prices can be changed in Subscriptions → Plans).
+    name: "platform_plans_v1",
+    async run(db) {
+      const [[n]] = await db.query("SELECT COUNT(*) n FROM plans");
+      if (Number(n.n)) return;
+      await db.query(
+        `INSERT INTO plans (name, code, description, price_monthly, price_yearly, max_users, max_branches, max_products, features, sort_order) VALUES
+         ('Basic', 'basic', 'One shop: POS, stock, customers and reports', 10, 100, 3, 1, 1000, '["POS","Inventory","Customers","Reports"]', 1),
+         ('Standard', 'standard', 'A growing business: invoices, purchases, staff roles', 20, 200, 10, 2, 10000, '["Everything in Basic","Invoices","Purchases","Staff roles","Promotions"]', 2),
+         ('Premium', 'premium', 'Several branches, no limits', 40, 400, NULL, NULL, NULL, '["Everything in Standard","Unlimited branches","Unlimited users","Priority support"]', 3)`);
+    }
   }
 ];

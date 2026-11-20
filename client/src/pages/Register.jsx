@@ -5,6 +5,7 @@ import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
 import usePageTitle from "../hooks/usePageTitle.js";
 import { register } from "../services/authService.js";
+import { apiRequest } from "../services/api.js";
 
 /* Business categories (same list as the server: routes/auth.js; "fashion" = Clothing) */
 const TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "jewelry", "fabric", "restaurant", "cafe", "fast_food", "bakery", "juice_bar", "food_truck", "takeaway", "food_other"];
@@ -37,6 +38,9 @@ export default function Register() {
   usePageTitle("meta.register");
 
   const [form, setForm] = useState(EMPTY);
+  // business types the super admin closed for new sign-ups (System settings) are not offered
+  const [closed, setClosed] = useState([]);
+  useEffect(() => { apiRequest("/api/contact/platform").then((r) => setClosed(r.disabledTypes || [])).catch(() => {}); }, []);
   const [logo, setLogo] = useState(null);
   const [logoUrl, setLogoUrl] = useState(null);
   const [errors, setErrors] = useState({});
@@ -110,7 +114,7 @@ export default function Register() {
                     <label htmlFor="businessType">{t("register.businessType")}</label>
                     <select className="input input--type" id="businessType" name="businessType" value={form.businessType} onChange={update} {...aria("businessType")}>
                       <option value="">{t("register.choose")}</option>
-                      {TYPES.map((x) => <option key={x} value={x}>{t(`register.types.${x}`)}</option>)}
+                      {TYPES.filter((x) => !closed.includes(x)).map((x) => <option key={x} value={x}>{t(`register.types.${x}`)}</option>)}
                     </select>
                     {err("businessType")}
                   </div>

@@ -1,16 +1,21 @@
 import { Router } from "express";
+import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
 import { pool, checkDatabase } from "../config/db.js";
 import { env } from "../config/env.js";
 import { audit } from "../middleware/auth.js";
-import { ah, id, text, num, badRequest } from "../lib/http.js";
+import { ah, id, text, optText, num, badRequest, conflict } from "../lib/http.js";
+import { ADMIN_ROLES, adminCan, requireAdminPerm, adminAudit, totpValid, newTotpSecret, totpUrl, planOf } from "../lib/platform.js";
+import { platformRoutes } from "./adminPlatform.js";
 
 /*
  * Super Admin (platform owner). Completely separate from business users:
  * own table (platform_admins), own cookie, own routes. Business owners never get access.
  * Admins see business summaries and account status — not detailed financial records.
+ * Each super admin has a role (lib/platform.js ADMIN_ROLES: owner, admin, support, billing) that decides what they may do;
+ * two-step sign-in (authenticator app code) can be switched on per admin in My account.
  */
 const router = Router();
 const ADMIN_COOKIE = "faatix_admin";
@@ -21,9 +26,17 @@ const DUMMY = bcrypt.hashSync("not-a-real-password", 12);
 router.post("/sign-in", limiter, ah(async (req, res) => {
   const username = text(req.body?.username, 60).toLowerCase();
   const password = typeof req.body?.password === "string" ? req.body.password : "";
-  const [[a]] = await pool.query("SELECT id, password_hash, status FROM platform_admins WHERE username = ? OR email = ?", [username, username]);
+  const [[a]] = await pool.query("SELECT id, password_hash, status, totp_enabled, totp_secret FROM platform_admins WHERE username = ? OR email = ?", [username, username]);
   const ok = await bcrypt.compare(password, a ? a.password_hash : DUMMY);
-  if (!a || !ok || a.status !== "active") return res.status(401).json({ code: "invalidCredentials" });
+  if (!a || !ok || a.status !== "active") {
+    await pool.query("INSERT INTO audit_logs (platform_admin_id, action, meta, ip) VALUES (?, 'admin.login_failed', ?, ?)", [a?.id || null, JSON.stringify({ username }), req.ip]);
+    return res.status(401).json({ code: "invalidCredentials" });
+  }
+  // two-step sign-in: the password was right, now the 6-digit code from the authenticator app
+  if (a.totp_enabled) {
+    if (!req.body?.code) return res.status(401).json({ code: "twoFactorRequired" });
+    if (!totpValid(a.totp_secret, req.body.code)) return res.status(401).json({ code: "twoFactorWrong" });
+  }
   await pool.query("UPDATE platform_admins SET last_login_at = UTC_TIMESTAMP() WHERE id = ?", [a.id]);
   await pool.query("INSERT INTO audit_logs (platform_admin_id, action, ip) VALUES (?, 'admin.login', ?)", [a.id, req.ip]);
   const token = jwt.sign({ aid: a.id, scope: "platform" }, env.jwtSecret, { expiresIn: "8h" });
@@ -38,7 +51,7 @@ router.use(ah(async (req, res, next) => {
   try {
     const p = jwt.verify(req.cookies?.[ADMIN_COOKIE] || "", env.jwtSecret);
     if (p.scope !== "platform") throw new Error();
-    const [[a]] = await pool.query("SELECT id, username, status FROM platform_admins WHERE id = ?", [p.aid]);
+    const [[a]] = await pool.query("SELECT id, username, email, status, role, totp_enabled FROM platform_admins WHERE id = ?", [p.aid]);
     if (!a || a.status !== "active") throw new Error();
     req.admin = a;
     next();
@@ -47,7 +60,9 @@ router.use(ah(async (req, res, next) => {
   }
 }));
 
-router.get("/me", (req, res) => res.json({ admin: { id: req.admin.id, username: req.admin.username } }));
+router.get("/me", (req, res) => res.json({ admin: { id: req.admin.id, username: req.admin.username, email: req.admin.email, role: req.admin.role,
+  permissions: ADMIN_ROLES[req.admin.role] || [], twoFactor: Boolean(req.admin.totp_enabled) } }));
+router.use(requireAdminPerm("view"));   // every page below needs at least "view"
 
 /* GET /api/admin/overview — platform totals and health */
 router.get("/overview", ah(async (req, res) => {
@@ -106,18 +121,33 @@ router.get("/businesses/:id", ah(async (req, res) => {
     [bid, bid, bid, bid, bid, bid]);
   const [[trial]] = await pool.query("SELECT start_date, end_date, status FROM trial_records WHERE business_id = ? ORDER BY id DESC LIMIT 1", [bid]);
   const [logs] = await pool.query("SELECT a.action, a.created_at, u.full_name FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id WHERE a.business_id = ? ORDER BY a.id DESC LIMIT 25", [bid]);
+  // platform side: plan and payments, internal notes, support tickets
+  const plan = await planOf(pool, bid);
+  const [payments] = await pool.query(
+    `SELECT sp.id, sp.amount, sp.method, sp.reference, sp.period_start, sp.period_end, sp.paid_at, sp.notes, p.name plan, pa.username admin FROM subscription_payments sp
+       LEFT JOIN plans p ON p.id = sp.plan_id LEFT JOIN platform_admins pa ON pa.id = sp.admin_id WHERE sp.business_id = ? ORDER BY sp.paid_at DESC LIMIT 50`, [bid]);
+  const [notes] = await pool.query("SELECT n.id, n.note, n.created_at, pa.username admin FROM business_notes n LEFT JOIN platform_admins pa ON pa.id = n.admin_id WHERE n.business_id = ? ORDER BY n.id DESC", [bid]);
+  const [tickets] = await pool.query("SELECT id, subject, status, priority, updated_at FROM support_tickets WHERE business_id = ? ORDER BY updated_at DESC LIMIT 20", [bid]);
+  const [[owner]] = await pool.query("SELECT u.id, u.username FROM users u JOIN business_user_roles r ON r.user_id = u.id AND r.role = 'owner' WHERE u.business_id = ? LIMIT 1", [bid]);
   await pool.query("INSERT INTO audit_logs (platform_admin_id, business_id, action, ip) VALUES (?, ?, 'admin.viewed_business', ?)", [req.admin.id, bid, req.ip]);
   res.json({
     business: { id: b.id, name: b.name, owner: b.owner_name, phone: b.phone, email: b.email, type: b.business_type, address: b.address, logoPath: b.logo_path, status: b.status, createdAt: b.created_at },
     users: users.map((u) => ({ id: u.id, fullName: u.full_name, username: u.username, status: u.status, role: u.role === 'owner' ? 'owner' : 'staff', roleName: u.role_name || null, lastLoginAt: u.last_login_at })),
     usage: Object.fromEntries(Object.entries(usage).map(([k, v]) => [k, num(v)])),
     trial: trial || null,
-    activity: logs.map((l) => ({ action: l.action, at: l.created_at, user: l.full_name }))
+    activity: logs.map((l) => ({ action: l.action, at: l.created_at, user: l.full_name })),
+    subscription: plan ? { planId: plan.id, plan: plan.name, cycle: plan.cycle, status: plan.status, periodEnd: plan.current_period_end,
+      price: num(plan.cycle === "yearly" ? plan.price_yearly : plan.price_monthly) } : null,
+    payments: payments.map((x) => ({ id: x.id, amount: num(x.amount), method: x.method, reference: x.reference, periodStart: x.period_start, periodEnd: x.period_end,
+      paidAt: x.paid_at, notes: x.notes, plan: x.plan, admin: x.admin })),
+    notes: notes.map((n) => ({ id: n.id, note: n.note, at: n.created_at, admin: n.admin })),
+    tickets: tickets.map((x) => ({ id: x.id, subject: x.subject, status: x.status, priority: x.priority, updatedAt: x.updated_at })),
+    owner: owner ? { id: owner.id, username: owner.username } : null
   });
 }));
 
 /* PATCH /api/admin/businesses/:id { status: active|suspended|deactivated, reason } */
-router.patch("/businesses/:id", ah(async (req, res) => {
+router.patch("/businesses/:id", requireAdminPerm("businesses"), ah(async (req, res) => {
   const bid = id(req.params.id);
   const status = req.body?.status;
   const reason = text(req.body?.reason, 200);
@@ -131,7 +161,7 @@ router.patch("/businesses/:id", ah(async (req, res) => {
 }));
 
 /* PATCH /api/admin/businesses/:id/trial { days } — extend the business's trial by 1–90 days (from its end, or from today if it ended) */
-router.patch("/businesses/:id/trial", ah(async (req, res) => {
+router.patch("/businesses/:id/trial", requireAdminPerm("businesses"), ah(async (req, res) => {
   const bid = id(req.params.id);
   const days = Number(req.body?.days);
   if (!Number.isInteger(days) || days < 1 || days > 90) throw badRequest({ days: "invalidAmount" });
@@ -139,6 +169,64 @@ router.patch("/businesses/:id/trial", ah(async (req, res) => {
   if (!t) return res.status(404).json({ code: "notFound" });
   await pool.query("UPDATE trial_records SET end_date = DATE_ADD(GREATEST(end_date, UTC_DATE()), INTERVAL ? DAY), status = 'active' WHERE id = ?", [days, t.id]);
   await pool.query("INSERT INTO audit_logs (platform_admin_id, business_id, action, meta, ip) VALUES (?, ?, 'admin.trial_extended', ?, ?)", [req.admin.id, bid, JSON.stringify({ days }), req.ip]);
+  res.json({ code: "saved" });
+}));
+
+const TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "jewelry", "fabric", "restaurant", "cafe", "fast_food", "bakery", "juice_bar", "food_truck", "takeaway", "food_other"];
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const tempPassword = () => `${crypto.randomBytes(6).toString("base64url").replace(/[-_]/g, "x")}${crypto.randomInt(10, 99)}`;
+
+/* PUT /api/admin/businesses/:id { name, ownerName, phone, email, address, type } — correct a business's details */
+router.put("/businesses/:id", requireAdminPerm("businesses"), ah(async (req, res) => {
+  const bid = id(req.params.id);
+  const b = req.body || {};
+  const d = { name: text(b.name, 150), owner: text(b.ownerName, 150), phone: text(b.phone, 30), email: optText(b.email, 190), address: optText(b.address, 255), type: text(b.type, 60) };
+  const e = {};
+  if (!d.name) e.name = "required";
+  if (!d.owner) e.ownerName = "required";
+  if (!d.phone) e.phone = "required";
+  if (d.email && !EMAIL.test(d.email)) e.email = "invalidEmail";
+  if (!TYPES.includes(d.type)) e.type = "required";
+  if (Object.keys(e).length) throw badRequest(e);
+  const [[old]] = await pool.query("SELECT name, owner_name, phone, email, address, business_type FROM businesses WHERE id = ?", [bid || 0]);
+  if (!old) return res.status(404).json({ code: "notFound" });
+  await pool.query("UPDATE businesses SET name = ?, owner_name = ?, phone = ?, email = ?, address = ?, business_type = ? WHERE id = ?", [d.name, d.owner, d.phone, d.email, d.address, d.type, bid]);
+  await adminAudit(pool, { adminId: req.admin.id, businessId: bid, action: "admin.business_edited", meta: { before: old, after: d }, ip: req.ip });
+  res.json({ code: "saved" });
+}));
+
+/* POST /api/admin/businesses/:id/reset-owner-password — a new password for the owner, shown once (they should change it) */
+router.post("/businesses/:id/reset-owner-password", requireAdminPerm("businesses"), ah(async (req, res) => {
+  const bid = id(req.params.id);
+  const [[o]] = await pool.query("SELECT u.id, u.username FROM users u JOIN business_user_roles r ON r.user_id = u.id AND r.role = 'owner' WHERE u.business_id = ? LIMIT 1", [bid || 0]);
+  if (!o) return res.status(404).json({ code: "notFound" });
+  const password = tempPassword();
+  await pool.query("UPDATE users SET password_hash = ? WHERE id = ?", [await bcrypt.hash(password, 12), o.id]);
+  await adminAudit(pool, { adminId: req.admin.id, businessId: bid, action: "admin.owner_password_reset", entity: "user", entityId: o.id, ip: req.ip });
+  res.json({ username: o.username, password });
+}));
+
+/* POST /api/admin/businesses/:id/sign-out-all — every user of the business is signed out now */
+router.post("/businesses/:id/sign-out-all", requireAdminPerm("security"), ah(async (req, res) => {
+  const bid = id(req.params.id);
+  const [r] = await pool.query("UPDATE businesses SET sessions_valid_after = UTC_TIMESTAMP() WHERE id = ?", [bid || 0]);
+  if (!r.affectedRows) return res.status(404).json({ code: "notFound" });
+  await adminAudit(pool, { adminId: req.admin.id, businessId: bid, action: "admin.signed_out_all", ip: req.ip });
+  res.json({ code: "saved" });
+}));
+
+/* notes about a business, seen only by super admins */
+router.post("/businesses/:id/notes", requireAdminPerm("notes"), ah(async (req, res) => {
+  const bid = id(req.params.id);
+  const note = text(req.body?.note, 2000);
+  if (!note) throw badRequest({ note: "required" });
+  const [[b]] = await pool.query("SELECT id FROM businesses WHERE id = ?", [bid || 0]);
+  if (!b) return res.status(404).json({ code: "notFound" });
+  await pool.query("INSERT INTO business_notes (business_id, admin_id, note) VALUES (?, ?, ?)", [bid, req.admin.id, note]);
+  res.status(201).json({ code: "saved" });
+}));
+router.delete("/businesses/:id/notes/:noteId", requireAdminPerm("notes"), ah(async (req, res) => {
+  await pool.query("DELETE FROM business_notes WHERE id = ? AND business_id = ?", [id(req.params.noteId) || 0, id(req.params.id) || 0]);
   res.json({ code: "saved" });
 }));
 
@@ -182,8 +270,72 @@ router.get("/users", ah(async (req, res) => {
 
 /* GET /api/admin/admins — the platform's super admins */
 router.get("/admins", ah(async (req, res) => {
-  const [rows] = await pool.query("SELECT id, username, email, status, last_login_at, created_at FROM platform_admins ORDER BY id");
-  res.json({ admins: rows.map((a) => ({ id: a.id, username: a.username, email: a.email, status: a.status, lastLoginAt: a.last_login_at, createdAt: a.created_at, me: a.id === req.admin.id })) });
+  const [rows] = await pool.query("SELECT id, username, email, role, status, totp_enabled, last_login_at, created_at FROM platform_admins ORDER BY id");
+  res.json({ roles: Object.keys(ADMIN_ROLES), admins: rows.map((a) => ({ id: a.id, username: a.username, email: a.email, role: a.role, status: a.status, twoFactor: Boolean(a.totp_enabled),
+    lastLoginAt: a.last_login_at, createdAt: a.created_at, me: a.id === req.admin.id })) });
+}));
+
+/* owners manage super admins: add one (a password is made and shown once), change role / status, reset a password */
+const activeOwners = async () => Number((await pool.query("SELECT COUNT(*) n FROM platform_admins WHERE role = 'owner' AND status = 'active'"))[0][0].n);
+router.post("/admins", requireAdminPerm("admins"), ah(async (req, res) => {
+  const username = text(req.body?.username, 60).toLowerCase();
+  const email = optText(req.body?.email, 190);
+  const role = req.body?.role;
+  const e = {};
+  if (!/^[a-z0-9._-]{3,60}$/.test(username)) e.username = "invalidUsername";
+  if (email && !EMAIL.test(email)) e.email = "invalidEmail";
+  if (!ADMIN_ROLES[role]) e.role = "required";
+  if (Object.keys(e).length) throw badRequest(e);
+  const [[taken]] = await pool.query("SELECT id FROM platform_admins WHERE username = ? OR (email IS NOT NULL AND email = ?)", [username, email || ""]);
+  if (taken) throw badRequest({ username: "usernameTaken" });
+  const password = tempPassword();
+  const [r] = await pool.query("INSERT INTO platform_admins (username, email, role, password_hash) VALUES (?, ?, ?, ?)", [username, email, role, await bcrypt.hash(password, 12)]);
+  await adminAudit(pool, { adminId: req.admin.id, action: "admin.admin_created", entity: "platform_admin", entityId: r.insertId, meta: { username, role }, ip: req.ip });
+  res.status(201).json({ id: r.insertId, username, password });
+}));
+router.patch("/admins/:id", requireAdminPerm("admins"), ah(async (req, res) => {
+  const aid = id(req.params.id);
+  const [[a]] = await pool.query("SELECT id, role, status FROM platform_admins WHERE id = ?", [aid || 0]);
+  if (!a) return res.status(404).json({ code: "notFound" });
+  const role = req.body?.role === undefined ? a.role : req.body.role;
+  const status = req.body?.status === undefined ? a.status : req.body.status;
+  if (!ADMIN_ROLES[role] || !["active", "disabled"].includes(status)) throw badRequest({ role: "required" });
+  if (a.id === req.admin.id && (role !== a.role || status !== "active")) throw conflict("notYourself");   // no locking yourself out
+  if (a.role === "owner" && a.status === "active" && (role !== "owner" || status !== "active") && (await activeOwners()) <= 1) throw conflict("lastOwner");
+  await pool.query("UPDATE platform_admins SET role = ?, status = ? WHERE id = ?", [role, status, a.id]);
+  await adminAudit(pool, { adminId: req.admin.id, action: "admin.admin_changed", entity: "platform_admin", entityId: a.id, meta: { role, status }, ip: req.ip });
+  res.json({ code: "saved" });
+}));
+router.post("/admins/:id/reset-password", requireAdminPerm("admins"), ah(async (req, res) => {
+  const aid = id(req.params.id);
+  const [[a]] = await pool.query("SELECT id, username FROM platform_admins WHERE id = ?", [aid || 0]);
+  if (!a) return res.status(404).json({ code: "notFound" });
+  const password = tempPassword();
+  // a reset also turns two-step sign-in off, so a lost phone can be recovered
+  await pool.query("UPDATE platform_admins SET password_hash = ?, totp_enabled = 0, totp_secret = NULL WHERE id = ?", [await bcrypt.hash(password, 12), a.id]);
+  await adminAudit(pool, { adminId: req.admin.id, action: "admin.admin_password_reset", entity: "platform_admin", entityId: a.id, ip: req.ip });
+  res.json({ username: a.username, password });
+}));
+
+/* my two-step sign-in: setup gives a new secret (QR / key for the authenticator app), enable checks a code from it, disable needs the password */
+router.post("/me/2fa/setup", ah(async (req, res) => {
+  const secret = newTotpSecret();
+  await pool.query("UPDATE platform_admins SET totp_secret = ?, totp_enabled = 0 WHERE id = ?", [secret, req.admin.id]);
+  res.json({ secret, url: totpUrl(secret, req.admin.username) });
+}));
+router.post("/me/2fa/enable", limiter, ah(async (req, res) => {
+  const [[a]] = await pool.query("SELECT totp_secret FROM platform_admins WHERE id = ?", [req.admin.id]);
+  if (!a?.totp_secret || !totpValid(a.totp_secret, req.body?.code)) throw badRequest({ code: "twoFactorWrong" });
+  await pool.query("UPDATE platform_admins SET totp_enabled = 1 WHERE id = ?", [req.admin.id]);
+  await adminAudit(pool, { adminId: req.admin.id, action: "admin.2fa_enabled", ip: req.ip });
+  res.json({ code: "saved" });
+}));
+router.post("/me/2fa/disable", limiter, ah(async (req, res) => {
+  const [[a]] = await pool.query("SELECT password_hash FROM platform_admins WHERE id = ?", [req.admin.id]);
+  if (!(await bcrypt.compare(String(req.body?.password || ""), a.password_hash))) throw badRequest({ password: "wrongPassword" });
+  await pool.query("UPDATE platform_admins SET totp_enabled = 0, totp_secret = NULL WHERE id = ?", [req.admin.id]);
+  await adminAudit(pool, { adminId: req.admin.id, action: "admin.2fa_disabled", ip: req.ip });
+  res.json({ code: "saved" });
 }));
 
 /* POST /api/admin/me/password { current, next } — the signed-in super admin changes their own password */
@@ -207,6 +359,8 @@ router.get("/audit", ah(async (req, res) => {
       ${where} ORDER BY a.id DESC LIMIT 300`);
   res.json({ logs: rows.map((a) => ({ action: a.action, entity: a.entity, entityId: a.entity_id, ip: a.ip, at: a.created_at, business: a.business, user: a.user_name || (a.admin_name ? `admin:${a.admin_name}` : null) })) });
 }));
+
+platformRoutes(router);   // billing, support, announcements, reports, security, settings, export (routes/adminPlatform.js)
 
 export default router;
 export { audit };

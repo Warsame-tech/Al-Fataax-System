@@ -14,6 +14,7 @@ import { conflict } from "../lib/http.js";
 import { currentRates, weightPrice, netWeight } from "../lib/jewelry.js";
 import { ITEM_KINDS, viaRecipe, optionsOf } from "../lib/food.js";
 import { PRICE_EDIT, withoutCost } from "../lib/pricing.js";
+import { checkPlanLimit } from "../lib/platform.js";
 
 const router = Router();
 router.use(requireAuth);
@@ -483,6 +484,7 @@ function changesOf(old, d) {
 
 /* POST /api/products (multipart; barcodes = JSON [{ barcode, label, qty }]; variantOf = product this is a variant of) */
 router.post("/", requirePerm("products.edit"), imageUpload.single("image"), ah(async (req, res) => {
+  await checkPlanLimit(pool, req.business.id, "products");   // the business's plan may limit its products (lib/platform.js)
   const d = readProduct(req.body || {}, { creating: true });
   if (req.business.profile.batches) d.trackBatches = true;     // e.g. cosmetics: every product tracks batches & expiry
   rollRules(d, req.business.profile);
@@ -591,6 +593,7 @@ router.post("/:id/variants", requirePerm("products.edit"), ah(async (req, res) =
   const bid = req.business.id;
   const list = Array.isArray(req.body?.variants) ? req.body.variants.slice(0, 200) : [];
   if (!list.length) throw badRequest({ variants: "required" });
+  await checkPlanLimit(pool, bid, "products", list.length);
   const result = await withTx(async (conn) => {
     const parent = await ensureOwned(conn, "products", id(req.params.id), bid, true);
     const group = parent.variant_of || parent.id;
@@ -713,6 +716,7 @@ router.post("/import", requirePerm("products.edit"), ah(async (req, res) => {
   const rows = Array.isArray(req.body?.rows) ? req.body.rows.slice(0, 2000) : [];
   if (!rows.length) throw badRequest({ rows: "required" });
   const bid = req.business.id;
+  await checkPlanLimit(pool, bid, "products", rows.length);
   const errors = [];
   rows.forEach((r, i) => { try { readProduct(r, { creating: true }); } catch (e) { errors.push({ row: i + 2, errors: e.errors }); } });
   if (errors.length) return res.status(400).json({ code: "importErrors", rows: errors.slice(0, 50) });
@@ -840,6 +844,7 @@ router.post("/bulk/check", requirePerm("products.edit"), ah(async (req, res) => 
 router.post("/bulk", requirePerm("products.edit"), ah(async (req, res) => {
   const rows = readBulkRows(req);
   const bid = req.business.id;
+  await checkPlanLimit(pool, bid, "products", rows.length);
   const out = await withTx(async (conn) => {
     const results = await checkBulk(conn, req, rows);   // checked again inside the transaction (codes may have been taken meanwhile)
     const cache = { category: new Map(), brand: new Map() };

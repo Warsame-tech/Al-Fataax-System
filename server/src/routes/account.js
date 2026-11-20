@@ -1,6 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { pool } from "../config/db.js";
+import { checkPlanLimit } from "../lib/platform.js";
 import { requireAuth, audit } from "../middleware/auth.js";
 import { requirePerm, can } from "../lib/permissions.js";
 import { ah, id, text, optText, withTx, ensureOwned, badRequest, conflict, forbidden, num } from "../lib/http.js";
@@ -38,6 +39,7 @@ staffRouter.get("/", ah(async (req, res) => {
 }));
 
 staffRouter.post("/", ah(async (req, res) => {
+  await checkPlanLimit(pool, req.business.id, "users");   // the business's plan may limit its users (lib/platform.js)
   const b = req.body || {};
   const d = { fullName: text(b.fullName, 150), username: text(b.username, 30).toLowerCase(), email: optText(b.email, 190), phone: optText(b.phone, 30), roleId: id(b.roleId), password: b.password };
   const e = {};

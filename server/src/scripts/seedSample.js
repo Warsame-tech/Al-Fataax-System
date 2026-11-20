@@ -53,7 +53,7 @@ async function main() {
   // Super admin (platform owner)
   const [[admin]] = await pool.query("SELECT id FROM platform_admins WHERE username = ?", [SAMPLE.admin.username]);
   if (!admin) {
-    await pool.query("INSERT INTO platform_admins (username, email, password_hash) VALUES (?, ?, ?)",
+    await pool.query("INSERT INTO platform_admins (username, email, role, password_hash) VALUES (?, ?, 'owner', ?)",
       [SAMPLE.admin.username, SAMPLE.admin.email, await bcrypt.hash(SAMPLE.admin.password, 12)]);
     console.log("Created super admin.");
   }

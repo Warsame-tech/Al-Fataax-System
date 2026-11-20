@@ -41,6 +41,8 @@ import { staffRouter, settingsRouter, profileRouter, notificationsRouter, auditR
 import { HttpError } from "./lib/http.js";
 import { filesRouter } from "./lib/files.js";
 import searchRoutes from "./routes/search.js";
+import supportRoutes from "./routes/support.js";
+import { blockIpMiddleware, startBillingJob } from "./lib/platform.js";
 
 const app = express();
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -67,6 +69,9 @@ app.use("/api", (req, res, next) => {
   if (req.get("X-Requested-With") !== "faatix") return res.status(403).json({ code: "forbidden" });
   next();
 });
+
+// Blocked IPs (Super admin → Security) get nothing from the API, except the super admin area itself.
+app.use("/api", blockIpMiddleware());
 
 // Uploaded logos (validated on upload; served as static files only).
 app.use("/uploads", express.static(path.resolve(here, "../uploads"), { fallthrough: false, index: false }));
@@ -110,6 +115,7 @@ app.use("/api/profile", profileRouter);
 app.use("/api/notifications", notificationsRouter);
 app.use("/api/audit", auditRouter);
 app.use("/api/search", searchRoutes);
+app.use("/api/support", supportRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", (req, res) => res.status(404).json({ code: "notFound" }));
 
@@ -133,6 +139,7 @@ app.listen(env.port, async () => {
   console.log(`Faatix API running on http://localhost:${env.port}`);
   const db = await checkDatabase();
   if (db.ok) await migrate().catch((e) => console.error("Database upgrade failed:", e.code || e.message));
+  if (db.ok) startBillingJob();   // trials / unpaid subscriptions, every hour (lib/platform.js)
   console.log(db.ok
     ? `MySQL connected (database "${env.db.database}")`
     : `MySQL NOT connected: ${db.error} — start MySQL and run "npm run db:init" in /server`);

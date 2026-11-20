@@ -28,7 +28,7 @@ try {
     await pool.query("INSERT INTO audit_logs (platform_admin_id, action) VALUES (?, 'admin.passwordReset')", [a.id]);
     console.log(`Password changed for super admin "${username}".`);
   } else {
-    const [r] = await pool.query("INSERT INTO platform_admins (username, email, password_hash) VALUES (?, ?, ?)", [username, `${username}@faatix.local`, hash]);
+    const [r] = await pool.query("INSERT INTO platform_admins (username, email, role, password_hash) VALUES (?, ?, 'owner', ?)", [username, `${username}@faatix.local`, hash]);
     await pool.query("INSERT INTO audit_logs (platform_admin_id, action) VALUES (?, 'admin.created')", [r.insertId]);
     console.log(`Super admin "${username}" created.`);
   }

@@ -4,6 +4,7 @@ import { requireAuth, audit } from "../middleware/auth.js";
 import { can, requirePerm } from "../lib/permissions.js";
 import { ah, id, text, optText, withTx, ensureOwned, badRequest, conflict, num, round2, range } from "../lib/http.js";
 import { branchesOf, forgetBranches } from "../lib/branches.js";
+import { checkPlanLimit } from "../lib/platform.js";
 
 /*
  * Branches (lib/branches.js): the owner adds branches, each selling from its own stock location; staff are assigned to a
@@ -36,6 +37,8 @@ const nameTaken = (err) => (err.code === "ER_DUP_ENTRY" ? badRequest({ name: "br
 /** POST { name, address?, phone?, sellLocationId? } — without a selling location, a shop location of the same name is made */
 router.post("/", requirePerm("settings.edit"), ah(async (req, res) => {
   const d = readBranch(req.body || {});
+  await branchesOf(pool, req.business.id);   // the main branch exists first, so it counts
+  await checkPlanLimit(pool, req.business.id, "branches");   // the business's plan may limit its branches (lib/platform.js)
   try {
     const r = await withTx(async (conn) => {
       await branchesOf(conn, req.business.id);   // the main branch exists first

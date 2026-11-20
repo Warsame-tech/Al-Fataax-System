@@ -930,6 +930,50 @@ COLUMNS.push(
   { table: "business_settings", column: "shortcuts", ddl: "ALTER TABLE business_settings ADD COLUMN shortcuts TEXT NULL" }
 );
 
+// platform administration: plans, subscriptions and their payments, notes on businesses, website messages, support tickets,
+// announcements, blocked IPs, platform settings (lib/platform.js, routes/admin.js, routes/platform.js)
+const T = (table, cols) => ({ table, ddl: `CREATE TABLE IF NOT EXISTS ${table} (${cols}) ENGINE=InnoDB` });
+TABLES.push(
+  T("plans", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(80) NOT NULL, code VARCHAR(40) NOT NULL, description VARCHAR(255) NULL,
+    price_monthly DECIMAL(14,4) NOT NULL DEFAULT 0, price_yearly DECIMAL(14,4) NOT NULL DEFAULT 0,
+    max_users INT UNSIGNED NULL, max_branches INT UNSIGNED NULL, max_products INT UNSIGNED NULL, features TEXT NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1, sort_order INT NOT NULL DEFAULT 0, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_plan_code (code)`),
+  T("subscriptions", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, business_id INT UNSIGNED NOT NULL, plan_id INT UNSIGNED NOT NULL,
+    cycle VARCHAR(10) NOT NULL DEFAULT 'monthly', status VARCHAR(12) NOT NULL DEFAULT 'active', current_period_start DATE NOT NULL, current_period_end DATE NOT NULL,
+    cancel_reason VARCHAR(255) NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_sub_business (business_id), INDEX idx_sub_status (status, current_period_end),
+    CONSTRAINT fk_sub_business FOREIGN KEY (business_id) REFERENCES businesses(id), CONSTRAINT fk_sub_plan FOREIGN KEY (plan_id) REFERENCES plans(id)`),
+  T("subscription_payments", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, business_id INT UNSIGNED NOT NULL, plan_id INT UNSIGNED NULL, amount DECIMAL(14,4) NOT NULL,
+    method VARCHAR(30) NOT NULL, reference VARCHAR(80) NULL, period_start DATE NULL, period_end DATE NULL, notes VARCHAR(255) NULL,
+    paid_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, admin_id INT UNSIGNED NULL, INDEX idx_subpay_business (business_id, paid_at), INDEX idx_subpay_date (paid_at),
+    CONSTRAINT fk_subpay_business FOREIGN KEY (business_id) REFERENCES businesses(id)`),
+  T("business_notes", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, business_id INT UNSIGNED NOT NULL, admin_id INT UNSIGNED NULL, note TEXT NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_bnotes (business_id, created_at), CONSTRAINT fk_bnotes_business FOREIGN KEY (business_id) REFERENCES businesses(id)`),
+  T("contact_messages", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(120) NOT NULL, email VARCHAR(190) NULL, phone VARCHAR(40) NULL, message TEXT NOT NULL,
+    status VARCHAR(10) NOT NULL DEFAULT 'new', reply_note TEXT NULL, handled_by INT UNSIGNED NULL, handled_at DATETIME NULL, ip VARCHAR(64) NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_cmsg_status (status, created_at)`),
+  T("support_tickets", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, business_id INT UNSIGNED NOT NULL, user_id INT UNSIGNED NULL, subject VARCHAR(160) NOT NULL,
+    status VARCHAR(10) NOT NULL DEFAULT 'open', priority VARCHAR(10) NOT NULL DEFAULT 'normal', last_reply_by VARCHAR(10) NOT NULL DEFAULT 'business',
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_ticket_business (business_id, updated_at), INDEX idx_ticket_status (status, updated_at), CONSTRAINT fk_ticket_business FOREIGN KEY (business_id) REFERENCES businesses(id)`),
+  T("support_messages", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, ticket_id INT UNSIGNED NOT NULL, business_id INT UNSIGNED NOT NULL, author VARCHAR(10) NOT NULL,
+    user_id INT UNSIGNED NULL, admin_id INT UNSIGNED NULL, body TEXT NOT NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_smsg_ticket (ticket_id, id), CONSTRAINT fk_smsg_ticket FOREIGN KEY (ticket_id) REFERENCES support_tickets(id)`),
+  T("announcements", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(160) NOT NULL, body TEXT NOT NULL, level VARCHAR(10) NOT NULL DEFAULT 'info',
+    audience VARCHAR(10) NOT NULL DEFAULT 'all', business_type VARCHAR(60) NULL, starts_at DATETIME NOT NULL, ends_at DATETIME NULL, is_active TINYINT(1) NOT NULL DEFAULT 1,
+    admin_id INT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_ann_time (is_active, starts_at)`),
+  T("blocked_ips", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, ip VARCHAR(64) NOT NULL, reason VARCHAR(255) NULL, admin_id INT UNSIGNED NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NULL, UNIQUE KEY uq_blocked_ip (ip)`),
+  T("platform_settings", `name VARCHAR(60) NOT NULL PRIMARY KEY, value TEXT NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`)
+);
+COLUMNS.push(
+  // super admin role and two-step sign-in (authenticator app)
+  { table: "platform_admins", column: "role", ddl: "ALTER TABLE platform_admins ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'admin' AFTER email, ADD COLUMN totp_secret VARCHAR(64) NULL AFTER role, ADD COLUMN totp_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER totp_secret" },
+  // "sign everyone out": sessions of this business started before it stop working
+  { table: "businesses", column: "sessions_valid_after", ddl: "ALTER TABLE businesses ADD COLUMN sessions_valid_after DATETIME NULL" }
+);
+
 const INDEXES = [
   { table: "products", name: "idx_products_category", ddl: "ALTER TABLE products ADD INDEX idx_products_category (business_id, category_id)" },
   { table: "products", name: "idx_products_brand", ddl: "ALTER TABLE products ADD INDEX idx_products_brand (business_id, brand_id)" },

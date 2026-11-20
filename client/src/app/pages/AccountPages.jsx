@@ -589,12 +589,33 @@ export function Profile() {
 /* ===================== Subscription ===================== */
 export function Subscription() {
   const { t, lang } = useLanguage();
-  const { trial } = useAuth();
+  const { trial, subscription: plan } = useAuth();
   const left = daysLeft(trial?.end_date);
+  const paidLeft = daysLeft(plan?.periodEnd);
+  const lim = (v) => (v === null || v === undefined ? t("ui.billing.unlimited") : v);
   return (
     <div className="page">
       <PageHeader icon="credit-card" title={t("ui.subscription.title")} />
-      <section className="panel-card sub-card">
+      {/* the plan Faatix gave the business (Super admin → Subscriptions) */}
+      {plan && (
+        <section className="panel-card sub-card sub-card--plan">
+          <span className="sub-card__icon"><Icon name="credit-card" /></span>
+          <div>
+            <h2>{plan.plan} <small className="muted">· {t(`ui.billing.cycles.${plan.cycle}`)}</small></h2>
+            <dl className="sub-card__facts">
+              <div><dt>{t("ui.subscription.status")}</dt><dd><span className={`badge-status badge-status--${plan.status === "active" ? "paid" : "overdue"}`}>{t(`ui.billing.statuses.${plan.status}`)}</span></dd></div>
+              <div><dt>{t("ui.billing.paidUntil")}</dt><dd>{date(plan.periodEnd, lang)}</dd></div>
+              {paidLeft !== null && paidLeft >= 0 && <div><dt /><dd><strong>{fill(t("ui.subscription.daysLeft"), { days: paidLeft })}</strong></dd></div>}
+              <div><dt>{t("ui.billing.limits.users")}</dt><dd>{lim(plan.maxUsers)}</dd></div>
+              <div><dt>{t("ui.billing.limits.branches")}</dt><dd>{lim(plan.maxBranches)}</dd></div>
+              <div><dt>{t("ui.billing.limits.products")}</dt><dd>{lim(plan.maxProducts)}</dd></div>
+            </dl>
+            {plan.features?.length > 0 && <ul className="plan-card__features">{plan.features.map((f) => <li key={f}><Icon name="check" /> {f}</li>)}</ul>}
+            <p className="muted">{t("ui.subscription.planNote")}</p>
+          </div>
+        </section>
+      )}
+      {!plan && <section className="panel-card sub-card">
         <span className="sub-card__icon"><Icon name="clock" /></span>
         <div>
           <h2>{t("ui.subscription.trial")}</h2>
@@ -609,7 +630,7 @@ export function Subscription() {
           <p className="sub-card__plan">{t("ui.subscription.plan")}</p>
           <p className="muted">{t("ui.subscription.note")}</p>
         </div>
-      </section>
+      </section>}
     </div>
   );
 }

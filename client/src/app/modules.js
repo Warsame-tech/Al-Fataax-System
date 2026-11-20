@@ -33,6 +33,7 @@ export const MODULES = [
   { id: "business",     icon: "briefcase",   color: "#2c3494", perm: null },
   { id: "profile",      icon: "user",        color: "#f2712f", perm: null },
   { id: "subscription", icon: "credit-card", color: "#7c3aed", perm: null },
+  { id: "support",      icon: "message",     color: "#2373f4", perm: null },
   { id: "settings",     icon: "settings",    color: "#475569", perm: null },
   { id: "audit",        icon: "activity",    color: "#0f9488", perm: "audit.view" }
 ];

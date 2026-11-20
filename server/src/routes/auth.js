@@ -2,6 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
 import { pool } from "../config/db.js";
+import { platformSettings, planOf } from "../lib/platform.js";
 import { env } from "../config/env.js";
 import { setSessionCookie, clearSessionCookie, requireAuth, audit } from "../middleware/auth.js";
 import { imageUpload, imageType, saveImage } from "../lib/files.js";
@@ -45,6 +46,9 @@ router.post("/register", imageUpload.single("logo"), async (req, res, next) => {
   const file = req.file;
   const { data, errors } = validateRegistration(req.body || {});
   if (file && !imageType(file.buffer)) errors.logo = "invalidLogo";
+  // business types the super admin closed for new sign-ups (Settings), and the trial length set there
+  const platform = await platformSettings();
+  if (data.businessType && platform.disabledTypes.includes(data.businessType)) errors.businessType = "typeClosed";
   if (Object.keys(errors).length) return res.status(400).json({ code: "validation", errors });
 
   const conn = await pool.getConnection();
@@ -76,7 +80,7 @@ router.post("/register", imageUpload.single("logo"), async (req, res, next) => {
     await conn.query("INSERT INTO cash_accounts (business_id, name, is_default) VALUES (?, 'Main cash', 1), (?, 'Mobile money', 0)", [businessId, businessId]);
     await conn.query(
       "INSERT INTO trial_records (business_id, start_date, end_date) VALUES (?, UTC_DATE(), DATE_ADD(UTC_DATE(), INTERVAL ? DAY))",
-      [businessId, env.trialDays]
+      [businessId, Number(platform.trialDays) || 0]
     );
     await audit(conn, { businessId, userId, action: "business.registered", entity: "business", entityId: businessId, ip: req.ip });
     await conn.commit();
@@ -145,7 +149,10 @@ router.get("/me", requireAuth, async (req, res, next) => {
       "SELECT start_date, end_date, status FROM trial_records WHERE business_id = ? ORDER BY id DESC LIMIT 1",
       [req.business.id]
     );
+    const plan = await planOf(pool, req.business.id);
     res.json({ user: req.user, business: req.business, trial: trial[0] || null, permissions: req.user.permissions,
+      subscription: plan ? { plan: plan.name, cycle: plan.cycle, status: plan.status, periodEnd: plan.current_period_end, maxUsers: plan.max_users, maxBranches: plan.max_branches, maxProducts: plan.max_products,
+        features: (() => { try { return JSON.parse(plan.features || "[]"); } catch { return []; } })() } : null,
       branches: { list: req.branch.list, current: req.branch.filterId, fixed: req.branch.fixed } });
   } catch (err) {
     next(err);

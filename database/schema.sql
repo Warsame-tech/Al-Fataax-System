@@ -24,6 +24,9 @@ CREATE TABLE IF NOT EXISTS platform_admins (
   id            INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   username      VARCHAR(60)  NOT NULL UNIQUE,
   email         VARCHAR(190) NULL UNIQUE,
+  role          VARCHAR(20)  NOT NULL DEFAULT 'admin',   -- owner | admin | support | billing (server/src/lib/platform.js)
+  totp_secret   VARCHAR(64)  NULL,                   -- two-step sign-in (authenticator app)
+  totp_enabled  TINYINT(1)   NOT NULL DEFAULT 0,
   password_hash VARCHAR(255) NOT NULL,
   status        ENUM('active','disabled') NOT NULL DEFAULT 'active',
   last_login_at DATETIME NULL,
@@ -44,6 +47,7 @@ CREATE TABLE IF NOT EXISTS businesses (
   logo_path     VARCHAR(255) NULL,
   status        ENUM('active','suspended','deactivated') NOT NULL DEFAULT 'active',
   terms_accepted_at DATETIME NOT NULL,
+  sessions_valid_after DATETIME NULL,              -- a super admin signed everyone out: older sessions stop working
   created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX idx_businesses_status (status),
   INDEX idx_businesses_created (created_at)

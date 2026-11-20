@@ -166,7 +166,10 @@ const translations = {
     contact: {
       eyebrow: "Get in touch",
       phone: "Phone calls",
-      email: "Emails"
+      email: "Emails",
+      form: { title: "Send us a message", sub: "Leave your number or email — the Faatix team will get back to you.", name: "Your name", phone: "Phone number", email: "Email (optional)",
+        message: "How can we help?", send: "Send message", sending: "Sending…", sent: "Thank you! Your message was sent — we will contact you soon.",
+        needContact: "Please give a phone number or an email so we can reply.", needAll: "Please write your name and your message.", tooMany: "Too many messages — please try again later.", failed: "The message could not be sent. Please call us instead." }
     },
     register: {
       title: "Create your business account",
@@ -325,7 +328,7 @@ const translations = {
         profile: "My profile",
         business: "Business info",
         staff: "Staff & roles",
-        subscription: "Subscription",
+        subscription: "Subscription", support: "Help & support",
         settings: "Settings",
         audit: "Activity log",
         devices: "Devices (serial / IMEI)",
@@ -598,7 +601,10 @@ const translations = {
     contact: {
       eyebrow: "Nala soo xiriir",
       phone: "Wicitaanada",
-      email: "Iimaylada"
+      email: "Iimaylada",
+      form: { title: "Noo soo dir fariin", sub: "Ka tag lambarkaaga ama iimaylkaaga — kooxda Faatix ayaa kuu soo jawaabi doonta.", name: "Magacaaga", phone: "Lambarka taleefanka", email: "Iimayl (ikhtiyaari)",
+        message: "Sideen kuu caawin karnaa?", send: "Dir fariinta", sending: "Waa la dirayaa…", sent: "Mahadsanid! Fariintaada waa la diray — dhawaan ayaan kula soo xiriiri doonnaa.",
+        needContact: "Fadlan sii lambar taleefan ama iimayl si aan kuugu jawaabno.", needAll: "Fadlan qor magacaaga iyo fariintaada.", tooMany: "Fariimo badan — fadlan mar dambe isku day.", failed: "Fariinta lama diri karin. Fadlan nala soo wac." }
     },
     register: {
       title: "Samee akoonka ganacsigaaga",
@@ -757,7 +763,7 @@ const translations = {
         profile: "Xogta qaaska ah",
         business: "Xogta ganacsiga",
         staff: "Shaqaalaha & doorarka",
-        subscription: "Xirmada",
+        subscription: "Xirmada", support: "Caawimaad & taageero",
         settings: "Dejinta",
         audit: "Diiwaanka dhaqdhaqaaqa",
         devices: "Qalabka (serial / IMEI)",

@@ -47,7 +47,7 @@ export async function requireAuth(req, res, next) {
       `SELECT u.id, u.full_name, u.username, u.language, u.status AS user_status,
               r.role, r.role_id, r.branch_id AS user_branch_id, ro.name AS role_name, ro.permissions AS role_permissions,
               b.id AS business_id, b.name AS business_name, b.status AS business_status,
-              b.logo_path, b.phone, b.email, b.address, b.business_type,
+              b.logo_path, b.phone, b.email, b.address, b.business_type, b.sessions_valid_after,
               s.currency, s.invoice_prefix, s.invoice_footer, s.allow_duplicate_codes, s.weight_decimals
          FROM users u
          JOIN businesses b ON b.id = u.business_id
@@ -64,6 +64,11 @@ export async function requireAuth(req, res, next) {
     }
     if (row.business_status !== "active") {
       return res.status(403).json({ code: "businessSuspended" });
+    }
+    // a super admin signed everyone out of this business: sessions started before that end now
+    if (row.sessions_valid_after && payload.iat && payload.iat * 1000 < new Date(`${String(row.sessions_valid_after).replace(" ", "T")}Z`).getTime()) {
+      clearSessionCookie(res);
+      return res.status(401).json({ code: "unauthenticated" });
     }
 
     // Owner: everything. Staff: the permissions of their business role (none if the role is missing).

@@ -8,6 +8,7 @@ import { apiRequest, fileUrl } from "../services/api.js";
 import { fill } from "./format.js";
 import { BranchSwitch } from "./Branches.jsx";
 import { ShortcutsProvider, useShortcuts, Kbd } from "./Shortcuts.jsx";
+import { AnnouncementBar } from "./pages/Support.jsx";
 import logo from "../assets/faatix-logo.png";
 
 /** Frame for the signed-in business application. */
@@ -72,6 +73,7 @@ export default function AppLayout() {
         </div>
       </header>
 
+      <AnnouncementBar />
       <main id="app-main" className="app-main">
         <Outlet />
       </main>
