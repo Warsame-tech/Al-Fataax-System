@@ -43,6 +43,10 @@ import { filesRouter } from "./lib/files.js";
 import searchRoutes from "./routes/search.js";
 import supportRoutes from "./routes/support.js";
 import { blockIpMiddleware, startBillingJob } from "./lib/platform.js";
+import { tenantContext } from "./lib/tenancy.js";
+import { migrateAllBusinessDbs, recoverJobs } from "./lib/provisioning.js";
+import { startBackupJob } from "./lib/backups.js";
+import { SESSION_COOKIE } from "./middleware/auth.js";
 
 const app = express();
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -80,6 +84,9 @@ app.use("/api", (req, res, next) => {
 
 // Blocked IPs (Super admin → Security) get nothing from the API, except the super admin area itself.
 app.use("/api", blockIpMiddleware());
+
+// Which business (and so which database) a request belongs to: session, subdomain, custom domain or X-Tenant (lib/tenancy.js)
+app.use("/api", tenantContext(SESSION_COOKIE));
 
 // Uploaded logos (validated on upload; served as static files only).
 app.use("/uploads", express.static(path.resolve(here, "../uploads"), { fallthrough: false, index: false }));
@@ -147,7 +154,12 @@ app.listen(env.port, async () => {
   console.log(`Faatix API running on http://localhost:${env.port}`);
   const db = await checkDatabase();
   if (db.ok) await migrate().catch((e) => console.error("Database upgrade failed:", e.code || e.message));
-  if (db.ok) startBillingJob();   // trials / unpaid subscriptions, every hour (lib/platform.js)
+  if (db.ok) {
+    await recoverJobs().catch(() => {});
+    await migrateAllBusinessDbs().catch((e) => console.error("Business database upgrades failed:", e.code || e.message));   // each own database to the current schema
+    startBillingJob();   // trials / unpaid subscriptions, every hour (lib/platform.js)
+    startBackupJob();    // daily backups when switched on (lib/backups.js)
+  }
   console.log(db.ok
     ? `MySQL connected (database "${env.db.database}")`
     : `MySQL NOT connected: ${db.error} — start MySQL and run "npm run db:init" in /server`);

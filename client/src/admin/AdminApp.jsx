@@ -11,6 +11,7 @@ import AdminDashboard from "./AdminDashboard.jsx";
 import { Subscriptions, Payments, Plans, GivePlan, RecordPayment } from "./AdminBilling.jsx";
 import { Tickets, Messages } from "./AdminSupport.jsx";
 import { Announcements, Reports, Security, AdminsPage, SettingsPage, ExportPage, AccountPage, ShownOnce } from "./AdminPlatform.jsx";
+import { RegisterBusiness, ProvisioningRoute, Hosting, Databases, Backups, BranchOverview, BranchLimit } from "./AdminTenancy.jsx";
 
 /*
  * Super Admin (platform owner) area — separate sign-in and session from businesses.
@@ -22,9 +23,14 @@ const MENU = [
   { id: "dashboard", icon: "grid", items: [
     { to: "/admin", label: "overview" }, { to: "/admin/health", label: "health" }] },
   { id: "businesses", icon: "briefcase", items: [
+    { to: "/admin/businesses/create", label: "register", perm: "provision" },
     { to: "/admin/businesses", label: "all" }, { to: "/admin/businesses?status=active", label: "active" },
-    { to: "/admin/businesses?status=suspended", label: "suspended" }, { to: "/admin/businesses?status=deactivated", label: "deactivated" },
-    { to: "/admin/businesses?since=30", label: "newest" }, { to: "/admin/business-types", label: "types" }] },
+    { to: "/admin/businesses?status=provisioning", label: "settingUp" }, { to: "/admin/businesses?status=suspended", label: "suspended" },
+    { to: "/admin/businesses?status=expired", label: "expired" }, { to: "/admin/businesses?status=archived", label: "archived" },
+    { to: "/admin/businesses?status=deactivated", label: "deactivated" },
+    { to: "/admin/businesses?since=30", label: "newest" }, { to: "/admin/business-types", label: "types" }, { to: "/admin/branches", label: "branches" }] },
+  { id: "infra", icon: "server", items: [
+    { to: "/admin/hosting", label: "hosting" }, { to: "/admin/databases", label: "databases", perm: "databases" }, { to: "/admin/backups", label: "backups", perm: "backups" }] },
   { id: "billing", icon: "credit-card", items: [
     { to: "/admin/subscriptions", label: "subscriptions" }, { to: "/admin/subscriptions?filter=due", label: "due" },
     { to: "/admin/subscriptions?filter=overdue", label: "overdue", badge: "overdue" }, { to: "/admin/subscriptions?filter=none", label: "noPlan" },
@@ -134,7 +140,13 @@ function AdminShell({ onSignOut }) {
             <Route index element={<AdminDashboard can={can} />} />
             <Route path="health" element={<Health />} />
             <Route path="businesses" element={<Businesses />} />
+            <Route path="businesses/create" element={can("provision") ? <RegisterBusiness /> : <Navigate to="/admin/businesses" replace />} />
+            <Route path="businesses/:id/setup" element={<ProvisioningRoute can={can} />} />
             <Route path="businesses/:id" element={<BusinessDetail can={can} />} />
+            <Route path="hosting" element={<Hosting can={can} />} />
+            <Route path="databases" element={can("databases") ? <Databases /> : <Navigate to="/admin" replace />} />
+            <Route path="backups" element={can("backups") ? <Backups /> : <Navigate to="/admin" replace />} />
+            <Route path="branches" element={<BranchOverview can={can} />} />
             <Route path="business-types" element={<BusinessTypes />} />
             <Route path="subscriptions" element={<Subscriptions can={can} />} />
             <Route path="payments" element={<Payments />} />
@@ -232,8 +244,11 @@ function Health() {
 }
 
 /* Businesses: the sidebar's sub-menus set the filter in the address (status / since / type); the list follows it */
+const STATUSES = ["pending", "provisioning", "active", "suspended", "expired", "archived", "deactivated"];
 function Businesses() {
   const { t, lang } = useLanguage();
+  const me = useApi("/api/admin/me");
+  const canRegister = me.data?.admin?.permissions?.includes("provision");
   const [params, setParams] = useSearchParams();
   const [q, setQ] = useState("");
   const status = params.get("status") || "";
@@ -241,7 +256,7 @@ function Businesses() {
   const type = params.get("type") || "";
   const list = useApi(`/api/admin/businesses?${new URLSearchParams({ q, status, since, type })}`);
   const rows = list.data?.businesses || [];
-  const title = status ? t(`ui.admin.menu.${status}`) : since ? t("ui.admin.menu.newest") : type ? `${t("ui.admin.businesses")} · ${t(`register.types.${type}`)}` : t("ui.admin.menu.all");
+  const title = status ? (status === "provisioning" ? t("ui.admin.menu.settingUp") : t(`ui.status.${status}`)) : since ? t("ui.admin.menu.newest") : type ? `${t("ui.admin.businesses")} · ${t(`register.types.${type}`)}` : t("ui.admin.menu.all");
   return (
     <div className="page">
       <h1 className="admin-title">{title}</h1>
@@ -249,8 +264,9 @@ function Businesses() {
         <SearchBox value={q} onChange={setQ} />
         <select className="input input--auto" value={status} onChange={(e) => setParams(e.target.value ? { status: e.target.value } : {})}>
           <option value="">{t("ui.common.all")}</option>
-          {["active", "suspended", "deactivated"].map((s) => <option key={s} value={s}>{t(`ui.status.${s}`)}</option>)}
+          {STATUSES.map((s) => <option key={s} value={s}>{t(`ui.status.${s}`)}</option>)}
         </select>
+        {canRegister && <Link className="btn btn--primary" to="/admin/businesses/create"><Icon name="plus" /><span>{t("ui.admin.menu.register")}</span></Link>}
       </div>
       {list.loading && !list.data ? <Loading /> : rows.length === 0 ? <EmptyState text={t("ui.common.noResults")} /> : (
         <div className="table-wrap"><table className="table">
@@ -258,7 +274,7 @@ function Businesses() {
           <tbody>
             {rows.map((b) => (
               <tr key={b.id}>
-                <td><Link to={`/admin/businesses/${b.id}`} className="biz-cell">{b.logoPath ? <img src={fileUrl(b.logoPath)} alt="" /> : <span>{b.name.slice(0, 1)}</span>}<strong>{b.name}</strong></Link></td>
+                <td><Link to={`/admin/businesses/${b.id}`} className="biz-cell">{b.logoPath ? <img src={fileUrl(b.logoPath)} alt="" /> : <span>{b.name.slice(0, 1)}</span>}<span><strong>{b.name}</strong><small className="cell-sub">{b.slug}{b.database === "dedicated" ? ` · ${t("ui.tenancy.detail.dedicated")}` : ""}</small></span></Link></td>
                 <td>{b.owner}</td><td>{b.phone}</td><td>{date(b.createdAt, lang)}</td>
                 <td className="num">{b.users}</td><td className="num">{b.transactions}</td>
                 <td>{b.trial ? `${t(`ui.status.${b.trial.status}`)} · ${date(b.trial.endDate, lang)}` : "—"}</td>
@@ -287,7 +303,9 @@ function BusinessDetail({ can }) {
   const [msg, setMsg] = useState(null);
   if (d.loading && !d.data) return <Loading />;
   if (!d.data) return <EmptyState text={t("ui.errors.notFound")} />;
-  const { business: b, users, usage, trial, activity, subscription: s, payments, notes, tickets, owner } = d.data;
+  const { business: b, users, usage, trial, activity, subscription: s, payments, notes, tickets, owner, database, provisioning } = d.data;
+  const settingUp = ["pending", "provisioning"].includes(b.status);
+  const signin = b.url || (b.link ? `${window.location.origin}${b.link}` : null);
   const cur = plans.data?.currency || "USD";
   const m = (v) => money(v, cur, lang);
   const close = () => { setModal(null); d.reload(); };
@@ -306,15 +324,24 @@ function BusinessDetail({ can }) {
           <StatusBadge status={b.status} />
         </div>
         <div className="form-actions admin-biz__actions">
-          {can("businesses") && b.status !== "active" && <button type="button" className="btn btn--primary" onClick={() => setStatus("active", "")}>{t("ui.admin.activate")}</button>}
+          {settingUp && <Link className="btn btn--primary" to={`/admin/businesses/${b.id}/setup`}><Icon name="activity" /><span>{t("ui.tenancy.detail.viewSetup")}</span></Link>}
+          {can("businesses") && !settingUp && b.status !== "active" && <button type="button" className="btn btn--primary" onClick={() => setStatus("active", "")}>{t("ui.admin.activate")}</button>}
           {can("businesses") && b.status === "active" && <button type="button" className="btn btn--danger" onClick={() => setModal("suspended")}>{t("ui.admin.suspend")}</button>}
-          {can("businesses") && b.status !== "deactivated" && <button type="button" className="btn btn--outline" onClick={() => setModal("deactivated")}>{t("ui.admin.deactivate")}</button>}
+          {can("businesses") && !settingUp && !["expired", "archived", "deactivated"].includes(b.status) && <button type="button" className="btn btn--outline" onClick={() => setModal("expired")}>{t("ui.tenancy.detail.expire")}</button>}
+          {can("businesses") && !settingUp && b.status !== "archived" && <button type="button" className="btn btn--outline" onClick={() => setModal("archived")}><Icon name="archive" /><span>{t("ui.tenancy.detail.archive")}</span></button>}
+          {can("businesses") && !settingUp && b.status !== "deactivated" && <button type="button" className="btn btn--outline" onClick={() => setModal("deactivated")}>{t("ui.admin.deactivate")}</button>}
           {can("businesses") && <button type="button" className="btn btn--outline" onClick={() => setModal("edit")}><Icon name="settings" /><span>{t("ui.platform.editDetails")}</span></button>}
           {can("businesses") && trial && !s && <button type="button" className="btn btn--outline" onClick={() => setModal("extend")}><Icon name="clock" /><span>{t("ui.admin.extend")}</span></button>}
           {can("businesses") && owner && <button type="button" className="btn btn--outline" onClick={resetOwner}><Icon name="lock" /><span>{t("ui.platform.resetOwner")}</span></button>}
           {can("security") && <button type="button" className="btn btn--outline" onClick={signOutAll}><Icon name="log-out" /><span>{t("ui.platform.signOutAll")}</span></button>}
         </div>
         {msg && <p className="form-status form-status--success">{msg}</p>}
+        {provisioning?.status === "failed" && <p className="form-status form-status--error"><Icon name="alert" /> {fill(t("ui.tenancy.detail.setupFailed"), { step: t(`ui.tenancy.prov.steps.${provisioning.step}`) })} <Link to={`/admin/businesses/${b.id}/setup`}>{t("ui.tenancy.detail.viewSetup")}</Link></p>}
+        <dl className="sub-card__facts biz-infra">
+          {signin && <div><dt>{t("ui.tenancy.detail.signin")}</dt><dd><a href={signin} target="_blank" rel="noreferrer">{signin}</a></dd></div>}
+          {database && <div><dt>{t("ui.tenancy.detail.database")}</dt><dd>{database.mode === "dedicated" ? <>{t("ui.tenancy.detail.dedicated")} · <code>{database.name}</code></> : t("ui.tenancy.detail.shared")}{database.schemaVersion ? ` · v${database.schemaVersion}` : ""}</dd></div>}
+          <div><dt>{t("ui.tenancy.branches.limit")}</dt><dd>{b.maxBranches ?? "—"} {can("businesses") && <button type="button" className="link-btn" onClick={() => setModal("branches")}>{t("ui.tenancy.branches.setLimit")}</button>}</dd></div>
+        </dl>
         <p className="page-help"><Icon name="lock" /> {t("ui.admin.privacy")}</p>
       </section>
       <div className="split-view">
@@ -368,7 +395,8 @@ function BusinessDetail({ can }) {
         <h2 className="panel-card__title">{t("ui.admin.activity")}</h2>
         <ul className="pay-list">{activity.map((a, i) => <li key={i}>{date(a.at, lang, true)} · {a.user || "—"} · <code className="action-code">{a.action}</code></li>)}</ul>
       </section>
-      {(modal === "suspended" || modal === "deactivated") && <ReasonModal title={t(`ui.admin.${modal === "suspended" ? "suspend" : "deactivate"}`)} help={t("ui.admin.reasonRequired")} confirmLabel={t("ui.common.confirm")}
+      {modal === "branches" && <BranchLimit business={{ id: b.id, name: b.name, limitFrom: b.maxBranches ? "business" : null, limit: b.maxBranches }} onClose={() => setModal(null)} onDone={close} />}
+      {["suspended", "deactivated", "expired", "archived"].includes(modal) && <ReasonModal title={modal === "expired" ? t("ui.tenancy.detail.expire") : modal === "archived" ? t("ui.tenancy.detail.archive") : t(`ui.admin.${modal === "suspended" ? "suspend" : "deactivate"}`)} help={t("ui.admin.reasonRequired")} confirmLabel={t("ui.common.confirm")}
         onConfirm={(reason) => setStatus(modal, reason)} onClose={() => setModal(null)} />}
       {modal === "extend" && <ExtendTrial business={b} onClose={() => setModal(null)} onDone={close} />}
       {modal === "edit" && <EditBusiness business={b} onClose={() => setModal(null)} onDone={close} />}

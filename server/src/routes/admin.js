@@ -9,12 +9,14 @@ import { audit } from "../middleware/auth.js";
 import { ah, id, text, optText, num, badRequest, conflict } from "../lib/http.js";
 import { ADMIN_ROLES, adminCan, requireAdminPerm, adminAudit, totpValid, newTotpSecret, totpUrl, planOf } from "../lib/platform.js";
 import { platformRoutes } from "./adminPlatform.js";
+import { withTenant, forEachDatabase, registryOf, mirrorToTenant } from "../lib/tenancy.js";
+import { tenancyRoutes } from "./adminTenancy.js";
 
 /*
  * Super Admin (platform owner). Completely separate from business users:
  * own table (platform_admins), own cookie, own routes. Business owners never get access.
  * Admins see business summaries and account status — not detailed financial records.
- * Each super admin has a role (lib/platform.js ADMIN_ROLES: owner, admin, support, billing) that decides what they may do;
+ * Each super admin has a role (lib/platform.js ADMIN_ROLES: owner, admin, technical, billing, support) that decides what they may do;
  * two-step sign-in (authenticator app code) can be switched on per admin in My account.
  */
 const router = Router();
@@ -75,6 +77,13 @@ router.get("/overview", ah(async (req, res) => {
             (SELECT COUNT(*) FROM businesses WHERE created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)) new30,
             (SELECT COUNT(*) FROM sales) sales, (SELECT COUNT(*) FROM invoices) invoices,
             (SELECT COUNT(*) FROM trial_records WHERE status = 'active' AND end_date >= UTC_DATE()) trials`);
+  // users, sales and invoices of businesses with their own database are counted there
+  const extra = await forEachDatabase(async (p, { businessId }) => {
+    if (!businessId) return null;
+    const [[x]] = await p.query("SELECT (SELECT COUNT(*) FROM users) users, (SELECT COUNT(*) FROM sales) sales, (SELECT COUNT(*) FROM invoices) invoices");
+    return x;
+  });
+  for (const x of extra.filter(Boolean)) for (const k of ["users", "sales", "invoices"]) c[k] = num(c[k]) + num(x[k]);
   const [[size]] = await pool.query("SELECT ROUND(SUM(data_length + index_length) / 1024 / 1024, 2) mb FROM information_schema.tables WHERE table_schema = DATABASE()");
   res.json({ counts: Object.fromEntries(Object.entries(c).map(([k, v]) => [k, num(v)])), health: { database: db.ok ? "connected" : "down", sizeMb: num(size.mb), uptimeSec: Math.round(process.uptime()), node: process.version } });
 }));
@@ -85,21 +94,29 @@ router.get("/businesses", ah(async (req, res) => {
   const params = [];
   const q = text(req.query.q, 80);
   if (q) { where.push("(b.name LIKE ? OR b.phone LIKE ? OR b.owner_name LIKE ?)"); params.push(`%${q}%`, `%${q}%`, `%${q}%`); }
-  if (["active", "suspended", "deactivated"].includes(req.query.status)) { where.push("b.status = ?"); params.push(req.query.status); }
+  if (BUSINESS_STATUSES.includes(req.query.status)) { where.push("b.status = ?"); params.push(req.query.status); }
   const since = Number(req.query.since);
   if (since > 0 && since <= 3650) { where.push("b.created_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL ? DAY)"); params.push(since); }
   const type = text(req.query.type, 60);
   if (type) { where.push("b.business_type = ?"); params.push(type); }
   const [rows] = await pool.query(
-    `SELECT b.id, b.name, b.owner_name, b.phone, b.email, b.business_type, b.logo_path, b.status, b.created_at,
+    `SELECT b.id, b.name, b.slug, b.owner_name, b.phone, b.email, b.business_type, b.logo_path, b.status, b.created_at, dr.mode db_mode,
             (SELECT COUNT(*) FROM users u WHERE u.business_id = b.id) users,
             (SELECT COUNT(*) FROM sales s WHERE s.business_id = b.id) + (SELECT COUNT(*) FROM invoices i WHERE i.business_id = b.id) transactions,
             (SELECT MAX(created_at) FROM audit_logs a WHERE a.business_id = b.id) last_activity,
             (SELECT CONCAT(status, '|', end_date) FROM trial_records t WHERE t.business_id = b.id ORDER BY t.id DESC LIMIT 1) trial
-       FROM businesses b WHERE ${where.join(" AND ")} ORDER BY b.created_at DESC LIMIT 500`, params);
+       FROM businesses b LEFT JOIN database_registry dr ON dr.business_id = b.id WHERE ${where.join(" AND ")} ORDER BY b.created_at DESC LIMIT 500`, params);
+  for (const b of rows.filter((x) => x.db_mode === "dedicated" && x.status !== "pending" && x.status !== "provisioning")) {
+    try {
+      const [[x]] = await withTenant(b.id, (p) => p.query(
+        `SELECT (SELECT COUNT(*) FROM users WHERE business_id = ?) users, (SELECT COUNT(*) FROM sales WHERE business_id = ?) + (SELECT COUNT(*) FROM invoices WHERE business_id = ?) transactions,
+                (SELECT MAX(created_at) FROM audit_logs WHERE business_id = ?) last_activity`, [b.id, b.id, b.id, b.id]));
+      Object.assign(b, x);
+    } catch { /* database not reachable: shown as 0 */ }
+  }
   res.json({ businesses: rows.map((b) => {
     const [tStatus, tEnd] = String(b.trial || "|").split("|");
-    return { id: b.id, name: b.name, owner: b.owner_name, phone: b.phone, email: b.email, type: b.business_type, logoPath: b.logo_path, status: b.status,
+    return { id: b.id, name: b.name, slug: b.slug, database: b.db_mode || "shared", owner: b.owner_name, phone: b.phone, email: b.email, type: b.business_type, logoPath: b.logo_path, status: b.status,
       createdAt: b.created_at, users: num(b.users), transactions: num(b.transactions), lastActivity: b.last_activity, trial: tStatus ? { status: tStatus, endDate: tEnd } : null };
   }) });
 }));
@@ -109,18 +126,26 @@ router.get("/businesses/:id", ah(async (req, res) => {
   const bid = id(req.params.id);
   const [[b]] = await pool.query("SELECT * FROM businesses WHERE id = ?", [bid || 0]);
   if (!b) return res.status(404).json({ code: "notFound" });
-  const [users] = await pool.query(
+  const ready = !["pending", "provisioning"].includes(b.status);
+  const t = ready ? await withTenant(bid, async (tp) => {
+  const [users] = await tp.query(
     `SELECT u.id, u.full_name, u.username, u.status, u.last_login_at, r.role, ro.name role_name FROM users u JOIN business_user_roles r ON r.user_id = u.id
        LEFT JOIN roles ro ON ro.id = r.role_id AND ro.business_id = u.business_id
       WHERE u.business_id = ? ORDER BY r.role = 'owner' DESC, ro.name, u.full_name`, [bid]);
-  const [[usage]] = await pool.query(
+  const [[usage]] = await tp.query(
     `SELECT (SELECT COUNT(*) FROM products WHERE business_id = ?) products, (SELECT COUNT(*) FROM customers WHERE business_id = ?) customers,
             (SELECT COUNT(*) FROM sales WHERE business_id = ?) sales, (SELECT COUNT(*) FROM invoices WHERE business_id = ?) invoices,
             (SELECT COUNT(*) FROM purchases WHERE business_id = ?) purchases,
             (SELECT COUNT(*) FROM sales WHERE business_id = ? AND sold_at >= DATE_SUB(UTC_TIMESTAMP(), INTERVAL 30 DAY)) sales30`,
     [bid, bid, bid, bid, bid, bid]);
+  const [logs] = await tp.query("SELECT a.action, a.created_at, u.full_name FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id WHERE a.business_id = ? ORDER BY a.id DESC LIMIT 25", [bid]);
+  const [[owner]] = await tp.query("SELECT u.id, u.username FROM users u JOIN business_user_roles r ON r.user_id = u.id AND r.role = 'owner' WHERE u.business_id = ? LIMIT 1", [bid]);
+  return { users, usage, logs, owner };
+  }).catch(() => null) : null;
+  const { users = [], usage = {}, logs = [], owner = null } = t || {};
   const [[trial]] = await pool.query("SELECT start_date, end_date, status FROM trial_records WHERE business_id = ? ORDER BY id DESC LIMIT 1", [bid]);
-  const [logs] = await pool.query("SELECT a.action, a.created_at, u.full_name FROM audit_logs a LEFT JOIN users u ON u.id = a.user_id WHERE a.business_id = ? ORDER BY a.id DESC LIMIT 25", [bid]);
+  const r = await registryOf(bid);
+  const [[job]] = await pool.query("SELECT status, step, error FROM provisioning_jobs WHERE business_id = ? ORDER BY id DESC LIMIT 1", [bid]);
   // platform side: plan and payments, internal notes, support tickets
   const plan = await planOf(pool, bid);
   const [payments] = await pool.query(
@@ -128,10 +153,13 @@ router.get("/businesses/:id", ah(async (req, res) => {
        LEFT JOIN plans p ON p.id = sp.plan_id LEFT JOIN platform_admins pa ON pa.id = sp.admin_id WHERE sp.business_id = ? ORDER BY sp.paid_at DESC LIMIT 50`, [bid]);
   const [notes] = await pool.query("SELECT n.id, n.note, n.created_at, pa.username admin FROM business_notes n LEFT JOIN platform_admins pa ON pa.id = n.admin_id WHERE n.business_id = ? ORDER BY n.id DESC", [bid]);
   const [tickets] = await pool.query("SELECT id, subject, status, priority, updated_at FROM support_tickets WHERE business_id = ? ORDER BY updated_at DESC LIMIT 20", [bid]);
-  const [[owner]] = await pool.query("SELECT u.id, u.username FROM users u JOIN business_user_roles r ON r.user_id = u.id AND r.role = 'owner' WHERE u.business_id = ? LIMIT 1", [bid]);
   await pool.query("INSERT INTO audit_logs (platform_admin_id, business_id, action, ip) VALUES (?, ?, 'admin.viewed_business', ?)", [req.admin.id, bid, req.ip]);
   res.json({
-    business: { id: b.id, name: b.name, owner: b.owner_name, phone: b.phone, email: b.email, type: b.business_type, address: b.address, logoPath: b.logo_path, status: b.status, createdAt: b.created_at },
+    business: { id: b.id, name: b.name, slug: b.slug, owner: b.owner_name, phone: b.phone, email: b.email, type: b.business_type, address: b.address, logoPath: b.logo_path, status: b.status, createdAt: b.created_at,
+      maxBranches: b.max_branches, url: env.baseDomain && b.slug ? `https://${b.slug}.${env.baseDomain}` : null, link: b.slug ? `/b/${b.slug}` : null },
+    database: r ? { mode: r.mode, name: r.mode === "dedicated" ? r.db_name : null, status: r.status, schemaVersion: r.schema_version, lastBackupAt: r.last_backup_at } : null,
+    provisioning: job ? { status: job.status, step: job.step, error: job.error } : null,
+    reachable: Boolean(t),
     users: users.map((u) => ({ id: u.id, fullName: u.full_name, username: u.username, status: u.status, role: u.role === 'owner' ? 'owner' : 'staff', roleName: u.role_name || null, lastLoginAt: u.last_login_at })),
     usage: Object.fromEntries(Object.entries(usage).map(([k, v]) => [k, num(v)])),
     trial: trial || null,
@@ -151,10 +179,13 @@ router.patch("/businesses/:id", requireAdminPerm("businesses"), ah(async (req, r
   const bid = id(req.params.id);
   const status = req.body?.status;
   const reason = text(req.body?.reason, 200);
-  if (!["active", "suspended", "deactivated"].includes(status)) throw badRequest({ status: "required" });
+  if (!["active", "suspended", "expired", "archived", "deactivated"].includes(status)) throw badRequest({ status: "required" });
   if (status !== "active" && !reason) throw badRequest({ reason: "required" });
+  const r0 = await registryOf(bid || 0);
+  if (status === "active" && r0 && r0.status !== "ready") throw conflict("notProvisioned");
   const [r] = await pool.query("UPDATE businesses SET status = ? WHERE id = ?", [status, bid || 0]);
   if (!r.affectedRows) return res.status(404).json({ code: "notFound" });
+  await mirrorToTenant(bid);
   await pool.query("INSERT INTO audit_logs (platform_admin_id, business_id, action, meta, ip) VALUES (?, ?, 'admin.business_status', ?, ?)",
     [req.admin.id, bid, JSON.stringify({ status, reason }), req.ip]);
   res.json({ code: "saved" });
@@ -172,6 +203,7 @@ router.patch("/businesses/:id/trial", requireAdminPerm("businesses"), ah(async (
   res.json({ code: "saved" });
 }));
 
+const BUSINESS_STATUSES = ["pending", "provisioning", "active", "suspended", "expired", "archived", "deactivated"];
 const TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "jewelry", "fabric", "restaurant", "cafe", "fast_food", "bakery", "juice_bar", "food_truck", "takeaway", "food_other"];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const tempPassword = () => `${crypto.randomBytes(6).toString("base64url").replace(/[-_]/g, "x")}${crypto.randomInt(10, 99)}`;
@@ -191,6 +223,7 @@ router.put("/businesses/:id", requireAdminPerm("businesses"), ah(async (req, res
   const [[old]] = await pool.query("SELECT name, owner_name, phone, email, address, business_type FROM businesses WHERE id = ?", [bid || 0]);
   if (!old) return res.status(404).json({ code: "notFound" });
   await pool.query("UPDATE businesses SET name = ?, owner_name = ?, phone = ?, email = ?, address = ?, business_type = ? WHERE id = ?", [d.name, d.owner, d.phone, d.email, d.address, d.type, bid]);
+  await mirrorToTenant(bid);
   await adminAudit(pool, { adminId: req.admin.id, businessId: bid, action: "admin.business_edited", meta: { before: old, after: d }, ip: req.ip });
   res.json({ code: "saved" });
 }));
@@ -198,10 +231,14 @@ router.put("/businesses/:id", requireAdminPerm("businesses"), ah(async (req, res
 /* POST /api/admin/businesses/:id/reset-owner-password — a new password for the owner, shown once (they should change it) */
 router.post("/businesses/:id/reset-owner-password", requireAdminPerm("businesses"), ah(async (req, res) => {
   const bid = id(req.params.id);
-  const [[o]] = await pool.query("SELECT u.id, u.username FROM users u JOIN business_user_roles r ON r.user_id = u.id AND r.role = 'owner' WHERE u.business_id = ? LIMIT 1", [bid || 0]);
-  if (!o) return res.status(404).json({ code: "notFound" });
   const password = tempPassword();
-  await pool.query("UPDATE users SET password_hash = ? WHERE id = ?", [await bcrypt.hash(password, 12), o.id]);
+  const hash = await bcrypt.hash(password, 12);
+  const o = await withTenant(bid || 0, async (tp) => {
+    const [[u]] = await tp.query("SELECT u.id, u.username FROM users u JOIN business_user_roles r ON r.user_id = u.id AND r.role = 'owner' WHERE u.business_id = ? LIMIT 1", [bid || 0]);
+    if (u) await tp.query("UPDATE users SET password_hash = ? WHERE id = ?", [hash, u.id]);
+    return u;
+  });
+  if (!o) return res.status(404).json({ code: "notFound" });
   await adminAudit(pool, { adminId: req.admin.id, businessId: bid, action: "admin.owner_password_reset", entity: "user", entityId: o.id, ip: req.ip });
   res.json({ username: o.username, password });
 }));
@@ -259,11 +296,16 @@ router.get("/users", ah(async (req, res) => {
   const q = text(req.query.q, 80);
   if (q) { where.push("(u.full_name LIKE ? OR u.username LIKE ? OR u.phone LIKE ? OR b.name LIKE ?)"); params.push(...Array(4).fill(`%${q}%`)); }
   if (["active", "disabled"].includes(req.query.status)) { where.push("u.status = ?"); params.push(req.query.status); }
-  const [rows] = await pool.query(
-    `SELECT u.id, u.full_name, u.username, u.phone, u.status, u.last_login_at, u.created_at, r.role, ro.name role_name, b.id business_id, b.name business
-       FROM users u JOIN businesses b ON b.id = u.business_id LEFT JOIN business_user_roles r ON r.user_id = u.id AND r.business_id = u.business_id
-       LEFT JOIN roles ro ON ro.id = r.role_id AND ro.business_id = u.business_id
-      WHERE ${where.join(" AND ")} ORDER BY u.last_login_at IS NULL, u.last_login_at DESC LIMIT 500`, params);
+  // every database: the central one (shared businesses) and each business's own
+  const parts = await forEachDatabase(async (p, { businessId }) => {
+    const [x] = await p.query(
+      `SELECT u.id, u.full_name, u.username, u.phone, u.status, u.last_login_at, u.created_at, r.role, ro.name role_name, b.id business_id, b.name business
+         FROM users u JOIN businesses b ON b.id = u.business_id LEFT JOIN business_user_roles r ON r.user_id = u.id AND r.business_id = u.business_id
+         LEFT JOIN roles ro ON ro.id = r.role_id AND ro.business_id = u.business_id
+        WHERE ${where.join(" AND ")}${businessId ? " AND u.business_id = " + Number(businessId) : ""} ORDER BY u.last_login_at IS NULL, u.last_login_at DESC LIMIT 500`, params);
+    return x;
+  });
+  const rows = parts.flat().sort((a, z) => String(z.last_login_at || "").localeCompare(String(a.last_login_at || ""))).slice(0, 500);
   res.json({ users: rows.map((u) => ({ id: u.id, name: u.full_name, username: u.username, phone: u.phone, status: u.status, lastLoginAt: u.last_login_at, createdAt: u.created_at,
     role: u.role === "owner" ? "owner" : u.role_name || u.role, businessId: u.business_id, business: u.business })) });
 }));
@@ -361,6 +403,7 @@ router.get("/audit", ah(async (req, res) => {
 }));
 
 platformRoutes(router);   // billing, support, announcements, reports, security, settings, export (routes/adminPlatform.js)
+tenancyRoutes(router);    // register & provision businesses, hosting & domains, databases, backups, branches (routes/adminTenancy.js)
 
 export default router;
 export { audit };

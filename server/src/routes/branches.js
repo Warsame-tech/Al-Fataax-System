@@ -10,7 +10,9 @@ import { checkPlanLimit } from "../lib/platform.js";
  * Branches (lib/branches.js): the owner adds branches, each selling from its own stock location; staff are assigned to a
  * branch (or work in all of them); reports compare the branches and add them up (consolidated).
  *   GET /api/branches · POST /api/branches · PUT /api/branches/:id          (settings.edit)
- *   GET /api/branches/staff · PUT /api/branches/staff/:userId { branchId }  (staff.manage)
+ *   GET /api/branches/staff · PUT /api/branches/staff/:userId { branchId, extraBranchIds? }  (staff.manage)
+ *     branchId: the staff member's own branch (null = all branches); extraBranchIds: other branches they may open
+ *     (user_branch_access) — then they work only in those branches (enforced in middleware/auth.js)
  *   GET /api/branches/summary?from&to                                       sales, gross profit, expenses, net per branch
  */
 const router = Router();
@@ -19,30 +21,39 @@ router.use(requireAuth);
 router.get("/", ah(async (req, res) => {
   await branchesOf(pool, req.business.id);
   const [rows] = await pool.query(
-    `SELECT b.*, l.name location_name,
+    `SELECT b.*, l.name location_name, mu.full_name manager_name,
             (SELECT COUNT(*) FROM business_user_roles r WHERE r.business_id = b.business_id AND r.branch_id = b.id) staff,
             (SELECT COUNT(*) FROM stock_locations s WHERE s.business_id = b.business_id AND s.branch_id = b.id AND s.is_active = 1) locations
-       FROM branches b LEFT JOIN stock_locations l ON l.id = b.sell_location_id WHERE b.business_id = ? ORDER BY b.is_main DESC, b.name`, [req.business.id]);
-  res.json({ branches: rows.map((b) => ({ id: b.id, name: b.name, address: b.address || "", phone: b.phone || "", sellLocationId: b.sell_location_id, sellLocation: b.location_name || null,
+       FROM branches b LEFT JOIN stock_locations l ON l.id = b.sell_location_id LEFT JOIN users mu ON mu.id = b.manager_user_id AND mu.business_id = b.business_id
+      WHERE b.business_id = ? ORDER BY b.is_main DESC, b.name`, [req.business.id]);
+  res.json({ branches: rows.map((b) => ({ id: b.id, name: b.name, code: b.code || "", managerUserId: b.manager_user_id || null, manager: b.manager_name || null, address: b.address || "", phone: b.phone || "", sellLocationId: b.sell_location_id, sellLocation: b.location_name || null,
     isMain: Boolean(b.is_main), isActive: Boolean(b.is_active), staff: Number(b.staff), locations: Number(b.locations) })), current: req.branch.filterId, fixed: req.branch.fixed });
 }));
 
 function readBranch(b) {
-  const d = { name: text(b.name, 100), address: optText(b.address, 200), phone: optText(b.phone, 30), sellLocationId: id(b.sellLocationId) };
+  const d = { name: text(b.name, 100), code: optText(b.code, 20)?.toUpperCase().replace(/[^A-Z0-9_-]/g, "") || null, managerUserId: id(b.managerUserId) || null,
+    address: optText(b.address, 200), phone: optText(b.phone, 30), sellLocationId: id(b.sellLocationId) };
   if (!d.name) throw badRequest({ name: "required" });
   return d;
+}
+/** the branch manager must be an active user of this business */
+async function checkManager(db, businessId, userId) {
+  if (!userId) return;
+  const [[u]] = await db.query("SELECT id FROM users WHERE id = ? AND business_id = ? AND status = 'active'", [userId, businessId]);
+  if (!u) throw badRequest({ managerUserId: "required" });
 }
 const nameTaken = (err) => (err.code === "ER_DUP_ENTRY" ? badRequest({ name: "branchNameTaken" }) : err);
 
 /** POST { name, address?, phone?, sellLocationId? } — without a selling location, a shop location of the same name is made */
 router.post("/", requirePerm("settings.edit"), ah(async (req, res) => {
   const d = readBranch(req.body || {});
+  await checkManager(pool, req.business.id, d.managerUserId);
   await branchesOf(pool, req.business.id);   // the main branch exists first, so it counts
   await checkPlanLimit(pool, req.business.id, "branches");   // the business's plan may limit its branches (lib/platform.js)
   try {
     const r = await withTx(async (conn) => {
       await branchesOf(conn, req.business.id);   // the main branch exists first
-      const [x] = await conn.query("INSERT INTO branches (business_id, name, address, phone) VALUES (?, ?, ?, ?)", [req.business.id, d.name, d.address, d.phone]);
+      const [x] = await conn.query("INSERT INTO branches (business_id, name, code, manager_user_id, address, phone) VALUES (?, ?, ?, ?, ?, ?)", [req.business.id, d.name, d.code, d.managerUserId, d.address, d.phone]);
       let loc = d.sellLocationId;
       if (loc) {
         const l = await ensureOwned(conn, "stock_locations", loc, req.business.id, true);
@@ -63,6 +74,7 @@ router.post("/", requirePerm("settings.edit"), ah(async (req, res) => {
 router.put("/:id", requirePerm("settings.edit"), ah(async (req, res) => {
   const d = readBranch(req.body || {});
   const active = req.body?.isActive !== false;
+  await checkManager(pool, req.business.id, d.managerUserId);
   try {
     await withTx(async (conn) => {
       const b = await ensureOwned(conn, "branches", id(req.params.id), req.business.id, true);
@@ -71,8 +83,8 @@ router.put("/:id", requirePerm("settings.edit"), ah(async (req, res) => {
         await ensureOwned(conn, "stock_locations", d.sellLocationId, req.business.id);
         await conn.query("UPDATE stock_locations SET branch_id = ? WHERE id = ?", [b.id, d.sellLocationId]);
       }
-      await conn.query("UPDATE branches SET name = ?, address = ?, phone = ?, sell_location_id = COALESCE(?, sell_location_id), is_active = ? WHERE id = ?",
-        [d.name, d.address, d.phone, d.sellLocationId, active ? 1 : 0, b.id]);
+      await conn.query("UPDATE branches SET name = ?, code = ?, manager_user_id = ?, address = ?, phone = ?, sell_location_id = COALESCE(?, sell_location_id), is_active = ? WHERE id = ?",
+        [d.name, d.code, d.managerUserId, d.address, d.phone, d.sellLocationId, active ? 1 : 0, b.id]);
       await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "branch.changed", entity: "branch", entityId: b.id, meta: { ...d, active }, ip: req.ip });
     });
     forgetBranches(req.business.id);
@@ -85,17 +97,27 @@ router.get("/staff", requirePerm("staff.manage"), ah(async (req, res) => {
   const [rows] = await pool.query(
     `SELECT u.id, u.full_name, u.username, r.role, r.branch_id, ro.name role_name FROM users u JOIN business_user_roles r ON r.user_id = u.id AND r.business_id = u.business_id
        LEFT JOIN roles ro ON ro.id = r.role_id WHERE u.business_id = ? AND u.status = 'active' ORDER BY u.full_name`, [req.business.id]);
-  res.json({ staff: rows.map((u) => ({ id: u.id, name: u.full_name, username: u.username, role: u.role === "owner" ? "owner" : u.role_name || u.role, branchId: u.branch_id })) });
+  const [acc] = await pool.query("SELECT user_id, branch_id FROM user_branch_access WHERE business_id = ?", [req.business.id]);
+  res.json({ staff: rows.map((u) => ({ id: u.id, name: u.full_name, username: u.username, role: u.role === "owner" ? "owner" : u.role_name || u.role, branchId: u.branch_id,
+    extraBranchIds: acc.filter((a) => a.user_id === u.id).map((a) => a.branch_id) })) });
 }));
 router.put("/staff/:userId", requirePerm("staff.manage"), ah(async (req, res) => {
   const branchId = req.body?.branchId ? id(req.body.branchId) : null;
+  const extra = Array.isArray(req.body?.extraBranchIds) ? [...new Set(req.body.extraBranchIds.map(id).filter(Boolean))].filter((x) => x !== branchId).slice(0, 100) : null;
   await withTx(async (conn) => {
     const [[r]] = await conn.query("SELECT role FROM business_user_roles WHERE business_id = ? AND user_id = ? FOR UPDATE", [req.business.id, id(req.params.userId)]);
     if (!r) throw badRequest({ userId: "required" });
     if (r.role === "owner" && branchId) throw conflict("ownerAllBranches");
     if (branchId) await ensureOwned(conn, "branches", branchId, req.business.id);
     await conn.query("UPDATE business_user_roles SET branch_id = ? WHERE business_id = ? AND user_id = ?", [branchId, req.business.id, id(req.params.userId)]);
-    await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "staff.branch", entity: "user", entityId: id(req.params.userId), meta: { branchId }, ip: req.ip });
+    // extra branches only make sense with an own branch; "all branches" clears them
+    if (extra !== null || !branchId) {
+      if (r.role === "owner" && extra?.length) throw conflict("ownerAllBranches");
+      for (const b of extra || []) await ensureOwned(conn, "branches", b, req.business.id);
+      await conn.query("DELETE FROM user_branch_access WHERE business_id = ? AND user_id = ?", [req.business.id, id(req.params.userId)]);
+      if (branchId) for (const b of extra || []) await conn.query("INSERT INTO user_branch_access (user_id, branch_id, business_id) VALUES (?, ?, ?)", [id(req.params.userId), b, req.business.id]);
+    }
+    await audit(conn, { businessId: req.business.id, userId: req.user.id, action: "staff.branch", entity: "user", entityId: id(req.params.userId), meta: { branchId, extraBranchIds: branchId ? extra : [] }, ip: req.ip });
   });
   res.json({ code: "saved" });
 }));

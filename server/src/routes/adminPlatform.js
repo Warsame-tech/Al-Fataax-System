@@ -256,7 +256,7 @@ export function platformRoutes(router) {
     const st = ["open", "answered", "closed"].includes(req.query.status) ? req.query.status : req.query.status === "waiting" ? "waiting" : null;
     const where = st === "waiting" ? "t.status <> 'closed' AND t.last_reply_by = 'business'" : st ? "t.status = ?" : "1=1";
     const [rows] = await pool.query(
-      `SELECT t.*, b.name business, u.full_name user_name, (SELECT COUNT(*) FROM support_messages m WHERE m.ticket_id = t.id) replies,
+      `SELECT t.*, b.name business, COALESCE(t.user_name, u.full_name) user_name, (SELECT COUNT(*) FROM support_messages m WHERE m.ticket_id = t.id) replies,
               (SELECT m.body FROM support_messages m WHERE m.ticket_id = t.id ORDER BY m.id DESC LIMIT 1) last_body
          FROM support_tickets t JOIN businesses b ON b.id = t.business_id LEFT JOIN users u ON u.id = t.user_id
         WHERE ${where} ORDER BY FIELD(t.priority, 'high', 'normal', 'low'), t.updated_at DESC LIMIT 500`, st && st !== "waiting" ? [st] : []);
@@ -264,10 +264,10 @@ export function platformRoutes(router) {
       lastReplyBy: t.last_reply_by, replies: num(t.replies), lastBody: String(t.last_body || "").slice(0, 160), createdAt: t.created_at, updatedAt: t.updated_at })) });
   }));
   router.get("/tickets/:id", ah(async (req, res) => {
-    const [[t]] = await pool.query("SELECT t.*, b.name business, u.full_name user_name FROM support_tickets t JOIN businesses b ON b.id = t.business_id LEFT JOIN users u ON u.id = t.user_id WHERE t.id = ?", [id(req.params.id) || 0]);
+    const [[t]] = await pool.query("SELECT t.*, b.name business, COALESCE(t.user_name, u.full_name) user_name FROM support_tickets t JOIN businesses b ON b.id = t.business_id LEFT JOIN users u ON u.id = t.user_id WHERE t.id = ?", [id(req.params.id) || 0]);
     if (!t) return res.status(404).json({ code: "notFound" });
     const [msgs] = await pool.query(
-      `SELECT m.*, u.full_name user_name, pa.username admin_name FROM support_messages m LEFT JOIN users u ON u.id = m.user_id LEFT JOIN platform_admins pa ON pa.id = m.admin_id
+      `SELECT m.*, COALESCE(m.user_name, u.full_name) user_name, pa.username admin_name FROM support_messages m LEFT JOIN users u ON u.id = m.user_id LEFT JOIN platform_admins pa ON pa.id = m.admin_id
         WHERE m.ticket_id = ? ORDER BY m.id`, [t.id]);
     res.json({ ticket: { id: t.id, businessId: t.business_id, business: t.business, user: t.user_name, subject: t.subject, status: t.status, priority: t.priority, createdAt: t.created_at },
       messages: msgs.map((m) => ({ id: m.id, author: m.author, name: m.author === "admin" ? `Faatix · ${m.admin_name || ""}` : m.user_name, body: m.body, at: m.created_at })) });
@@ -411,7 +411,9 @@ export function platformRoutes(router) {
       trialDays, graceDays, autoSuspend: b.autoSuspend === true, suspendAfterTrial: b.suspendAfterTrial === true,
       billingCurrency: /^[A-Z]{3}$/.test(b.billingCurrency || "") ? b.billingCurrency : SETTING_DEFAULTS.billingCurrency,
       contact: { phones: list(b.contact?.phones, 40), emails: list(b.contact?.emails, 190), whatsapp: optText(b.contact?.whatsapp, 40) || "", address: optText(b.contact?.address, 255) || "" },
-      disabledTypes: (Array.isArray(b.disabledTypes) ? b.disabledTypes : []).map((x) => String(x).slice(0, 60)).slice(0, 30)
+      disabledTypes: (Array.isArray(b.disabledTypes) ? b.disabledTypes : []).map((x) => String(x).slice(0, 60)).slice(0, 30),
+      dailyBackups: b.dailyBackups === true,
+      keepBackups: Math.min(90, Math.max(1, Number.parseInt(b.keepBackups, 10) || 14))
     };
     await savePlatformSettings(pool, values);
     await adminAudit(pool, { adminId: req.admin.id, action: "admin.settings", meta: values, ip: req.ip });

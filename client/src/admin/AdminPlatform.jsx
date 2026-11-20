@@ -309,6 +309,11 @@ export function SettingsPage({ can }) {
             <label key={x} className={"type-toggle" + (f.disabledTypes.includes(x) ? " is-off" : "")}><input type="checkbox" checked={!f.disabledTypes.includes(x)} onChange={() => toggleType(x)} /> {typeName(x)}</label>
           ))}</div>
         </section>
+        <section className="adash-card form-grid form-grid--2">
+          <h2 className="ff--full"><Icon name="hard-drive" /> {t("ui.tenancy.settings.backups")}</h2>
+          <label className="check-row ff--full"><input type="checkbox" checked={Boolean(f.dailyBackups)} onChange={(e) => { setSaved(false); setF({ ...f, dailyBackups: e.target.checked }); }} /> {t("ui.tenancy.settings.daily")}</label>
+          <Field label={t("ui.tenancy.settings.keep")}><input className="input" type="number" min="1" max="90" value={f.keepBackups ?? 14} onChange={(e) => { setSaved(false); setF({ ...f, keepBackups: e.target.value }); }} /></Field>
+        </section>
         <FormError error={sub.formError} />
         {saved && <p className="form-status form-status--success" role="status"><Icon name="check" /> {t("ui.platform.saved")}</p>}
         {can("settings") && <div className="form-actions"><button type="submit" className="btn btn--navy btn--lg" disabled={sub.busy}>{t("ui.common.save")}</button></div>}

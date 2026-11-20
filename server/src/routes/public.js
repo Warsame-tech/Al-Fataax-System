@@ -1,7 +1,7 @@
 import crypto from "node:crypto";
 import { Router } from "express";
 import rateLimit from "express-rate-limit";
-import { pool } from "../config/db.js";
+import { pool, corePool } from "../config/db.js";
 import { audit } from "../middleware/auth.js";
 import { ah, text, optText, withTx, badRequest, conflict, num, round2 } from "../lib/http.js";
 import { profileFor } from "../lib/businessProfiles.js";
@@ -98,6 +98,18 @@ router.get("/orders/:code/:tracking", ah(async (req, res) => {
       readyAt: o.ready_at, dispatchedAt: o.dispatched_at, deliveredAt: o.delivered_at, deliveryFee: num(o.delivery_fee), paid: Boolean(o.sale_id),
       items: items.filter((i) => i.status !== "cancelled" || o.status === "cancelled").map((i) => ({ name: i.name, qty: num(i.qty), size: i.size, extras: JSON.parse(i.extras || "[]"), total: num(i.line_total) })),
       total: round2(items.filter((i) => i.status !== "cancelled").reduce((a, i) => a + num(i.line_total), 0) + num(o.delivery_fee)) } });
+}));
+
+/*
+ * GET /api/public/tenant — the business this address belongs to (resolved on the server from the subdomain, a verified
+ * custom domain, or the branded link's X-Tenant header): name and logo for its own sign-in page. null on the Faatix address.
+ */
+router.get("/tenant", ah(async (req, res) => {
+  if (!req.tenant) return res.json({ tenant: null });
+  const [[b]] = await corePool.query("SELECT id, name, slug, logo_path, business_type, status FROM businesses WHERE id = ?", [req.tenant.id]);
+  if (!b) return res.json({ tenant: null });
+  res.json({ tenant: { name: b.name, slug: b.slug, logoPath: b.logo_path, type: b.business_type, ready: b.status === "active",
+    status: ["pending", "provisioning"].includes(b.status) ? "notReady" : b.status === "active" ? "active" : "unavailable", via: req.tenant.via } });
 }));
 
 export default router;

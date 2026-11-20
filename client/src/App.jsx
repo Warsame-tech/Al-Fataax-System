@@ -25,6 +25,7 @@ export default function App() {
     <Routes>
       <Route index element={<Navigate to="/signin" replace />} />
       <Route path="signin" element={<SignIn />} />
+      <Route path="b/:slug" element={<SignIn />} />
       <Route path="register" element={<Navigate to="/signin" replace />} />
 
       <Route path="app" element={<RequireAuth><AppLayout /></RequireAuth>}>

@@ -42,5 +42,18 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET || "dev-only-secret-change-me",
   sessionDays: Number(process.env.SESSION_DAYS) || 7,
   trialDays: Number(process.env.TRIAL_DAYS) || 15,
-  db: dbConfig()
+  db: dbConfig(),
+  /* ---- multi-tenancy (lib/tenancy.js, lib/provisioning.js) ---- */
+  // businesses open at <slug>.<BASE_DOMAIN>, e.g. prodima.faatix.com (empty: only /b/<slug> links and custom domains)
+  baseDomain: (process.env.BASE_DOMAIN || "").trim().toLowerCase().replace(/^\.+|\/+$/g, ""),
+  // key that encrypts the per-business database passwords (AES-256-GCM). Required in production for own databases.
+  tenantDbKey: process.env.TENANT_DB_KEY || "",
+  // "dedicated" (own database per new business, default) or "shared" (new businesses use the central database)
+  tenantDbMode: process.env.TENANT_DB_MODE === "shared" ? "shared" : "dedicated",
+  // create a separate, restricted MySQL user per business database (needs CREATE USER / GRANT); "false" = reuse the main user
+  tenantDbUsers: process.env.TENANT_DB_USERS !== "false",
+  // the host the per-business MySQL users may connect from ('%' = anywhere; set e.g. 10.% on a private network)
+  tenantDbUserHost: process.env.TENANT_DB_USER_HOST || "%",
+  // where backups are written (JSON + gzip). On Railway mount a volume here.
+  backupDir: process.env.BACKUP_DIR || ""
 };

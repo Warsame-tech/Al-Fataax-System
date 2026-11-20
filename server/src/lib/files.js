@@ -11,7 +11,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Router } from "express";
 import multer from "multer";
-import { pool } from "../config/db.js";
+import { pool, corePool } from "../config/db.js";
+import { poolFor } from "./tenancy.js";
 
 const UPLOADS_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../uploads");
 const IMAGE_TYPES = ["image/png", "image/jpeg", "image/webp"];
@@ -43,26 +44,33 @@ export async function saveImage(db, businessId, file, kind) {
     "INSERT INTO stored_files (file_key, business_id, kind, mime, size, data) VALUES (?, ?, ?, ?, ?, ?)",
     [key, businessId || null, kind, mime, file.buffer.length, file.buffer]
   );
-  return `/files/${key}`;
+  // /files/<business>/<key>: the server looks for the image in that business's own database
+  return businessId ? `/files/${businessId}/${key}` : `/files/${key}`;
 }
 
 /** Removes an image that is no longer used (database image or an old file on disk). Never throws. */
 export async function removeImage(p, db = pool) {
   if (!p) return;
   try {
-    const stored = /^\/files\/([a-f0-9]{32})$/.exec(p);
+    const stored = /^\/files\/(?:\d+\/)?([a-f0-9]{32})$/.exec(p);
     if (stored) { await db.query("DELETE FROM stored_files WHERE file_key = ?", [stored[1]]); return; }
     const old = /^\/uploads\/(logos|products)\/([\w.-]+)$/.exec(p);
     if (old) await fs.promises.unlink(path.join(UPLOADS_ROOT, old[1], old[2]));
   } catch { /* already gone */ }
 }
 
-/* GET /files/:key — public image (logos and product photos appear on invoices and the POS). */
+/* GET /files/:key and /files/:businessId/:key — public image (logos and product photos appear on invoices and the POS). */
 export const filesRouter = Router();
-filesRouter.get("/:key", async (req, res, next) => {
+filesRouter.get("/:key", sendFile);
+filesRouter.get("/:bid(\\d+)/:key", sendFile);
+async function sendFile(req, res, next) {
   try {
     if (!/^[a-f0-9]{32}$/.test(req.params.key)) return res.status(404).end();
-    const [[f]] = await pool.query("SELECT mime, data FROM stored_files WHERE file_key = ?", [req.params.key]);
+    const bid = Number(req.params.bid) || 0;
+    const db = bid ? await poolFor(bid) : corePool;
+    const [[f]] = bid
+      ? await db.query("SELECT mime, data FROM stored_files WHERE file_key = ? AND (business_id = ? OR business_id IS NULL)", [req.params.key, bid])
+      : await db.query("SELECT mime, data FROM stored_files WHERE file_key = ?", [req.params.key]);
     if (!f) return res.status(404).end();
     res.set({
       "Content-Type": f.mime,
@@ -71,4 +79,4 @@ filesRouter.get("/:key", async (req, res, next) => {
     });
     res.send(f.data);
   } catch (err) { next(err); }
-});
+}

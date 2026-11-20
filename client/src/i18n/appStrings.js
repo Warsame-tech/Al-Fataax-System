@@ -64,7 +64,11 @@ const en = {
     belowCost: "This price is below the cost price. It can't be sold this low.", paidBelowCost: "The amount paid can't be below the purchase cost.",
     paidLessForbidden: "Only staff who can give discounts can take less than the total.",
     priceLocked: "You don't have permission to change prices.", planLimit: "Your plan ({plan}) allows up to {limit} here. Ask Faatix to move you to a bigger plan.", typeClosed: "This business type is not open for sign-up right now.",
-    ipBlocked: "Access from this network is blocked. Contact Faatix.", twoFactorWrong: "The code is wrong or too old. Try the newest code.", notYourself: "You can't change your own role or disable yourself.",
+    ipBlocked: "Access from this network is blocked. Contact Faatix.", invalidSlug: "3–40 lowercase letters, numbers or dashes (not at the start or end).", slugReserved: "This name is kept for Faatix. Choose another.",
+    slugTaken: "Another business already uses this address.", passwordWeak: "At least 8 characters.", invalidDomain: "Not a valid domain, e.g. shop.example.com.", useSubdomain: "Addresses under the Faatix domain are subdomains — change the subdomain instead.",
+    domainTaken: "This domain is already added.", notProvisioned: "The business can't be activated before its setup has finished.", tenantKeyMissing: "TENANT_DB_KEY is not set on the server, so own databases can't be created.",
+    notFailed: "Only a failed setup can be retried.", jobExpired: "This setup can't be retried (its data is gone). Register the business again.", sharedDatabase: "This business uses the shared central database.",
+    notReady: "The database isn't ready yet.", migrationFailed: "The migration failed. See the last error on the Databases page.", backupFailed: "The backup failed. Check the server log and the backup folder.", businessNotReady: "This business is still being set up.", twoFactorWrong: "The code is wrong or too old. Try the newest code.", notYourself: "You can't change your own role or disable yourself.",
     lastOwner: "There must always be at least one active owner.", noSubscription: "This business has no plan yet. Give it a plan first.", invalidIp: "Not a valid IP address.", ownIp: "That is your own IP address.", adminPasswordWeak: "Use at least 10 characters with letters and numbers.", lineLocked: "This line can't change (serial / IMEI, roll or recipe). Cancel the invoice and make a new one.", useNewInvoice: "Products sold with serial numbers / IMEIs, from rolls or through recipes can't be added by an edit. Make a new invoice.", lockedLineRemoved: "Lines sold with serial numbers / IMEIs, from rolls or through recipes can't be removed by an edit. Cancel the invoice instead.", customerHasPayments: "This invoice has payments, so its customer can't change.", draftNoTracked: "Products with serial numbers / IMEIs or from rolls can't be in a draft.", draftNoPayment: "A draft can't be paid. Post it first.", notDraft: "This invoice isn't a draft.", cancelledNoEdit: "A cancelled invoice can't be edited.", invoiceChanged: "Someone changed this invoice meanwhile. Reload it.", noChanges: "Nothing was changed.", invoiceEditNeedsApproval: "These changes need a manager's approval.", cannotApproveEdit: "This user can't approve invoice changes.", cannotApprovePrice: "This user can't approve prices below the minimum.",
     trackingNeedsZeroStock: "The tracking method can only change while the product has no stock.",
     trackedNoReverse: "Serial / IMEI stock is corrected with Adjust (choose the devices).", devicesAdjustOnly: "Use Add / Subtract with the devices.",
@@ -100,7 +104,8 @@ const en = {
     ordered: "Ordered",
     completed: "Completed", cancelled: "Cancelled", unpaid: "Unpaid", partially_paid: "Partially paid", paid: "Paid", overdue: "Overdue",
     received: "Received", active: "Active", disabled: "Disabled", suspended: "Suspended", deactivated: "Deactivated", draft: "Draft",
-    returned: "Returned", expired: "Expired", converted: "Converted"
+    returned: "Returned", expired: "Expired", converted: "Converted",
+    pending: "Pending", provisioning: "Setting up", archived: "Archived"
   },
   drafts: {
     save: "Save as draft", update: "Update draft", saved: "Draft saved", list: "Drafts ({n})", title: "Saved drafts", none: "No drafts yet.",
@@ -367,6 +372,8 @@ const en = {
     sellLocation: "Sells from stock location", sellLocationNew: "Leave empty to create a new shop location for this branch.", sellLocationHint: "Sales and orders in this branch take stock from here.",
     newLocation: "New shop location", keepLocation: "Keep the current location",
     staffHelp: "Staff tied to a branch only see and record that branch's work. Staff on All branches can switch between branches.",
+    code: "Branch code", manager: "Branch manager", noManager: "No manager", alsoIn: "Can also open",
+    alsoInHelp: "Tick other branches a staff member may switch to; they then work only in their branches (never all branches at once).",
     worksIn: "Works in", allBranches: "All branches", switch: "Branch"
   },
   bulk: {
@@ -440,6 +447,62 @@ const en = {
     clash: { reserved: "The browser keeps these keys — they won't work.", browser: "The browser uses these keys too; Faatix will take them over.", typing: "Used for copy / paste and typing — better not." },
     errors: { invalidKey: "Not a key Faatix can use.", needsModifier: "Use Ctrl or Alt with the key.", keyTaken: "Used by another action." }
   },
+  tenancy: {
+    register: {
+      title: "Register a business", sub: "Faatix sets everything up: the business's database, the owner's account, the first branch and its sign-in address.",
+      steps: { business: "Business", owner: "Owner", plan: "Plan & branches", database: "Data", review: "Review" },
+      name: "Business name", slug: "Subdomain (sign-in address)", slugHelp: "Lowercase letters, numbers and dashes.", slugUrl: "Signs in at {url}", slugLink: "Link on this server: {link}",
+      checking: "Checking…", slugOk: "Free", type: "Business type", phone: "Phone", email: "Email (optional)", address: "Address (optional)",
+      ownerName: "Owner's full name", username: "Owner's username", ownerEmail: "Owner's email (optional)", ownerPhone: "Owner's phone (optional)",
+      password: "Owner's password (optional)", passwordHelp: "At least 8 characters. Leave it empty and Faatix makes a strong one, shown once.",
+      plan: "Plan", noPlan: "Trial only — no plan yet", cycle: "Billing", trialDays: "Trial days", branchName: "First branch", branchNamePh: "Main branch",
+      maxBranches: "Branch limit (optional)", maxBranchesHelp: "Empty: the plan decides.",
+      dbMode: "Where its data is kept", dedicated: "Its own database (recommended)", dedicatedHelp: "A separate MySQL database ({db}) with its own restricted user; the password is stored encrypted.",
+      shared: "The shared central database", sharedHelp: "Like the businesses registered earlier. Works where the database server can't create databases.",
+      keyMissing: "The server has no TENANT_DB_KEY: in production an own database can't be created until it is set.",
+      next: "Next", back: "Back", create: "Register and set up", creating: "Registering…", reviewHelp: "Check the details. Setting up takes a few seconds; the business is active only when every step has succeeded."
+    },
+    prov: {
+      title: "Setting up {name}", steps: { database: "Create the database", user: "Create its restricted database user", schema: "Create all tables (current schema)", data: "Owner, roles, settings and first branch", activate: "Activate the business" },
+      status: { waiting: "Waiting", running: "Working…", done: "Done", failed: "Failed" },
+      succeeded: "{name} is ready and active.", failed: "Setup stopped: {error}", retry: "Try again", stillInactive: "The business stays inactive (nobody can sign in) until setup succeeds.",
+      signinAt: "Sign-in address", ownerLogin: "Owner's sign-in (shown once — copy it now)", openBusiness: "Open the business page", another: "Register another business", attempts: "Attempt {n}"
+    },
+    hosting: {
+      title: "Hosting & domains", sub: "Where each business signs in: its subdomain, the /b/ link and custom domains.",
+      baseDomain: "Base domain", noBase: "BASE_DOMAIN is not set on the server: businesses sign in with the link /b/<subdomain> on this address.",
+      dnsHelp: "DNS for {domain}: an A / CNAME record for {domain} and a wildcard *.{domain} pointing to the server (on Railway: add both as custom domains). Every business then opens at <subdomain>.{domain}.",
+      subdomain: "Subdomain", link: "Link", customDomains: "Custom domains", addDomain: "Add a custom domain", domainPh: "shop.example.com", add: "Add",
+      verify: "Check DNS", verified: "Verified", pending: "Waiting for DNS", txtHelp: "At the domain's DNS: a TXT record {name} = {value}, and a CNAME to the server. Then press Check DNS.",
+      primary: "Primary", makePrimary: "Make primary", changeSlug: "Change subdomain", remove: "Remove", removeConfirm: "Remove {domain}?", search: "Search businesses"
+    },
+    db: {
+      title: "Databases", sub: "The central platform database and each business's own database: schema versions, sizes, connection tests and migrations.",
+      central: "Central database", sharedCount: "{n} businesses keep their data here", current: "Current schema version: {v}", upToDate: "Up to date", behind: "Needs migration",
+      own: "Own database", sharedMode: "Central (shared)", size: "Size", tables: "Tables", user: "Database user", lastMigrated: "Last migration", lastBackup: "Last backup",
+      test: "Test", testOk: "Connected in {ms} ms as {user} · schema {v} · {users} users", testFail: "Could not connect ({error})",
+      migrate: "Migrate", migrateAll: "Run migrations on all own databases", migrated: "Brought to version {v}", migratedAll: "{n} databases checked, {f} failed",
+      never: "Never", error: "Last error", status: "Status", business: "Business", database: "Database", filterOwn: "Own databases", filterShared: "Shared", filterAll: "All"
+    },
+    backups: {
+      title: "Backups", sub: "Backups are made by the server as compressed JSON files: the central database, or one business (its own database, or its rows in the central one).",
+      folder: "Folder: {folder}", dailyOn: "Daily automatic backups are on — {n} kept per database.", dailyOff: "Daily automatic backups are off — switch them on in System settings.",
+      now: "Make a backup", core: "Central database", business: "One business", choose: "Choose a business", run: "Back up", running: "Backing up…",
+      when: "When", what: "What", file: "File", size: "Size", rows: "Rows", by: "By", auto: "Automatic", download: "Download", missing: "File missing on the server",
+      deleteConfirm: "Delete the backup file {file}?", empty: "No backups yet.",
+      restoreNote: "Restoring is done on purpose by a technical admin: load the file into a new, empty database and check it before switching. Faatix never writes a backup over live data by itself."
+    },
+    branches: {
+      title: "Branch overview", sub: "Every business's branches, read from its own database, with users, sales in the last 30 days and the branch limit.",
+      total: "{n} active branches in {b} businesses", limit: "Limit", fromPlan: "plan", fromBusiness: "this business", noLimit: "No limit", setLimit: "Branch limit",
+      limitHelp: "Empty: the plan decides.", main: "Main", manager: "Manager", users: "Users", sales30: "Sales · 30 days", unreachable: "Database not reachable", code: "Code", search: "Search businesses"
+    },
+    detail: {
+      database: "Database", dedicated: "Own database", shared: "Central (shared)", signin: "Sign-in", setup: "Setup", viewSetup: "View setup", copy: "Copy", copied: "Copied",
+      expire: "Mark expired", archive: "Archive", setupFailed: "Setup failed at “{step}”. Open the setup page to retry."
+    },
+    settings: { backups: "Backups", daily: "Make a backup of every database once a day", keep: "Automatic backups kept per database" }
+  },
   adminDash: {
     greet: { morning: "Good morning", afternoon: "Good afternoon", evening: "Good evening" },
     needs: "{n} things need your attention today.", allGood: "Everything is running smoothly.",
@@ -494,7 +557,7 @@ const en = {
     last: "Last", adminTries: "{n} on the super admin sign-in", blocked: "Blocked", block: "Block", unblock: "Unblock", tooManyTries: "Too many failed sign-ins",
     blockedIps: "Blocked IP addresses", noBlocked: "No IP is blocked.", forDays: "{n} days", forever: "For good", until: "until {date}", recentFailed: "Latest failed sign-ins",
     addAdmin: "Add super admin", adminAdded: "Super admin added", usernameHint: "Small letters, numbers, dots or dashes", resetConfirm: "Make a new password for {name}? Their two-step sign-in is switched off too.",
-    roles: { owner: "Owner", admin: "Administrator", support: "Support", billing: "Billing" },
+    roles: { owner: "Super Admin", admin: "Platform Manager", technical: "Technical Admin", billing: "Finance Admin", support: "Support Agent" },
     roleHelp: { owner: "Everything, including super admins and the data export.", admin: "Everything except super admins and the export.",
       support: "Looks around, answers support and messages, announcements, notes.", billing: "Looks around, plans, subscriptions and payments, reports." },
     twoStep: "Two-step sign-in", on: "On", offShort: "Off", disable: "Disable", enable: "Enable", resetPassword: "Reset password",
@@ -831,6 +894,8 @@ const en = {
       overview: "Overview", health: "System health", all: "All businesses", active: "Active", suspended: "Suspended", deactivated: "Deactivated", newest: "New (30 days)", types: "Business types",
       trialsActive: "Active trials", trialsEnding: "Ending in 7 days", trialsExpired: "Expired", allUsers: "All users", disabledUsers: "Disabled users", admins: "Super admins",
       allActivity: "All activity", adminActions: "Super admin actions", logins: "Sign-ins", password: "Change password", menu: "Menu",
+      register: "Register a business", settingUp: "Being set up", expired: "Expired", archived: "Archived", infra: "Hosting & data",
+      hosting: "Hosting & domains", databases: "Databases", backups: "Backups", branches: "Branch overview",
       billing: "Subscriptions & billing", subscriptions: "Active subscriptions", due: "Due in 7 days", overdue: "Overdue", noPlan: "No plan yet", payments: "Payments", plans: "Plans",
       support: "Support", waitingTickets: "Waiting for answer", allTickets: "All tickets", messages: "Website messages", communication: "Announcements", announcements: "Announcements",
       reportsMenu: "Reports", reports: "Platform reports", security: "Security", system: "System", settings: "System settings", export: "Export data", myAccount: "My account", account: "Password & two-step sign-in"
@@ -905,7 +970,11 @@ const so = {
     belowCost: "Qiimahan wuu ka hooseeyaa qiimaha iibsiga. Sidan hoose looma iibin karo.", paidBelowCost: "Lacagta la bixiyay kama hoosayn karto qiimaha iibsiga.",
     paidLessForbidden: "Kaliya shaqaalaha dhimis bixin kara ayaa qaadan kara lacag ka yar wadarta.",
     priceLocked: "Ma lihid ogolaansho aad ku beddesho qiimaha.", planLimit: "Qorshahaagu ({plan}) wuxuu ogol yahay ilaa {limit} halkan. Ka codso Faatix inay qorshe ka weyn kuu wareejiyaan.", typeClosed: "Noocan ganacsi hadda uma furna is-diiwaangelinta.",
-    ipBlocked: "Galitaanka shabakaddan waa la xiray. La xiriir Faatix.", twoFactorWrong: "Koodhku waa khalad ama waa duug. Isku day koodhka ugu cusub.", notYourself: "Ma beddeli kartid doorkaaga mana dami kartid naftaada.",
+    ipBlocked: "Galitaanka shabakaddan waa la xiray. La xiriir Faatix.", invalidSlug: "3–40 xaraf yar, lambar ama jiitin (ma aha bilowga ama dhammaadka).", slugReserved: "Magacan waxaa u hayaa Faatix. Dooro mid kale.",
+    slugTaken: "Ganacsi kale ayaa isticmaala cinwaankan.", passwordWeak: "Ugu yaraan 8 xaraf.", invalidDomain: "Domain sax ah ma aha, tusaale shop.example.com.", useSubdomain: "Cinwaannada domain-ka Faatix waa subdomain — beddel subdomain-ka.",
+    domainTaken: "Domain-kan horay ayaa loo daray.", notProvisioned: "Ganacsiga lama hawlgelin karo inta diyaarintiisu aysan dhammaan.", tenantKeyMissing: "TENANT_DB_KEY laguma dejin server-ka, sidaa darteed kayd xog gaar ah lama samayn karo.",
+    notFailed: "Diyaarin fashilantay oo keliya ayaa dib loo isku dayi karaa.", jobExpired: "Diyaarintan dib looma isku dayi karo (xogteedii way baxday). Mar kale diiwaan geli ganacsiga.", sharedDatabase: "Ganacsigan wuxuu isticmaalaa kaydka xogta dhexe ee la wadaago.",
+    notReady: "Kaydka xogta weli diyaar ma aha.", migrationFailed: "Cusboonaysiintu way fashilantay. Eeg khaladkii u dambeeyay bogga Kaydadka xogta.", backupFailed: "Nuqul-kaydintu way fashilantay. Hubi log-ga server-ka iyo galka nuqulada.", businessNotReady: "Ganacsigan weli waa la diyaarinayaa.", twoFactorWrong: "Koodhku waa khalad ama waa duug. Isku day koodhka ugu cusub.", notYourself: "Ma beddeli kartid doorkaaga mana dami kartid naftaada.",
     lastOwner: "Had iyo jeer waa inuu jiraa ugu yaraan hal milkiile oo firfircoon.", noSubscription: "Ganacsigan weli qorshe ma leh. Marka hore sii qorshe.", invalidIp: "Ciwaan IP sax ah ma aha.", ownIp: "Taasi waa ciwaankaaga IP.", adminPasswordWeak: "Isticmaal ugu yaraan 10 xaraf oo xarfo iyo tiro leh.", lineLocked: "Safkan isma beddeli karo (serial / IMEI, duub ama cunto-karis). Jooji qaansheegta oo samee mid cusub.", useNewInvoice: "Alaabta serial / IMEI, duub ama cunto-karis lagu iibiyo laguma dari karo beddel. Samee qaansheeg cusub.", lockedLineRemoved: "Safafka serial / IMEI, duub ama cunto-karis lagama saari karo beddel. Halkii jooji qaansheegta.", customerHasPayments: "Qaansheegtan lacag ayaa lagu bixiyay, sidaa darteed macmiilkeeda isma beddeli karo.", draftNoTracked: "Alaabta serial / IMEI leh ama duubka ka timaada qabyo kuma jiri karto.", draftNoPayment: "Qabyo lacag laguma bixin karo. Marka hore diiwaangeli.", notDraft: "Qaansheegtan qabyo ma aha.", cancelledNoEdit: "Qaansheeg la joojiyay wax lagama beddeli karo.", invoiceChanged: "Qof kale ayaa qaansheegtan beddelay. Dib u soo deji.", noChanges: "Waxba lama beddelin.", invoiceEditNeedsApproval: "Isbeddeladan waxay u baahan yihiin ansixinta maamule.", cannotApproveEdit: "Isticmaalahan ma ansixin karo isbeddelka qaansheegta.", cannotApprovePrice: "Isticmaalahan ma ansixin karo qiimaha ka hooseeya kan ugu yar.",
     trackingNeedsZeroStock: "Habka raacidda waxaa la beddeli karaa kaliya marka alaabtu kayd la'aan tahay.",
     trackedNoReverse: "Kaydka serial / IMEI waxaa lagu saxaa Hagaaji (dooro qalabka).", devicesAdjustOnly: "Isticmaal Ku dar / Ka jar adiga oo dooranaya qalabka.",
@@ -941,7 +1010,8 @@ const so = {
     ordered: "La dalbaday",
     completed: "La dhammeeyay", cancelled: "La joojiyay", unpaid: "Lama bixin", partially_paid: "Qayb ahaan la bixiyay", paid: "La bixiyay", overdue: "Waqtigii dhaafay",
     received: "La helay", active: "Firfircoon", disabled: "La damiyay", suspended: "La hakiyay", deactivated: "La xiray", draft: "Qabyo",
-    returned: "La soo celiyay", expired: "Dhacay", converted: "La beddelay"
+    returned: "La soo celiyay", expired: "Dhacay", converted: "La beddelay",
+    pending: "Sugaya", provisioning: "La diyaarinayaa", archived: "La kaydiyay"
   },
   drafts: {
     save: "Kaydi qabyo ahaan", update: "Cusbooneysii qabyada", saved: "Qabyada waa la kaydiyay", list: "Qabyooyin ({n})", title: "Qabyooyinka la kaydiyay", none: "Weli qabyo ma jirto.",
@@ -1208,6 +1278,8 @@ const so = {
     sellLocation: "Waxay ka iibisaa goobta kaydka", sellLocationNew: "Banaan u daa si loogu sameeyo goob dukaan oo cusub laantan.", sellLocationHint: "Iibka iyo dalabyada laantan halkan ayay kaydka ka qaataan.",
     newLocation: "Goob dukaan oo cusub", keepLocation: "Hay goobta hadda",
     staffHelp: "Shaqaalaha laan ku xiran waxay arkaan oo diiwaangeliyaan shaqada laantaas oo keliya. Shaqaalaha Laamaha oo dhan way u kala gudbi karaan laamaha.",
+    code: "Koodka laanta", manager: "Maareeyaha laanta", noManager: "Maareeye ma leh", alsoIn: "Sidoo kale wuu furi karaa",
+    alsoInHelp: "Calaamadee laamo kale oo shaqaaluhu u gudbi karo; markaas waxay ka shaqeeyaan laamahooda oo keliya (marna dhammaan hal mar).",
     worksIn: "Wuxuu ka shaqeeyaa", allBranches: "Laamaha oo dhan", switch: "Laan"
   },
   bulk: {
@@ -1281,6 +1353,62 @@ const so = {
     clash: { reserved: "Browser-ku wuu haystaa furayaashan — ma shaqeyn doonaan.", browser: "Browser-ku sidoo kale wuu isticmaalaa; Faatix ayaa la wareegaya.", typing: "Waxaa loo isticmaalaa koobiyeynta / qorista — ha isticmaalin." },
     errors: { invalidKey: "Fure Faatix isticmaali karo ma aha.", needsModifier: "Furaha la isticmaal Ctrl ama Alt.", keyTaken: "Ficil kale ayaa isticmaala." }
   },
+  tenancy: {
+    register: {
+      title: "Diiwaan geli ganacsi", sub: "Faatix ayaa wax walba diyaarisa: kaydka xogta ganacsiga, akoonka milkiilaha, laanta koowaad iyo cinwaanka gelitaanka.",
+      steps: { business: "Ganacsiga", owner: "Milkiilaha", plan: "Qorshe & laamo", database: "Xogta", review: "Hubi" },
+      name: "Magaca ganacsiga", slug: "Subdomain (cinwaanka gelitaanka)", slugHelp: "Xarfo yaryar, lambarro iyo jiitin.", slugUrl: "Wuxuu ka soo galayaa {url}", slugLink: "Linkiga server-kan: {link}",
+      checking: "Waa la hubinayaa…", slugOk: "Waa bannaan yahay", type: "Nooca ganacsiga", phone: "Taleefan", email: "Iimayl (ikhtiyaari)", address: "Cinwaan (ikhtiyaari)",
+      ownerName: "Magaca buuxa ee milkiilaha", username: "Magaca isticmaale ee milkiilaha", ownerEmail: "Iimaylka milkiilaha (ikhtiyaari)", ownerPhone: "Taleefanka milkiilaha (ikhtiyaari)",
+      password: "Furaha milkiilaha (ikhtiyaari)", passwordHelp: "Ugu yaraan 8 xaraf. Haddii aad banaan ka tagto Faatix ayaa samaynaysa mid adag, hal mar la tusayo.",
+      plan: "Qorshe", noPlan: "Tijaabo oo keliya — qorshe weli ma leh", cycle: "Lacag-bixin", trialDays: "Maalmaha tijaabada", branchName: "Laanta koowaad", branchNamePh: "Laanta weyn",
+      maxBranches: "Xadka laamaha (ikhtiyaari)", maxBranchesHelp: "Banaan: qorshaha ayaa go'aamiya.",
+      dbMode: "Halka xogtiisa lagu kaydinayo", dedicated: "Kayd xog u gaar ah (lagu taliyay)", dedicatedHelp: "Kayd MySQL oo gooni ah ({db}) leh isticmaale xaddidan; furaha waa la sir-qariyay.",
+      shared: "Kaydka xogta dhexe ee la wadaago", sharedHelp: "Sida ganacsiyadii hore loo diiwaan geliyay. Wuu shaqeeyaa marka server-ku uusan samayn karin kayd cusub.",
+      keyMissing: "Server-ku ma laha TENANT_DB_KEY: production-ka kayd gaar ah lama samayn karo ilaa la dejiyo.",
+      next: "Xiga", back: "Dib", create: "Diiwaan geli oo diyaari", creating: "Waa la diiwaan gelinayaa…", reviewHelp: "Hubi xogta. Diyaarintu waxay qaadataa dhowr ilbiriqsi; ganacsigu wuxuu firfircoonaanayaa marka tallaabo kasta guulaysato."
+    },
+    prov: {
+      title: "Diyaarinta {name}", steps: { database: "Samee kaydka xogta", user: "Samee isticmaalaha xaddidan", schema: "Samee dhammaan miisaska", data: "Milkiilaha, doorarka, dejinta iyo laanta koowaad", activate: "Hawlgeli ganacsiga" },
+      status: { waiting: "Sugaya", running: "Waa la shaqaynayaa…", done: "Dhammaaday", failed: "Fashilmay" },
+      succeeded: "{name} waa diyaar oo waa firfircoon yahay.", failed: "Diyaarintu way joogsatay: {error}", retry: "Isku day mar kale", stillInactive: "Ganacsigu wuu firfircoonaan doonaa (qofna ma soo geli karo) ilaa diyaarintu guulaysato.",
+      signinAt: "Cinwaanka gelitaanka", ownerLogin: "Gelitaanka milkiilaha (hal mar ayaa la tusayaa — hadda koobiyee)", openBusiness: "Fur bogga ganacsiga", another: "Diiwaan geli ganacsi kale", attempts: "Isku day {n}"
+    },
+    hosting: {
+      title: "Martigelinta & domain-yada", sub: "Halka ganacsi kasta ka soo galo: subdomain-kiisa, linkiga /b/ iyo domain-yada gaarka ah.",
+      baseDomain: "Domain-ka aasaasiga ah", noBase: "BASE_DOMAIN laguma dejin server-ka: ganacsiyadu waxay ka soo galaan linkiga /b/<subdomain> ee cinwaankan.",
+      dnsHelp: "DNS-ka {domain}: diiwaan A / CNAME ah oo {domain} ah iyo wildcard *.{domain} oo u jeeda server-ka (Railway: labadaba ku dar custom domain ahaan). Kadib ganacsi kastaa wuxuu ka furmayaa <subdomain>.{domain}.",
+      subdomain: "Subdomain", link: "Link", customDomains: "Domain-yada gaarka ah", addDomain: "Ku dar domain gaar ah", domainPh: "shop.example.com", add: "Ku dar",
+      verify: "Hubi DNS", verified: "La xaqiijiyay", pending: "Sugaya DNS", txtHelp: "DNS-ka domain-ka: diiwaan TXT ah {name} = {value}, iyo CNAME u jeeda server-ka. Kadib riix Hubi DNS.",
+      primary: "Kan koowaad", makePrimary: "Ka dhig kan koowaad", changeSlug: "Beddel subdomain-ka", remove: "Ka saar", removeConfirm: "Ka saar {domain}?", search: "Raadi ganacsiyada"
+    },
+    db: {
+      title: "Kaydadka xogta", sub: "Kaydka xogta dhexe iyo kayd kasta oo ganacsi u gaar ah: noocyada schema-da, cabbirka, tijaabada xiriirka iyo cusboonaysiinta.",
+      central: "Kaydka xogta dhexe", sharedCount: "{n} ganacsi ayaa xogtooda halkan ku haya", current: "Nooca schema-da hadda: {v}", upToDate: "Cusub", behind: "U baahan cusboonaysiin",
+      own: "Kayd gaar ah", sharedMode: "Dhexe (la wadaago)", size: "Cabbir", tables: "Miisas", user: "Isticmaalaha kaydka", lastMigrated: "Cusboonaysiintii u dambaysay", lastBackup: "Nuqulkii u dambeeyay",
+      test: "Tijaabi", testOk: "Wuu xiriiray {ms} ms gudahood sida {user} · schema {v} · {users} isticmaale", testFail: "Lama xiriiri karo ({error})",
+      migrate: "Cusboonaysii", migrateAll: "Cusboonaysii dhammaan kaydadka gaarka ah", migrated: "Waxaa la gaarsiiyay nooca {v}", migratedAll: "{n} kayd ayaa la hubiyay, {f} way fashilmeen",
+      never: "Weligeed", error: "Khaladkii u dambeeyay", status: "Xaalad", business: "Ganacsi", database: "Kayd", filterOwn: "Kaydad gaar ah", filterShared: "La wadaago", filterAll: "Dhammaan"
+    },
+    backups: {
+      title: "Nuqulada kaydka", sub: "Server-ka ayaa sameeya nuqulada sida faylal JSON ah oo la cufay: kaydka dhexe, ama hal ganacsi (kaydkiisa gaarka ah, ama safafkiisa kaydka dhexe).",
+      folder: "Gal: {folder}", dailyOn: "Nuqulada maalinlaha ah ee tooska ah waa shidan yihiin — {n} ayaa la hayaa kayd kasta.", dailyOff: "Nuqulada maalinlaha ah waa dansan yihiin — ka shid Dejinta nidaamka.",
+      now: "Samee nuqul", core: "Kaydka dhexe", business: "Hal ganacsi", choose: "Dooro ganacsi", run: "Kaydi", running: "Waa la kaydinayaa…",
+      when: "Goorma", what: "Maxay", file: "Fayl", size: "Cabbir", rows: "Safaf", by: "Ayaa sameeyay", auto: "Toos", download: "Soo deji", missing: "Faylka kuma jiro server-ka",
+      deleteConfirm: "Tirtir faylka nuqulka {file}?", empty: "Weli nuqul ma jiro.",
+      restoreNote: "Soo celinta waxaa si ula kac ah u sameeya maamulaha farsamada: faylka geli kayd cusub oo madhan oo hubi ka hor beddelka. Faatix weligeed nuqul kuma qorto xog nool si toos ah."
+    },
+    branches: {
+      title: "Guudmarka laamaha", sub: "Laamaha ganacsi kasta, laga akhriyay kaydkiisa, iyo isticmaalayaasha, iibka 30-kii maalmood iyo xadka laamaha.",
+      total: "{n} laamood oo firfircoon {b} ganacsi gudahood", limit: "Xad", fromPlan: "qorshe", fromBusiness: "ganacsigan", noLimit: "Xad ma leh", setLimit: "Xadka laamaha",
+      limitHelp: "Banaan: qorshaha ayaa go'aamiya.", main: "Weyn", manager: "Maareeye", users: "Isticmaalayaal", sales30: "Iib · 30 maalmood", unreachable: "Kaydka lama gaari karo", code: "Kood", search: "Raadi ganacsiyada"
+    },
+    detail: {
+      database: "Kaydka xogta", dedicated: "Kayd gaar ah", shared: "Dhexe (la wadaago)", signin: "Gelitaan", setup: "Diyaarin", viewSetup: "Eeg diyaarinta", copy: "Koobiyee", copied: "La koobiyeeyay",
+      expire: "U calaamadee dhacay", archive: "Kaydi", setupFailed: "Diyaarintu waxay ku fashilantay “{step}”. Fur bogga diyaarinta si aad mar kale isku dayto."
+    },
+    settings: { backups: "Nuqulada kaydka", daily: "Maalin kasta samee nuqul kayd kasta", keep: "Nuqulada tooska ah ee la hayo kayd kasta" }
+  },
   adminDash: {
     greet: { morning: "Subax wanaagsan", afternoon: "Galab wanaagsan", evening: "Fiid wanaagsan" },
     needs: "{n} arrimood ayaa maanta u baahan fiiro.", allGood: "Wax walba si fiican ayay u socdaan.",
@@ -1335,7 +1463,7 @@ const so = {
     last: "Kii ugu dambeeyay", adminTries: "{n} galitaanka super admin-ka", blocked: "La xiray", block: "Xir", unblock: "Fur", tooManyTries: "Galitaanno khaldan oo badan",
     blockedIps: "Ciwaannada IP ee la xiray", noBlocked: "IP lama xirin.", forDays: "{n} maalmood", forever: "Weligeed", until: "ilaa {date}", recentFailed: "Galitaannadii khaldanaa ee ugu dambeeyay",
     addAdmin: "Ku dar super admin", adminAdded: "Super admin waa lagu daray", usernameHint: "Xarfo yaryar, tirooyin, dhibco ama jiitooyin", resetConfirm: "Ma u samaysaa fure cusub {name}? Labo-tallaabadiisa waa la damiyaa sidoo kale.",
-    roles: { owner: "Milkiile", admin: "Maamule", support: "Taageero", billing: "Lacag-bixin" },
+    roles: { owner: "Super Admin", admin: "Maamulaha Nidaamka", technical: "Maamulaha Farsamada", billing: "Maamulaha Maaliyadda", support: "Wakiilka Taageerada" },
     roleHelp: { owner: "Wax walba, oo ay ku jiraan super admin-yada iyo soo dhoofinta xogta.", admin: "Wax walba marka laga reebo super admin-yada iyo soo dhoofinta.",
       support: "Wax eegid, ka jawaabid taageerada iyo fariimaha, ogeysiisyada, qoraallada.", billing: "Wax eegid, qorshayaasha, rukummada iyo lacag-bixinta, warbixinnada." },
     twoStep: "Galitaan labo-tallaabo ah", on: "Shidan", offShort: "Dansan", disable: "Dami", enable: "Shid", resetPassword: "Dib u deji furaha",
@@ -1672,6 +1800,8 @@ const so = {
       overview: "Guudmar", health: "Caafimaadka nidaamka", all: "Dhammaan ganacsiyada", active: "Firfircoon", suspended: "La hakiyay", deactivated: "La joojiyay", newest: "Cusub (30 maalmood)", types: "Noocyada ganacsiga",
       trialsActive: "Tijaabooyin socda", trialsEnding: "Dhammaanaya 7 maalmood gudahood", trialsExpired: "Dhacay", allUsers: "Dhammaan isticmaalayaasha", disabledUsers: "Isticmaalayaal la xiray", admins: "Super admin-yada",
       allActivity: "Dhammaan dhaqdhaqaaqa", adminActions: "Ficillada super admin-ka", logins: "Galitaanka", password: "Beddel furaha", menu: "Menu",
+      register: "Diiwaan geli ganacsi", settingUp: "La diyaarinayo", expired: "Dhacay", archived: "La kaydiyay", infra: "Martigelinta & xogta",
+      hosting: "Martigelinta & domain-yada", databases: "Kaydadka xogta", backups: "Nuqulada kaydka", branches: "Guudmarka laamaha",
       billing: "Rukummada & lacag-bixinta", subscriptions: "Rukummada socda", due: "Ku eg 7 maalmood", overdue: "Dib u dhacay", noPlan: "Qorshe ma leh", payments: "Lacag-bixinta", plans: "Qorshayaasha",
       support: "Taageero", waitingTickets: "Sugaya jawaab", allTickets: "Dhammaan codsiyada", messages: "Fariimaha bogga", communication: "Ogeysiisyada", announcements: "Ogeysiisyada",
       reportsMenu: "Warbixinno", reports: "Warbixinnada nidaamka", security: "Amniga", system: "Nidaamka", settings: "Dejinta nidaamka", export: "Soo dhoofi xogta", myAccount: "Xisaabtayda", account: "Furaha & labo-tallaabo"

@@ -1,7 +1,7 @@
 import jwt from "jsonwebtoken";
 import { ALL_PERMISSIONS, permissionsFor } from "../lib/permissions.js";
 import { parsePermissions } from "../lib/roles.js";
-import { pool } from "../config/db.js";
+import { pool, corePool, currentTenant } from "../config/db.js";
 import { env } from "../config/env.js";
 import { profileFor } from "../lib/businessProfiles.js";
 import { resolveBranch } from "../lib/branches.js";
@@ -42,6 +42,8 @@ export async function requireAuth(req, res, next) {
       clearSessionCookie(res);
       return res.status(401).json({ code: "unauthenticated" });
     }
+    // the address names another business (prodima.faatix.com, a custom domain or the branded sign-in): not this session
+    if (req.tenant && req.tenant.id !== payload.bid) return res.status(401).json({ code: "unauthenticated" });
 
     const [rows] = await pool.query(
       `SELECT u.id, u.full_name, u.username, u.language, u.status AS user_status,
@@ -61,6 +63,11 @@ export async function requireAuth(req, res, next) {
     if (!row || row.user_status !== "active") {
       clearSessionCookie(res);
       return res.status(401).json({ code: "unauthenticated" });
+    }
+    // a business with its own database: status and "sign everyone out" are decided in the central registry
+    if (currentTenant()?.dedicated) {
+      const [[c]] = await corePool.query("SELECT status, sessions_valid_after FROM businesses WHERE id = ?", [row.business_id]);
+      if (c) { row.business_status = c.status; row.sessions_valid_after = c.sessions_valid_after; }
     }
     if (row.business_status !== "active") {
       return res.status(403).json({ code: "businessSuspended" });
@@ -90,7 +97,13 @@ export async function requireAuth(req, res, next) {
       profile: profileFor(row.business_type)        // this business type's own interface (lib/businessProfiles.js)
     };
     // the branch this request works in (lib/branches.js): the staff member's own branch, or the one chosen in the app
-    req.branch = await resolveBranch(pool, row.business_id, row.user_branch_id, req.get("X-Branch"));
+    // staff may also be given extra branches (user_branch_access): then they work only in those
+    let allowed = null;
+    if (!isOwner) {
+      const [acc] = await pool.query("SELECT branch_id FROM user_branch_access WHERE user_id = ? AND business_id = ?", [row.id, row.business_id]);
+      if (acc.length) allowed = [...new Set([row.user_branch_id, ...acc.map((a) => a.branch_id)].filter(Boolean).map(Number))];
+    }
+    req.branch = await resolveBranch(pool, row.business_id, row.user_branch_id, req.get("X-Branch"), allowed);
     next();
   } catch (err) {
     next(err);

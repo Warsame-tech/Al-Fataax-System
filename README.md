@@ -120,6 +120,7 @@ server/uploads/   uploaded business logos (not committed to git)
   `/api/contact` only, via `WEBSITE_ORIGIN` (comma separated); the app may set `VITE_WEBSITE_URL` so its sign-in page
   links back to the website.
 - Website text, images and contact placeholders now live in `faatix-website/src` (`config/site.js`, `public/images`).
+- **Multi-tenancy, provisioning, domains, databases, backups and branches:** see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## Editing text and translations
 

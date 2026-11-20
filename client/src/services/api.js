@@ -22,6 +22,7 @@ export async function apiRequest(path, { method = "GET", body } = {}) {
   if (body && !isForm) headers["Content-Type"] = "application/json";
   // the branch chosen in the header (owners / head office); the API ignores it for staff tied to one branch
   try { const branch = localStorage.getItem("faatix.branch"); if (branch) headers["X-Branch"] = branch; } catch { /* storage blocked */ }
+  try { const tenant = localStorage.getItem("faatix.tenant"); if (tenant && !path.startsWith("/api/admin")) headers["X-Tenant"] = tenant; } catch { /* storage blocked */ }
 
   let res;
   try {
@@ -43,6 +44,14 @@ export async function apiRequest(path, { method = "GET", body } = {}) {
   }
   return data;
 }
+
+/*
+ * The business whose sign-in link (/b/<slug>) was opened on this device. Sent as X-Tenant so the server signs in
+ * against that business's own database (on its subdomain the server knows it from the address anyway).
+ */
+const TENANT_KEY = "faatix.tenant";
+export const getTenant = () => { try { return localStorage.getItem(TENANT_KEY) || null; } catch { return null; } };
+export const setTenant = (slug) => { try { if (slug) localStorage.setItem(TENANT_KEY, slug); else localStorage.removeItem(TENANT_KEY); } catch { /* storage blocked */ } };
 
 /** Absolute URL for an uploaded file path such as "/uploads/logos/x.png". */
 export const fileUrl = (p) => (p ? BASE_URL + p : null);

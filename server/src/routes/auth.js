@@ -1,7 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
-import { pool } from "../config/db.js";
+import { pool, corePool } from "../config/db.js";
 import { platformSettings, planOf } from "../lib/platform.js";
 import { env } from "../config/env.js";
 import { setSessionCookie, clearSessionCookie, requireAuth, audit } from "../middleware/auth.js";
@@ -115,21 +115,28 @@ router.post("/sign-in", loginLimiter, async (req, res, next) => {
     const password = typeof req.body?.password === "string" ? req.body.password : "";
     if (!login || !password) return res.status(400).json({ code: "required" });
 
+    // The business comes from the address (prodima.faatix.com, a custom domain, or the branded sign-in page):
+    // then only that business's users can sign in here, from that business's own database.
+    const tenantId = req.tenant?.id || null;
     // Username, email or phone.
     const [rows] = await pool.query(
       `SELECT u.id, u.business_id, u.password_hash, u.status, b.status AS business_status
          FROM users u JOIN businesses b ON b.id = u.business_id
-        WHERE u.username = ? OR u.email = ? OR u.phone = ?
+        WHERE (u.username = ? OR u.email = ? OR u.phone = ?)${tenantId ? " AND u.business_id = ?" : ""}
         LIMIT 1`,
-      [login, login, login]
+      tenantId ? [login, login, login, tenantId] : [login, login, login]
     );
     const user = rows[0];
     const ok = await bcrypt.compare(password, user ? user.password_hash : DUMMY_HASH);
     if (!user || !ok || user.status !== "active") {
-      await audit(null, { businessId: user?.business_id ?? null, userId: user?.id ?? null, action: "auth.login_failed", ip: req.ip });
+      // failed sign-ins are kept centrally (Super admin → Security), whichever database the business uses
+      await audit(corePool, { businessId: user?.business_id ?? req.tenant?.id ?? null, userId: req.tenant ? null : user?.id ?? null, action: "auth.login_failed", meta: req.tenant ? { tenant: req.tenant.slug } : null, ip: req.ip });
       return res.status(401).json({ code: "invalidCredentials" });
     }
-    if (user.business_status !== "active") return res.status(403).json({ code: "businessSuspended" });
+    const [[core]] = await corePool.query("SELECT status FROM businesses WHERE id = ?", [user.business_id]);   // the central registry decides
+    const status = core?.status || user.business_status;
+    if (["pending", "provisioning"].includes(status)) return res.status(403).json({ code: "businessNotReady" });
+    if (status !== "active") return res.status(403).json({ code: "businessSuspended" });
 
     await pool.query("UPDATE users SET last_login_at = UTC_TIMESTAMP() WHERE id = ?", [user.id]);
     await audit(null, { businessId: user.business_id, userId: user.id, action: "auth.login", ip: req.ip });
@@ -149,12 +156,13 @@ router.post("/sign-out", (req, res) => {
 /* ---------- GET /api/auth/me ---------- */
 router.get("/me", requireAuth, async (req, res, next) => {
   try {
-    const [trial] = await pool.query(
+    const [trial] = await corePool.query(   // trials and plans live in the central database
       "SELECT start_date, end_date, status FROM trial_records WHERE business_id = ? ORDER BY id DESC LIMIT 1",
       [req.business.id]
     );
+    const [[core]] = await corePool.query("SELECT slug FROM businesses WHERE id = ?", [req.business.id]);
     const plan = await planOf(pool, req.business.id);
-    res.json({ user: req.user, business: req.business, trial: trial[0] || null, permissions: req.user.permissions,
+    res.json({ user: req.user, business: { ...req.business, slug: core?.slug || null }, trial: trial[0] || null, permissions: req.user.permissions,
       subscription: plan ? { plan: plan.name, cycle: plan.cycle, status: plan.status, periodEnd: plan.current_period_end, maxUsers: plan.max_users, maxBranches: plan.max_branches, maxProducts: plan.max_products,
         features: (() => { try { return JSON.parse(plan.features || "[]"); } catch { return []; } })() } : null,
       branches: { list: req.branch.list, current: req.branch.filterId, fixed: req.branch.fixed } });

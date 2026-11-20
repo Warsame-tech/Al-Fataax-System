@@ -33,8 +33,19 @@ export async function branchesOf(db, businessId) {
   return rows;
 }
 
-export async function resolveBranch(db, businessId, fixedId, chosen) {
-  const list = await branchesOf(db, businessId);
+export async function resolveBranch(db, businessId, fixedId, chosen, allowed = null) {
+  const all = await branchesOf(db, businessId);
+  if (allowed?.length) {
+    // a user with several branches (user_branch_access): only those, always one of them (never "all branches")
+    const mine = all.filter((b) => allowed.includes(b.id) && b.is_active);
+    if (mine.length) {
+      const main = all.find((b) => b.is_main) || all[0];
+      const at = mine.find((b) => b.id === Number(chosen)) || mine.find((b) => b.id === Number(fixedId)) || mine[0];
+      return { id: at.id, filterId: at.id, fixed: mine.length === 1, locationId: at.sell_location_id || null, mainId: main.id,
+        list: mine.map((b) => ({ id: b.id, name: b.name, isMain: Boolean(b.is_main) })) };
+    }
+  }
+  const list = all;
   const main = list.find((b) => b.is_main) || list[0];
   const pick = (v) => list.find((b) => b.id === Number(v) && b.is_active) || null;
   const fixed = fixedId ? pick(fixedId) || list.find((b) => b.id === Number(fixedId)) : null;

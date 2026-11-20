@@ -1,6 +1,7 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
-import { pool } from "../config/db.js";
+import { pool, corePool } from "../config/db.js";
+import { mirrorToCore } from "../lib/tenancy.js";
 import { checkPlanLimit } from "../lib/platform.js";
 import { requireAuth, audit } from "../middleware/auth.js";
 import { requirePerm, can } from "../lib/permissions.js";
@@ -108,7 +109,7 @@ settingsRouter.get("/", ah(async (req, res) => {
   const bid = req.business.id;
   const [[b]] = await pool.query("SELECT name, owner_name, email, phone, business_type, address, logo_path, created_at FROM businesses WHERE id = ?", [bid]);
   const [[s]] = await pool.query("SELECT currency, default_language, invoice_prefix, receipt_prefix, purchase_prefix, invoice_footer, timezone FROM business_settings WHERE business_id = ?", [bid]);
-  const [[t]] = await pool.query("SELECT start_date, end_date, status FROM trial_records WHERE business_id = ? ORDER BY id DESC LIMIT 1", [bid]);
+  const [[t]] = await corePool.query("SELECT start_date, end_date, status FROM trial_records WHERE business_id = ? ORDER BY id DESC LIMIT 1", [bid]);
   res.json({
     business: { name: b.name, ownerName: b.owner_name, email: b.email, phone: b.phone, type: b.business_type, address: b.address, logoPath: b.logo_path, createdAt: b.created_at },
     settings: { currency: s.currency, defaultLanguage: s.default_language, invoicePrefix: s.invoice_prefix, receiptPrefix: s.receipt_prefix, purchasePrefix: s.purchase_prefix, invoiceFooter: s.invoice_footer, timezone: s.timezone },
@@ -138,6 +139,7 @@ settingsRouter.put("/business", requirePerm("business.edit"), imageUpload.single
   else if (b.removeLogo === "true") logo = null;
   await pool.query("UPDATE businesses SET name = ?, owner_name = ?, email = ?, phone = ?, business_type = ?, address = ?, logo_path = ? WHERE id = ?",
     [d.name, d.ownerName, d.email, d.phone, d.type, d.address, logo, bid]);
+  await mirrorToCore(bid);   // the central registry shows the same name / logo (super admin, branded sign-in)
   if (cur.logo_path && cur.logo_path !== logo) removeImage(cur.logo_path);
   await audit(null, { businessId: bid, userId: req.user.id, action: "business.updated", ip: req.ip });
   res.json({ code: "saved" });

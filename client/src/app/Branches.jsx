@@ -97,18 +97,28 @@ function BranchForm({ branch, onClose, onSaved }) {
   const { t } = useLanguage();
   const locations = useApi("/api/stock/locations");
   const isNew = !branch.id;
-  const [f, setF] = useState({ name: branch.name || "", address: branch.address || "", phone: branch.phone || "", sellLocationId: branch.sellLocationId || "", isActive: branch.isActive !== false });
+  const staffList = useApi("/api/branches/staff");   // for the manager (needs staff.manage; hidden without it)
+  const [f, setF] = useState({ name: branch.name || "", code: branch.code || "", managerUserId: branch.managerUserId || "", address: branch.address || "", phone: branch.phone || "", sellLocationId: branch.sellLocationId || "", isActive: branch.isActive !== false });
   const sub = useSubmit();
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const save = async (e) => {
     e.preventDefault();
-    const body = { ...f, sellLocationId: f.sellLocationId || null };
+    const body = { ...f, sellLocationId: f.sellLocationId || null, managerUserId: f.managerUserId || null };
     if (await sub.run(() => apiRequest(isNew ? "/api/branches" : `/api/branches/${branch.id}`, { method: isNew ? "POST" : "PUT", body }))) onSaved();
   };
   return (
     <Modal title={isNew ? t("ui.branches.add") : branch.name} onClose={onClose}>
       <form onSubmit={save} className="form-grid form-grid--2">
         <Field label={t("ui.common.name")} error={sub.fieldErrors.name} full><input className="input" value={f.name} onChange={set("name")} maxLength={100} placeholder={t("ui.branches.namePh")} /></Field>
+        <Field label={`${t("ui.branches.code")} ${t("ui.common.optional")}`}><input className="input" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase().replace(/[^A-Z0-9_-]/g, "") })} maxLength={20} placeholder="HQ, BR2…" /></Field>
+        {staffList.data && (
+          <Field label={`${t("ui.branches.manager")} ${t("ui.common.optional")}`} error={sub.fieldErrors.managerUserId}>
+            <select className="input" value={f.managerUserId} onChange={set("managerUserId")}>
+              <option value="">{t("ui.branches.noManager")}</option>
+              {staffList.data.staff.map((u) => <option key={u.id} value={u.id}>{u.name}</option>)}
+            </select>
+          </Field>
+        )}
         <Field label={`${t("ui.common.address")} ${t("ui.common.optional")}`}><input className="input" value={f.address} onChange={set("address")} maxLength={200} /></Field>
         <Field label={`${t("ui.common.phone")} ${t("ui.common.optional")}`}><input className="input" value={f.phone} onChange={set("phone")} maxLength={30} /></Field>
         <Field label={t("ui.branches.sellLocation")} hint={isNew ? t("ui.branches.sellLocationNew") : t("ui.branches.sellLocationHint")} full>
@@ -137,18 +147,19 @@ function BranchStaff() {
   const [err, setErr] = useState(null);
   const [saved, setSaved] = useState(null);
   const branches = (list.data?.branches || []).filter((b) => b.isActive);
-  const assign = async (u, branchId) => {
+  const assign = async (u, branchId, extraBranchIds = u.extraBranchIds || []) => {
     setErr(null); setSaved(null);
-    try { await apiRequest(`/api/branches/staff/${u.id}`, { method: "PUT", body: { branchId: branchId || null } }); setSaved(u.id); staff.reload(); }
+    try { await apiRequest(`/api/branches/staff/${u.id}`, { method: "PUT", body: { branchId: branchId || null, extraBranchIds } }); setSaved(u.id); staff.reload(); }
     catch (e) { setErr(e); }
   };
+  const toggleExtra = (u, b) => assign(u, u.branchId, (u.extraBranchIds || []).includes(b) ? u.extraBranchIds.filter((x) => x !== b) : [...(u.extraBranchIds || []), b]);
   return (
     <>
-      <p className="muted">{t("ui.branches.staffHelp")}</p>
+      <p className="muted">{t("ui.branches.staffHelp")} {branches.length > 1 && t("ui.branches.alsoInHelp")}</p>
       <FormError error={err} />
       {!staff.data || !list.data ? <Loading /> : (
         <div className="table-wrap"><table className="table">
-          <thead><tr><th>{t("ui.common.name")}</th><th>{t("ui.common.role")}</th><th>{t("ui.branches.worksIn")}</th></tr></thead>
+          <thead><tr><th>{t("ui.common.name")}</th><th>{t("ui.common.role")}</th><th>{t("ui.branches.worksIn")}</th>{branches.length > 1 && <th>{t("ui.branches.alsoIn")}</th>}</tr></thead>
           <tbody>{staff.data.staff.map((u) => (
             <tr key={u.id}>
               <td><strong>{u.name}</strong><small className="cell-sub">{u.username}</small></td>
@@ -162,6 +173,19 @@ function BranchStaff() {
                 )}
                 {saved === u.id && <small className="cell-sub">{t("ui.common.saved")}</small>}
               </td>
+              {branches.length > 1 && (
+                <td>
+                  {u.role === "owner" || !u.branchId ? <span className="muted">—</span> : (
+                    <div className="branch-chips">
+                      {branches.filter((b) => b.id !== u.branchId).map((b) => (
+                        <label key={b.id} className={"branch-chip" + ((u.extraBranchIds || []).includes(b.id) ? " is-on" : "")}>
+                          <input type="checkbox" checked={(u.extraBranchIds || []).includes(b.id)} onChange={() => toggleExtra(u, b.id)} />{b.name}
+                        </label>
+                      ))}
+                    </div>
+                  )}
+                </td>
+              )}
             </tr>
           ))}</tbody>
         </table></div>

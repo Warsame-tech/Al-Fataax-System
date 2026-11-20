@@ -1777,3 +1777,102 @@ tr.is-danger td { background: #fff5f5; }
 .contact-form__msg { grid-column: 1 / -1; }
 .contact-form .btn { justify-self: start; }
 @media (max-width: 700px) { .contact-form__grid { grid-template-columns: 1fr; } }
+
+/* ---------- super admin: register a business, setup, hosting, databases, backups, branches ---------- */
+.reg-steps { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0 14px; padding: 0; list-style: none; counter-reset: step; }
+.reg-steps button { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px 7px 7px; border: 1px solid var(--line); border-radius: 999px; background: #fff; color: var(--muted); font: inherit; font-size: .9rem; font-weight: 600; cursor: pointer; }
+.reg-steps button:disabled { cursor: default; }
+.reg-steps button > span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--soft); color: var(--navy); font-size: .82rem; }
+.reg-steps button > span .icon { width: 14px; height: 14px; }
+.reg-steps .is-current button { border-color: var(--blue); color: var(--navy); box-shadow: 0 0 0 3px rgba(35, 115, 244, .12); }
+.reg-steps .is-current button > span { background: var(--blue); color: #fff; }
+.reg-steps .is-done button > span { background: #e3f6ec; color: #1f9d61; }
+.slug-input { display: flex; align-items: stretch; }
+.slug-input .input { flex: 1; min-width: 0; }
+.slug-input__suffix { display: flex; align-items: center; padding: 0 12px; border: 1px solid var(--line); border-left: 0; border-radius: 0 10px 10px 0; background: var(--soft); color: var(--muted); font-size: .9rem; white-space: nowrap; }
+.slug-input:has(.slug-input__suffix) .input { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.slug-state { min-height: 22px; font-size: .88rem; }
+.slug-ok, .slug-bad { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.slug-ok { color: #11683f; } .slug-bad { color: #b42318; }
+.slug-ok .icon, .slug-bad .icon { width: 15px; height: 15px; }
+.db-choice { display: grid; gap: 12px; }
+.db-choice__opt { display: flex; align-items: flex-start; gap: 14px; padding: 16px; border: 1.5px solid var(--line); border-radius: 16px; background: #fff; cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease; }
+.db-choice__opt input { margin-top: 12px; accent-color: var(--blue); }
+.db-choice__opt.is-on { border-color: var(--blue); box-shadow: 0 0 0 3px rgba(35, 115, 244, .12); }
+.db-choice__opt strong { display: block; color: var(--navy); }
+.db-choice__opt small { display: block; margin-top: 3px; color: var(--muted); line-height: 1.45; }
+.db-choice__icon { display: grid; place-items: center; flex: none; width: 42px; height: 42px; border-radius: 12px; background: var(--blue-50); color: var(--blue); }
+.reg-review .sub-card__facts code, .biz-infra code { font-size: .85rem; }
+
+.prov__steps { display: grid; gap: 0; margin: 0 0 16px; padding: 0; list-style: none; }
+.prov__steps li { position: relative; display: flex; gap: 14px; padding: 0 0 18px; }
+.prov__steps li:not(:last-child)::before { content: ""; position: absolute; left: 15px; top: 32px; bottom: 2px; width: 2px; background: var(--line); }
+.prov__steps li.is-done:not(:last-child)::before { background: #9fd9b9; }
+.prov__dot { display: grid; place-items: center; flex: none; width: 32px; height: 32px; border-radius: 50%; border: 2px solid var(--line); background: #fff; color: #fff; }
+.prov__dot .icon { width: 16px; height: 16px; }
+.is-done .prov__dot { border-color: #1f9d61; background: #1f9d61; }
+.is-failed .prov__dot { border-color: #d92d20; background: #d92d20; }
+.is-running .prov__dot { border-color: var(--blue); }
+.prov__spin { width: 16px; height: 16px; border-radius: 50%; border: 2px solid rgba(35, 115, 244, .25); border-top-color: var(--blue); animation: prov-spin .8s linear infinite; }
+@keyframes prov-spin { to { transform: rotate(360deg); } }
+.prov__text { display: flex; flex-direction: column; gap: 2px; padding-top: 4px; }
+.prov__text strong { color: var(--navy); }
+.prov__text small { color: var(--muted); }
+.prov__err { color: #b42318 !important; word-break: break-word; }
+.is-waiting .prov__text strong { color: var(--muted); font-weight: 500; }
+
+.host-list { display: grid; gap: 12px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 420px), 1fr)); }
+.host-card { display: grid; gap: 10px; align-content: start; }
+.host-card__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.host-card__head > a { flex: 1; min-width: 0; color: var(--navy); }
+.host-card .sub-card__facts dd { word-break: break-all; }
+.domain-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.domain-list li { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 12px; background: var(--soft); }
+.domain-dot { flex: none; width: 10px; height: 10px; margin-top: 6px; border-radius: 50%; background: #f59e0b; }
+.domain-dot.is-verified { background: #1f9d61; }
+.domain-list__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; word-break: break-word; }
+.domain-list__main small { font-size: .8rem; }
+.domain-list__act { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.chip-mini { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px; background: var(--blue-50); color: var(--blue); font-size: .72rem; font-weight: 700; vertical-align: middle; }
+
+.db-hero { display: grid; gap: 12px; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); margin-bottom: 4px; }
+@media (max-width: 860px) { .db-hero { grid-template-columns: 1fr; } }
+.db-hero__core { display: flex; gap: 14px; align-items: flex-start; }
+.db-hero__core h2 { margin: 0 0 4px; font-size: 1.05rem; color: var(--navy); }
+.db-hero__core p { margin: 2px 0; }
+.db-hero__core > div { flex: 1; min-width: 0; }
+.db-hero__icon { display: grid; place-items: center; flex: none; width: 48px; height: 48px; border-radius: 14px; background: var(--navy); color: #fff; }
+.db-hero__stats { display: grid; gap: 10px; align-content: start; }
+.db-hero__stats p { margin: 0; }
+.db-hero__nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.db-hero__nums div { display: flex; flex-direction: column; padding: 8px 10px; border-radius: 12px; background: var(--soft); }
+.db-hero__nums b { font-size: 1.3rem; color: var(--navy); }
+.db-hero__nums small { color: var(--muted); font-size: .76rem; }
+.db-ver { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700; white-space: nowrap; }
+.db-ver.is-ok { background: #e3f6ec; color: #11683f; }
+.db-ver.is-behind, .db-ver.is-wait { background: #fff4e5; color: #b45309; }
+.db-ver.is-bad { background: #fdecec; color: #b42318; }
+.row-actions small { display: block; margin-top: 4px; white-space: normal; text-align: right; font-size: .78rem; }
+
+.backup-make { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+
+.branch-limit { display: inline-flex; align-items: baseline; gap: 6px; padding: 3px 10px; border-radius: 999px; background: #e3f6ec; color: #11683f; font-weight: 700; }
+.branch-limit small { font-weight: 500; opacity: .8; }
+.branch-limit.is-full { background: #fff4e5; color: #b45309; }
+.branch-rows { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.branch-rows li { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--soft); }
+.branch-rows li.is-off { opacity: .55; }
+.branch-rows li > .icon { flex: none; width: 18px; height: 18px; color: var(--blue); }
+.branch-rows__name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.branch-rows__name small { font-size: .78rem; }
+.branch-rows__num { display: flex; flex-direction: column; align-items: flex-end; min-width: 64px; }
+.branch-rows__num b { color: var(--navy); }
+.branch-rows__num small { color: var(--muted); font-size: .72rem; white-space: nowrap; }
+.biz-infra { margin-top: 6px; }
+.biz-infra dd { word-break: break-all; }
+
+/* branches: other branches a staff member may open (user_branch_access) */
+.branch-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.branch-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; background: #fff; font-size: .82rem; cursor: pointer; }
+.branch-chip input { accent-color: var(--blue); margin: 0; }
+.branch-chip.is-on { border-color: var(--blue); background: var(--blue-50); color: var(--navy); font-weight: 600; }

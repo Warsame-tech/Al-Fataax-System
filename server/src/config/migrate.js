@@ -9,17 +9,19 @@ import { env } from "./env.js";
 import { schemaSql } from "./schema.js";
 import { linkAllBusinesses } from "../lib/roles.js";
 import { DATA_STEPS } from "./dataMigrations.js";
+import { ADMIN_ROLES, ADMIN_ROLE_INFO } from "../lib/platform.js";
+import { slugify, freeSlug } from "../lib/slugs.js";
 
-/* Brand-new database (e.g. a fresh Railway MySQL): create every table from schema.sql. */
-async function createSchemaIfEmpty() {
+/* Brand-new database (e.g. a fresh Railway MySQL, or a new business database): create every table from schema.sql. */
+async function createSchemaIfEmpty(dbConf = env.db) {
   const [[row]] = await pool.query(
     "SELECT COUNT(*) n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'businesses'"
   );
   if (row.n) return;
-  const conn = await mysql.createConnection({ ...env.db, multipleStatements: true });
+  const conn = await mysql.createConnection({ ...dbConf, multipleStatements: true });
   try {
-    await conn.query(schemaSql(env.db.database));
-    console.log(`Database set up: created all tables in "${env.db.database}"`);
+    await conn.query(schemaSql(dbConf.database));
+    console.log(`Database set up: created all tables in "${dbConf.database}"`);
   } finally {
     await conn.end();
   }
@@ -975,6 +977,57 @@ COLUMNS.push(
   { table: "businesses", column: "sessions_valid_after", ddl: "ALTER TABLE businesses ADD COLUMN sessions_valid_after DATETIME NULL" }
 );
 
+/*
+ * Architecture update: central platform registry (faatix_core = the main database), one database per business,
+ * provisioning, domains, branch access. The spec's table names that already existed under another name are
+ * offered as read-only views (platform_users, subscription_plans, platform_payments, platform_audit_logs, system_settings).
+ */
+TABLES.push(
+  T("schema_versions", `version INT UNSIGNED NOT NULL PRIMARY KEY, applied_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`),
+  T("business_types", `code VARCHAR(40) NOT NULL PRIMARY KEY, name VARCHAR(80) NOT NULL, description VARCHAR(255) NULL,
+    is_active TINYINT(1) NOT NULL DEFAULT 1, sort_order INT NOT NULL DEFAULT 0, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP`),
+  T("business_domains", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, business_id INT UNSIGNED NOT NULL, domain VARCHAR(190) NOT NULL,
+    kind VARCHAR(12) NOT NULL DEFAULT 'custom', status VARCHAR(12) NOT NULL DEFAULT 'pending', is_primary TINYINT(1) NOT NULL DEFAULT 0,
+    verify_token VARCHAR(64) NULL, checked_at DATETIME NULL, check_note VARCHAR(255) NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_domain (domain), INDEX idx_domain_business (business_id)`),
+  T("database_registry", `business_id INT UNSIGNED NOT NULL PRIMARY KEY, mode VARCHAR(10) NOT NULL DEFAULT 'shared',
+    db_name VARCHAR(64) NULL, db_host VARCHAR(190) NULL, db_port INT UNSIGNED NULL, db_user VARCHAR(32) NULL, db_password_enc TEXT NULL,
+    status VARCHAR(12) NOT NULL DEFAULT 'pending', schema_version INT UNSIGNED NULL, last_migrated_at DATETIME NULL, last_backup_at DATETIME NULL,
+    last_error VARCHAR(500) NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+  T("provisioning_jobs", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, business_id INT UNSIGNED NOT NULL, status VARCHAR(12) NOT NULL DEFAULT 'pending',
+    step VARCHAR(30) NULL, steps TEXT NULL, error VARCHAR(500) NULL, attempts INT UNSIGNED NOT NULL DEFAULT 0, payload TEXT NULL, admin_id INT UNSIGNED NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, started_at DATETIME NULL, finished_at DATETIME NULL, INDEX idx_prov_business (business_id, id)`),
+  T("platform_roles", `code VARCHAR(20) NOT NULL PRIMARY KEY, name VARCHAR(60) NOT NULL, description VARCHAR(255) NULL`),
+  T("platform_permissions", `role_code VARCHAR(20) NOT NULL, permission VARCHAR(30) NOT NULL, PRIMARY KEY (role_code, permission)`),
+  T("business_modules", `business_id INT UNSIGNED NOT NULL, module VARCHAR(40) NOT NULL, enabled TINYINT(1) NOT NULL DEFAULT 1,
+    updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, PRIMARY KEY (business_id, module)`),
+  T("backups", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, scope VARCHAR(10) NOT NULL, business_id INT UNSIGNED NULL, file_name VARCHAR(190) NOT NULL,
+    size_bytes BIGINT UNSIGNED NOT NULL DEFAULT 0, tables_count INT UNSIGNED NOT NULL DEFAULT 0, rows_count BIGINT UNSIGNED NOT NULL DEFAULT 0,
+    status VARCHAR(10) NOT NULL DEFAULT 'done', error VARCHAR(500) NULL, admin_id INT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_backup_scope (scope, business_id, created_at)`),
+  // branches: the branches a user may open (besides their own); enforced by middleware/auth.js
+  T("user_branch_access", `user_id INT UNSIGNED NOT NULL, branch_id INT UNSIGNED NOT NULL, business_id INT UNSIGNED NOT NULL,
+    created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY (user_id, branch_id), INDEX idx_uba_business (business_id, branch_id)`)
+);
+COLUMNS.push(
+  { table: "businesses", column: "slug", ddl: "ALTER TABLE businesses ADD COLUMN slug VARCHAR(40) NULL AFTER name, ADD UNIQUE KEY uq_business_slug (slug)" },
+  { table: "businesses", column: "provisioned_at", ddl: "ALTER TABLE businesses ADD COLUMN provisioned_at DATETIME NULL" },
+  { table: "businesses", column: "max_branches", ddl: "ALTER TABLE businesses ADD COLUMN max_branches INT UNSIGNED NULL" },
+  { table: "support_tickets", column: "user_name", ddl: "ALTER TABLE support_tickets ADD COLUMN user_name VARCHAR(150) NULL AFTER user_id" },
+  { table: "support_messages", column: "user_name", ddl: "ALTER TABLE support_messages ADD COLUMN user_name VARCHAR(150) NULL AFTER user_id" },
+  { table: "branches", column: "code", ddl: "ALTER TABLE branches ADD COLUMN code VARCHAR(20) NULL AFTER name" },
+  { table: "branches", column: "manager_user_id", ddl: "ALTER TABLE branches ADD COLUMN manager_user_id INT UNSIGNED NULL AFTER phone" }
+);
+/* the schema version every database is brought to (database_registry.schema_version, schema_versions) */
+export const SCHEMA_VERSION = 20261120;
+const VIEWS = {
+  platform_users: "SELECT id, username, email, role, status, totp_enabled AS two_factor, last_login_at, created_at FROM platform_admins",
+  subscription_plans: "SELECT * FROM plans",
+  platform_payments: "SELECT * FROM subscription_payments",
+  platform_audit_logs: "SELECT * FROM audit_logs WHERE platform_admin_id IS NOT NULL",
+  system_settings: "SELECT name, value, updated_at FROM platform_settings"
+};
+
 const INDEXES = [
   { table: "products", name: "idx_products_category", ddl: "ALTER TABLE products ADD INDEX idx_products_category (business_id, category_id)" },
   { table: "products", name: "idx_products_brand", ddl: "ALTER TABLE products ADD INDEX idx_products_brand (business_id, brand_id)" },
@@ -983,8 +1036,14 @@ const INDEXES = [
   { table: "products", name: "idx_products_variant", ddl: "ALTER TABLE products ADD INDEX idx_products_variant (business_id, variant_of)" }
 ];
 
-export async function migrate() {
-  await createSchemaIfEmpty();
+/*
+ * Brings the current database (`pool`: the core one, or a business database inside withTenant) up to date.
+ *   opts.db   connection settings for creating the schema in an empty database (default: the core database)
+ *   opts.core true for the central database (platform data: views, business types, roles, registry rows)
+ */
+export async function migrate(opts = {}) {
+  const { db: dbConf = env.db, core = true } = opts;
+  await createSchemaIfEmpty(dbConf);
   for (const t of TABLES) {
     const [[row]] = await pool.query(
       "SELECT COUNT(*) n FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", [t.table]
@@ -1071,13 +1130,53 @@ export async function migrate() {
     );
     if (!row.n) await pool.query(ix.ddl);
   }
+  // business statuses of the new architecture (pending → provisioning → active; expired, archived)
+  const [[bStatus]] = await pool.query(
+    "SELECT COLUMN_TYPE t FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'businesses' AND COLUMN_NAME = 'status'");
+  if (bStatus && !String(bStatus.t).includes("'provisioning'")) {
+    await pool.query("ALTER TABLE businesses MODIFY status ENUM('pending','provisioning','active','suspended','expired','deactivated','archived') NOT NULL DEFAULT 'active'");
+    console.log("Database upgraded: business statuses pending, provisioning, expired, archived");
+  }
   await linkAllBusinesses();
-  // One-time data steps (each runs once, recorded in app_migrations).
-  for (const step of DATA_STEPS) {
+  if (core) await coreData();
+  // One-time data steps (each runs once, recorded in app_migrations). Platform steps run only in the central database.
+  for (const step of DATA_STEPS.filter((x) => core || !x.name.startsWith("platform_"))) {
     const [[done]] = await pool.query("SELECT COUNT(*) n FROM app_migrations WHERE name = ?", [step.name]);
     if (done.n) continue;
     await step.run(pool);
     await pool.query("INSERT INTO app_migrations (name) VALUES (?)", [step.name]);
     console.log(`Database upgraded: ${step.name}`);
   }
+  await pool.query("INSERT IGNORE INTO schema_versions (version) VALUES (?)", [SCHEMA_VERSION]);
 }
+
+/* Central database only: compatibility views, business types, platform roles, registry rows and slugs of existing businesses. */
+async function coreData() {
+  for (const [name, sql] of Object.entries(VIEWS)) {
+    const [[t]] = await pool.query("SELECT TABLE_TYPE t FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?", [name]);
+    if (t && t.t !== "VIEW") continue;   // a real table with that name exists: leave it alone
+    await pool.query("CREATE OR REPLACE VIEW `" + name + "` AS " + sql).catch((err) => console.error(`View ${name}:`, err.code || err.message));
+  }
+  const [[types]] = await pool.query("SELECT COUNT(*) n FROM business_types");
+  if (!types.n) {
+    let i = 0;
+    for (const [code, name] of Object.entries(TYPE_NAMES)) await pool.query("INSERT IGNORE INTO business_types (code, name, sort_order) VALUES (?, ?, ?)", [code, name, i++]);
+  }
+  for (const [code, r] of Object.entries(ADMIN_ROLE_INFO)) {
+    await pool.query("INSERT INTO platform_roles (code, name, description) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), description = VALUES(description)", [code, r.name, r.description]);
+    await pool.query("DELETE FROM platform_permissions WHERE role_code = ?", [code]);
+    for (const perm of ADMIN_ROLES[code] || []) await pool.query("INSERT IGNORE INTO platform_permissions (role_code, permission) VALUES (?, ?)", [code, perm]);
+  }
+  // every business that already exists keeps working from the central database ("shared")
+  await pool.query(`INSERT IGNORE INTO database_registry (business_id, mode, db_name, status, schema_version, last_migrated_at)
+    SELECT id, 'shared', DATABASE(), 'ready', ?, UTC_TIMESTAMP() FROM businesses WHERE status NOT IN ('pending','provisioning')`, [SCHEMA_VERSION]);
+  await pool.query("UPDATE database_registry SET schema_version = ?, last_migrated_at = UTC_TIMESTAMP() WHERE mode = 'shared' AND status = 'ready'", [SCHEMA_VERSION]);
+  // support messages written before names were stored with them
+  await pool.query("UPDATE support_tickets t JOIN users u ON u.id = t.user_id SET t.user_name = u.full_name WHERE t.user_name IS NULL");
+  await pool.query("UPDATE support_messages m JOIN users u ON u.id = m.user_id SET m.user_name = u.full_name WHERE m.user_name IS NULL AND m.author = 'business'");
+  const [noSlug] = await pool.query("SELECT id, name FROM businesses WHERE slug IS NULL");
+  for (const b of noSlug) await pool.query("UPDATE businesses SET slug = ? WHERE id = ?", [await freeSlug(pool, slugify(b.name), b.id), b.id]);
+}
+const TYPE_NAMES = { supermarket: "Supermarket", cosmetics: "Cosmetics", fashion: "Clothing", pharmacy: "Pharmacy", electronics: "Electronics", jewelry: "Jewelry",
+  fabric: "Fabric & tailoring", restaurant: "Restaurant", cafe: "Café", fast_food: "Fast food", bakery: "Bakery", juice_bar: "Juice bar",
+  food_truck: "Food truck", takeaway: "Takeaway", food_other: "Other food business" };
