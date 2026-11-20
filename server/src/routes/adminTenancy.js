@@ -18,6 +18,8 @@
  *   GET    /backups · POST /backups · GET /backups/:id/download · DELETE /backups/:id   (perm backups)
  *   GET    /branches-overview                   every business's branches, users and sales (30 days), limits
  *   PATCH  /businesses/:id/branch-limit         a branch limit for one business (perm businesses)
+ *   POST   /databases/:businessId/move          move a shared business into its own database (perm databases)
+ *   GET    /businesses/:id/modules · PUT /businesses/:id/modules { disabled: [...] }   switch modules off / on (perm businesses)
  */
 import fs from "node:fs";
 import dns from "node:dns";
@@ -32,6 +34,8 @@ import { withTenant, registryOf, forgetSlugs, mirrorToTenant, forgetTenant } fro
 import { slugify, slugProblem, freeSlug } from "../lib/slugs.js";
 import { runJob, dbNameFor, migrateBusinessDb, migrateAllBusinessDbs } from "../lib/provisioning.js";
 import { makeBackup, backupPath, BACKUP_DIR } from "../lib/backups.js";
+import { startMove } from "../lib/provisioning.js";
+import { SWITCHABLE, forgetModules } from "../lib/modules.js";
 
 const db = corePool;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -277,6 +281,36 @@ export function tenancyRoutes(router) {
     const out = await migrateAllBusinessDbs();
     await adminAudit(db, { adminId: req.admin.id, action: "admin.database_migrated_all", meta: { count: out.length, failed: out.filter((x) => x.ok === false).length }, ip: req.ip });
     res.json({ results: out });
+  }));
+
+  router.post("/databases/:businessId/move", requireAdminPerm("databases"), ah(async (req, res) => {
+    const bid = id(req.params.businessId) || 0;
+    if (env.isProd && !env.tenantDbKey) throw conflict("tenantKeyMissing");
+    const r = await startMove(bid, req.admin.id);
+    if (r.error === "notFound") return res.status(404).json({ code: "notFound" });
+    if (r.error) throw conflict(r.error);
+    await adminAudit(db, { adminId: req.admin.id, businessId: bid, action: "admin.business_move_started", entity: "job", entityId: r.jobId, ip: req.ip });
+    res.status(201).json({ jobId: r.jobId });
+  }));
+
+  /* ===================== modules per business ===================== */
+  router.get("/businesses/:id/modules", ah(async (req, res) => {
+    const bid = id(req.params.id) || 0;
+    const [rows] = await db.query("SELECT module, enabled FROM business_modules WHERE business_id = ?", [bid]);
+    const off = new Set(rows.filter((r) => !r.enabled).map((r) => r.module));
+    res.json({ modules: Object.keys(SWITCHABLE).map((m) => ({ id: m, enabled: !off.has(m) })) });
+  }));
+  router.put("/businesses/:id/modules", requireAdminPerm("businesses"), ah(async (req, res) => {
+    const bid = id(req.params.id) || 0;
+    const [[b]] = await db.query("SELECT id FROM businesses WHERE id = ?", [bid]);
+    if (!b) return res.status(404).json({ code: "notFound" });
+    const disabled = (Array.isArray(req.body?.disabled) ? req.body.disabled : []).filter((m) => SWITCHABLE[m]);
+    for (const m of Object.keys(SWITCHABLE)) {
+      await db.query("INSERT INTO business_modules (business_id, module, enabled) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE enabled = VALUES(enabled)", [bid, m, disabled.includes(m) ? 0 : 1]);
+    }
+    forgetModules(bid);
+    await adminAudit(db, { adminId: req.admin.id, businessId: bid, action: "admin.modules", meta: { disabled }, ip: req.ip });
+    res.json({ code: "saved" });
   }));
 
   /* ===================== backups ===================== */

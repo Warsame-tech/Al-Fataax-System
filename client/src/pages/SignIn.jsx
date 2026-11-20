@@ -82,39 +82,27 @@ export default function SignIn() {
 
   return (
     <main className={`signin${dark ? " signin--dark" : ""}`}>
-      {/* left: the brand panel — the business's logo and name (or Faatix) on solid navy */}
-      <aside className="signin__brand" aria-hidden={tenant.loading ? "true" : undefined}>
-        <span className="signin__ring signin__ring--a" aria-hidden="true" />
-        <span className="signin__ring signin__ring--b" aria-hidden="true" />
-        <span className="signin__dots" aria-hidden="true" />
-        <div className="signin__brand-top">
-          {biz ? <span className="signin__chip"><Icon name="store" /> {t("signin.businessPortal")}</span> : <img className="signin__faatix" src={faatixLight} alt="Faatix" />}
-        </div>
-        <div className="signin__brand-main">
-          <div className={`signin__mark${biz && !logo ? " signin__mark--initials" : ""}`}>
-            {tenant.loading ? <span className="signin__mark-wait" /> : biz ? (logo ? <img src={logo} alt={biz.name} /> : <span>{initials(biz.name)}</span>) : <img src={faatixMark} alt="Faatix" />}
-          </div>
-          <h2 className="signin__brand-name">{biz ? biz.name : "Faatix"}</h2>
-          <p className="signin__brand-text">{t("signin.panelTitle")}</p>
-          <ul className="signin__perks">
-            {[["receipt", "signin.perkSales"], ["package", "signin.perkStock"], ["chart-line", "signin.perkReports"]].map(([icon, key]) => (
-              <li key={key}><span><Icon name={icon} /></span>{t(key)}</li>
-            ))}
-          </ul>
-        </div>
-        <p className="signin__powered">{biz ? <>{t("signin.poweredBy")} <img src={faatixLight} alt="Faatix" /></> : `© ${new Date().getFullYear()} Faatix`}</p>
-      </aside>
+      <span className="signin__glow signin__glow--a" aria-hidden="true" />
+      <span className="signin__glow signin__glow--b" aria-hidden="true" />
+      <div className="signin__top">
+        <LanguageSwitch />
+        <button type="button" className="signin__theme" onClick={() => setDark((v) => !v)} aria-pressed={dark} aria-label={t("signin.theme")} title={t("signin.theme")}>
+          <Icon name={dark ? "sun" : "moon"} />
+        </button>
+      </div>
 
-      {/* right: the form */}
-      <section className="signin__side" aria-labelledby="signin-title">
-        <div className="signin__top">
-          <LanguageSwitch />
-          <button type="button" className="signin__theme" onClick={() => setDark((v) => !v)} aria-pressed={dark} aria-label={t("signin.theme")} title={t("signin.theme")}>
-            <Icon name={dark ? "sun" : "moon"} />
-          </button>
+      {/* one card in the middle, like the super admin sign-in — Faatix blue and orange instead of navy */}
+      <section className="signin__card" aria-labelledby="signin-title">
+        <div className="signin__head">
+          {tenant.loading ? <span className="signin__mark"><span className="signin__mark-wait" /></span>
+            : biz ? (
+              <span className="signin__biz">
+                <span className={`signin__mark${logo ? "" : " signin__mark--initials"}`}>{logo ? <img src={logo} alt="" /> : initials(biz.name)}</span>
+                <strong>{biz.name}</strong>
+              </span>
+            ) : <img className="signin__faatix" src={faatixMark} alt="Faatix" />}
         </div>
-        <div className="signin__card">
-        <span className="signin__hello"><Icon name="lock" /> {t("signin.secure")}</span>
+        <span className="signin__badge"><Icon name={biz ? "store" : "lock"} />{t(biz ? "signin.businessPortal" : "signin.secure")}</span>
         <h1 id="signin-title">{t("signin.welcome")}</h1>
         <p className="signin__sub">{biz ? fill(t("signin.continueTo"), { name: biz.name }) : t("signin.continue")}</p>
 
@@ -168,8 +156,8 @@ export default function SignIn() {
         ) : (
           <p className="signin__other signin__other--text">{t("signin.noAccount")} {t("signin.byFaatix")}</p>
         )}
-        </div>
       </section>
+      <p className="signin__powered">{biz ? <>{t("signin.poweredBy")} <img src={faatixLight} alt="Faatix" /></> : `© ${new Date().getFullYear()} Faatix`}</p>
     </main>
   );
 }

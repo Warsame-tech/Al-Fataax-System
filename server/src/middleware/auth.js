@@ -5,6 +5,7 @@ import { pool, corePool, currentTenant } from "../config/db.js";
 import { env } from "../config/env.js";
 import { profileFor } from "../lib/businessProfiles.js";
 import { resolveBranch } from "../lib/branches.js";
+import { disabledModules, blockedModule } from "../lib/modules.js";
 
 export const SESSION_COOKIE = "faatix_session";
 
@@ -104,6 +105,10 @@ export async function requireAuth(req, res, next) {
       if (acc.length) allowed = [...new Set([row.user_branch_id, ...acc.map((a) => a.branch_id)].filter(Boolean).map(Number))];
     }
     req.branch = await resolveBranch(pool, row.business_id, row.user_branch_id, req.get("X-Branch"), allowed);
+    // modules the super admin switched off for this business: no changes through their API (lib/modules.js)
+    req.business.disabledModules = await disabledModules(row.business_id);
+    const blocked = blockedModule(req.business.disabledModules, req.method, req.originalUrl);
+    if (blocked) return res.status(403).json({ code: "moduleDisabled", module: blocked });
     next();
   } catch (err) {
     next(err);

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { apiRequest } from "../services/api.js";
-import { useApi, usePerm, useMoney, useSubmit, Modal, FormError } from "./ui.jsx";
+import { useApi, usePerm, useMoney, useSubmit, Modal, FormError, useModuleOff } from "./ui.jsx";
 import { useProfile } from "./profile.js";
 import { MODULES } from "./modules.js";
 import { date } from "./format.js";
@@ -148,6 +148,7 @@ function GlobalSearch({ onClose, keys }) {
   const can = usePerm();
   const m = useMoney();
   const profile = useProfile();
+  const off = useModuleOff();
   const navigate = useNavigate();
   const [q, setQ] = useState("");
   const [server, setServer] = useState({ q: "", results: [] });
@@ -165,7 +166,7 @@ function GlobalSearch({ onClose, keys }) {
   }, [needle]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // modules the user can open, and the shortcut actions (matched on their names in the user's language)
-  const modules = MODULES.filter((mod) => (!mod.perm || can(mod.perm)) && (!mod.profile || profile[mod.profile]))
+  const modules = MODULES.filter((mod) => (!mod.perm || can(mod.perm)) && (!mod.profile || profile[mod.profile]) && !off(mod.id))
     .map((mod) => ({ kind: "module", id: mod.id, title: t(`app.modules.${mod.id}`), icon: mod.icon, to: `/app/m/${mod.id}`, keys: keys[ACTIONS.find((a) => a.to === `/app/m/${mod.id}`)?.id] }));
   const actions = ACTIONS.filter((a) => a.to && !a.to.startsWith("/app/m/") && (!a.perm || can(a.perm)))
     .map((a) => ({ kind: "action", id: a.id, title: t(`ui.shortcuts.actions.${a.id}`), icon: a.icon, to: a.to, keys: keys[a.id] }));

@@ -94,10 +94,23 @@ binary data such as stored images). Check it, then point `database_registry` at 
 * `BACKUP_DIR` on a Railway volume, so backups survive deploys.
 * `WEBSITE_ORIGIN` when the website is deployed.
 
+## Moving a shared business into its own database
+
+Super admin → Databases → **Move to own database** (Technical Admin / Super Admin). A job with 8 steps, shown live:
+pause (status `provisioning`: its users wait) → backup → create database → restricted user → tables → copy every row
+(tables with business_id, and their child tables through the parent row) → compare row counts → switch the registry, give the
+old status back and remove the old rows from the central database (images stay there as well, so old image links keep working).
+Any failure drops the half-made database and puts everything back as it was. Users' sessions keep working (same ids).
+After the move, its staff sign in on the business's own address (subdomain or /b/<slug>).
+
+## Modules per business
+
+Super admin → business page → **Modules**: invoices, customers, suppliers, purchases, promotions, shifts, expenses, cashbook,
+reports, HR, branches, devices, warranties, rolls, tailoring, waste (`server/src/lib/modules.js`). Off = hidden in the business's app, and the
+API refuses every change under its paths (403 `moduleDisabled`); reading stays allowed because other screens share those lists.
+
 ## Not done yet
 
-* Moving an existing shared business into its own database (a copy-and-switch tool). Until then those businesses keep
-  working from the central database.
-* `business_modules` exists but turning modules on/off per business is not built yet.
+* Putting a business database on another MySQL server (the registry can hold host / port per business, but registering and
+  moving always create the database on the main server).
 * Online ordering links (/order/<code>) of an own-database business work on its subdomain or custom domain only.
-* Super admin's activity page shows business sign-ins of shared businesses; failed sign-ins of all businesses are central.

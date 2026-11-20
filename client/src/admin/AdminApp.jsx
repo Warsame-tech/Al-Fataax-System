@@ -11,7 +11,7 @@ import AdminDashboard from "./AdminDashboard.jsx";
 import { Subscriptions, Payments, Plans, GivePlan, RecordPayment } from "./AdminBilling.jsx";
 import { Tickets, Messages } from "./AdminSupport.jsx";
 import { Announcements, Reports, Security, AdminsPage, SettingsPage, ExportPage, AccountPage, ShownOnce } from "./AdminPlatform.jsx";
-import { RegisterBusiness, ProvisioningRoute, Hosting, Databases, Backups, BranchOverview, BranchLimit } from "./AdminTenancy.jsx";
+import { RegisterBusiness, ProvisioningRoute, Hosting, Databases, Backups, BranchOverview, BranchLimit, BusinessModules } from "./AdminTenancy.jsx";
 
 /*
  * Super Admin (platform owner) area — separate sign-in and session from businesses.
@@ -385,6 +385,7 @@ function BusinessDetail({ can }) {
           <ul className="pay-list">{users.map((u) => <li key={u.id}><strong>{u.fullName}</strong> · {u.username} · {u.roleName || t(`app.roles.${u.role}`)} · <StatusBadge status={u.status} /></li>)}</ul>
         </section>
       </div>
+      {!settingUp && <BusinessModules businessId={b.id} can={can} />}
       {tickets.length > 0 && (
         <section className="panel-card">
           <h2 className="panel-card__title"><Icon name="message" /> {t("ui.platform.tickets")}</h2>

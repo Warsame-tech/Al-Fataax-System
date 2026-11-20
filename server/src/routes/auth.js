@@ -163,6 +163,7 @@ router.get("/me", requireAuth, async (req, res, next) => {
     const [[core]] = await corePool.query("SELECT slug FROM businesses WHERE id = ?", [req.business.id]);
     const plan = await planOf(pool, req.business.id);
     res.json({ user: req.user, business: { ...req.business, slug: core?.slug || null }, trial: trial[0] || null, permissions: req.user.permissions,
+      disabledModules: req.business.disabledModules || [],
       subscription: plan ? { plan: plan.name, cycle: plan.cycle, status: plan.status, periodEnd: plan.current_period_end, maxUsers: plan.max_users, maxBranches: plan.max_branches, maxProducts: plan.max_products,
         features: (() => { try { return JSON.parse(plan.features || "[]"); } catch { return []; } })() } : null,
       branches: { list: req.branch.list, current: req.branch.filterId, fixed: req.branch.fixed } });

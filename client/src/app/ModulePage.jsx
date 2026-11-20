@@ -3,7 +3,7 @@ import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import usePageTitle from "../hooks/usePageTitle.js";
 import { moduleById } from "./modules.js";
-import { usePerm, PageHeader } from "./ui.jsx";
+import { usePerm, PageHeader, useModuleOff } from "./ui.jsx";
 import Products from "./pages/Products.jsx";
 import Parties from "./pages/Parties.jsx";
 import Pos from "./pages/Pos.jsx";
@@ -67,10 +67,11 @@ export default function ModulePage() {
   const { t } = useLanguage();
   const can = usePerm();
   const profile = useProfile();
+  const off = useModuleOff();
   const [params] = useSearchParams();
   usePageTitle("meta.app");
   const mod = moduleById(id);
-  if (!mod || (mod.profile && !profile[mod.profile])) return <Navigate to="/app" replace />;
+  if (!mod || (mod.profile && !profile[mod.profile]) || off(mod.id)) return <Navigate to="/app" replace />;
   if (mod.perm && !can(mod.perm)) {
     return (
       <div className="page">

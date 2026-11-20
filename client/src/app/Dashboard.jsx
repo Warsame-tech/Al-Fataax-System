@@ -3,7 +3,7 @@ import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import usePageTitle from "../hooks/usePageTitle.js";
 import { MODULES, QUICK_ACTIONS } from "./modules.js";
-import { usePerm } from "./ui.jsx";
+import { usePerm, useModuleOff } from "./ui.jsx";
 import { useProfile } from "./profile.js";
 import { ClockCard } from "./Hr.jsx";
 import { ACTIONS, useShortcuts, Kbd } from "./Shortcuts.jsx";
@@ -17,12 +17,13 @@ const QUICK_KEYS = { newSale: "pos", newInvoice: "newInvoice" };
 export default function Dashboard() {
   const { t } = useLanguage();
   const can = usePerm();
-  const quick = QUICK_ACTIONS.filter((a) => can(a.perm));
+  const off = useModuleOff();
+  const quick = QUICK_ACTIONS.filter((a) => can(a.perm) && !(a.module && off(a.module)));
   // the keyboard shortcut of each tile / quick action, shown on it (Shortcuts.jsx)
   const { keyOf } = useShortcuts();
   const moduleKey = (id) => keyOf(ACTIONS.find((x) => x.to === `/app/m/${id}`)?.id);
   const profile = useProfile();
-  const tiles = MODULES.filter((mod) => (!mod.perm || can(mod.perm)) && (!mod.profile || profile[mod.profile]));
+  const tiles = MODULES.filter((mod) => (!mod.perm || can(mod.perm)) && (!mod.profile || profile[mod.profile]) && !off(mod.id));
   usePageTitle("meta.app");
 
   return (

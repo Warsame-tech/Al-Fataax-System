@@ -203,13 +203,14 @@ export function Provisioning({ can, ownerFromState }) {
   }, [busy, reload]);
   if (!d.data) return <Loading />;
   const { business: b, database } = d.data;
+  const isMove = job?.steps?.some((s) => s.key === "copy");
   const steps = job?.steps?.length ? job.steps : (database?.mode === "shared" ? ["data", "activate"] : ["database", "user", "schema", "data", "activate"]).map((key) => ({ key, status: "waiting" }));
   const retry = async () => { if (await sub.run(() => apiRequest(`/api/admin/businesses/${b.id}/provisioning/retry`, { method: "POST" }))) setTimeout(() => d.reload(), 300); };
   const signin = b.url || absLink(b.link);
   return (
     <div className="page">
       <Link className="auth__back" to={`/admin/businesses/${b.id}`}><Icon name="arrow-left" /><span>{t("ui.common.back")}</span></Link>
-      <h1 className="admin-title">{fill(t("ui.tenancy.prov.title"), { name: b.name })}</h1>
+      <h1 className="admin-title">{fill(t(isMove ? "ui.tenancy.prov.moveTitle" : "ui.tenancy.prov.title"), { name: b.name })}</h1>
       <section className="panel-card prov">
         <ol className="prov__steps">
           {steps.map((s) => (
@@ -220,10 +221,10 @@ export function Provisioning({ can, ownerFromState }) {
             </li>
           ))}
         </ol>
-        {job?.status === "succeeded" && <p className="form-status form-status--success"><Icon name="check" /> {fill(t("ui.tenancy.prov.succeeded"), { name: b.name })}</p>}
+        {job?.status === "succeeded" && <p className="form-status form-status--success"><Icon name="check" /> {fill(t(isMove ? "ui.tenancy.prov.moved" : "ui.tenancy.prov.succeeded"), { name: b.name })}</p>}
         {job?.status === "failed" && <>
           <p className="form-status form-status--error"><Icon name="alert" /> {fill(t("ui.tenancy.prov.failed"), { error: job.error || "—" })}</p>
-          <p className="muted">{t("ui.tenancy.prov.stillInactive")} {job.attempts > 0 && `· ${fill(t("ui.tenancy.prov.attempts"), { n: job.attempts })}`}</p>
+          <p className="muted">{t(isMove ? "ui.tenancy.prov.moveUndone" : "ui.tenancy.prov.stillInactive")} {job.attempts > 0 && `· ${fill(t("ui.tenancy.prov.attempts"), { n: job.attempts })}`}</p>
         </>}
         <FormError error={sub.formError} />
         <dl className="sub-card__facts">
@@ -344,6 +345,7 @@ function HostingModal({ modal, baseDomain, onClose, onDone }) {
 /* ===================== databases ===================== */
 export function Databases() {
   const { t, lang } = useLanguage();
+  const navigate = useNavigate();
   const d = useApi("/api/admin/databases");
   const [filter, setFilter] = useState("all");
   const [q, setQ] = useState("");
@@ -365,6 +367,13 @@ export function Databases() {
     const r = await apiRequest(`/api/admin/databases/${x.businessId}/migrate`, { method: "POST" }).then((o) => ({ ok: true, text: fill(t("ui.tenancy.db.migrated"), { v: o.version }) })).catch((e) => ({ ok: false, text: errText(e) }));
     setResult({ ...result, [x.businessId]: r });
     setBusy(null); d.reload();
+  };
+  // a shared business → its own database (the setup page then shows the move, step by step)
+  const move = async (x) => {
+    if (!window.confirm(fill(t("ui.tenancy.db.moveConfirm"), { name: x.name }))) return;
+    setBusy(`v${x.businessId}`);
+    try { await apiRequest(`/api/admin/databases/${x.businessId}/move`, { method: "POST" }); navigate(`/admin/businesses/${x.businessId}/setup`); }
+    catch (e) { setResult({ ...result, [x.businessId]: { ok: false, text: errText(e) } }); setBusy(null); }
   };
   const migrateAll = async () => {
     setBusy("all");
@@ -417,6 +426,7 @@ export function Databases() {
               <td className="row-actions">
                 {x.status === "ready" && <button type="button" className="btn btn--outline btn--sm" onClick={() => test(x)} disabled={busy === `t${x.businessId}`}>{t("ui.tenancy.db.test")}</button>}
                 {x.mode === "dedicated" && x.status === "ready" && <button type="button" className="btn btn--outline btn--sm" onClick={() => migrate(x)} disabled={busy === `m${x.businessId}`}>{t("ui.tenancy.db.migrate")}</button>}
+                {x.mode === "shared" && x.status === "ready" && !["pending", "provisioning"].includes(x.businessStatus) && <button type="button" className="btn btn--primary btn--sm" onClick={() => move(x)} disabled={busy === `v${x.businessId}`}><Icon name="database" /><span>{t("ui.tenancy.db.move")}</span></button>}
                 {result[x.businessId] && <small className={result[x.businessId].ok ? "slug-ok" : "slug-bad"}>{result[x.businessId].text}</small>}
               </td>
             </tr>
@@ -540,6 +550,34 @@ export function BranchLimit({ business, onClose, onDone }) {
         <div className="form-actions"><button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button><button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.common.save")}</button></div>
       </form>
     </Modal>
+  );
+}
+
+/* Modules Faatix can switch off for one business (lib/modules.js): off = hidden in its app, and its API refuses changes */
+export function BusinessModules({ businessId, can }) {
+  const { t } = useLanguage();
+  const d = useApi(`/api/admin/businesses/${businessId}/modules`);
+  const [off, setOff] = useState(null);
+  const sub = useSubmit();
+  const [saved, setSaved] = useState(false);
+  useEffect(() => { if (d.data) setOff(new Set(d.data.modules.filter((m) => !m.enabled).map((m) => m.id))); }, [d.data]);
+  if (!d.data || !off) return null;
+  const toggle = (m) => { setSaved(false); const n = new Set(off); if (n.has(m)) n.delete(m); else n.add(m); setOff(n); };
+  const save = async () => { if (await sub.run(() => apiRequest(`/api/admin/businesses/${businessId}/modules`, { method: "PUT", body: { disabled: [...off] } }))) setSaved(true); };
+  return (
+    <section className="panel-card">
+      <h2 className="panel-card__title"><Icon name="grid" /> {t("ui.tenancy.modules.title")}</h2>
+      <p className="muted">{t("ui.tenancy.modules.help")}</p>
+      <div className="type-toggles">
+        {d.data.modules.map((m) => (
+          <label key={m.id} className={"type-toggle" + (off.has(m.id) ? " is-off" : "")}>
+            <input type="checkbox" checked={!off.has(m.id)} disabled={!can("businesses")} onChange={() => toggle(m.id)} /> {t(`app.modules.${m.id}`)}
+          </label>
+        ))}
+      </div>
+      <FormError error={sub.formError} />
+      {can("businesses") && <div className="form-actions"><button type="button" className="btn btn--primary btn--sm" onClick={save} disabled={sub.busy}>{t("ui.common.save")}</button>{saved && <span className="slug-ok"><Icon name="check" /> {t("ui.common.saved")}</span>}</div>}
+    </section>
   );
 }
 

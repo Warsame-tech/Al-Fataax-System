@@ -28,6 +28,12 @@ export function usePerm() {
   return (perm) => (Array.isArray(perm) ? perm.some((p) => permissions.includes(p)) : permissions.includes(perm));
 }
 
+/** Modules Faatix switched off for this business (Super admin → business → Modules); the API refuses their changes too. */
+export function useModuleOff() {
+  const { disabledModules = [] } = useAuth();
+  return (id) => disabledModules.includes(id);
+}
+
 export function useMoney() {
   const { lang } = useLanguage();
   const { business } = useAuth();

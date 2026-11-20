@@ -110,6 +110,12 @@ export async function runJob(jobId) {
     if (!lock.affectedRows) return;
     [[job]] = await corePool.query("SELECT * FROM provisioning_jobs WHERE id = ?", [jobId]);
     const payload = JSON.parse(job.payload || "{}");
+    if (payload.kind === "move") {   // a move always starts again from the beginning (a failure undid everything)
+      steps = MOVE_STEPS.map((key) => ({ key, status: "waiting" }));
+      await corePool.query("UPDATE provisioning_jobs SET steps = ? WHERE id = ?", [JSON.stringify(steps), jobId]);
+      await runMoveJob(job, steps);
+      return;
+    }
     const [[biz]] = await corePool.query("SELECT * FROM businesses WHERE id = ?", [job.business_id]);
     const reg = await registryOf(biz.id);
     const mode = reg?.mode === "dedicated" ? "dedicated" : "shared";
@@ -171,14 +177,173 @@ export async function runJob(jobId) {
     const cur = steps.find((s) => s.status === "running");
     if (cur) Object.assign(cur, { status: "failed", error: msg, at: new Date().toISOString() });
     await corePool.query("UPDATE provisioning_jobs SET status = 'failed', error = ?, steps = ?, finished_at = UTC_TIMESTAMP() WHERE id = ?", [msg, JSON.stringify(steps), jobId]).catch(() => {});
+    const isMove = (() => { try { return JSON.parse(job?.payload || "{}").kind === "move"; } catch { return false; } })();
     if (job) {
-      await corePool.query("UPDATE database_registry SET status = 'failed', last_error = ? WHERE business_id = ?", [msg, job.business_id]).catch(() => {});
+      if (!isMove) await corePool.query("UPDATE database_registry SET status = 'failed', last_error = ? WHERE business_id = ?", [msg, job.business_id]).catch(() => {});
       forgetTenant(job.business_id);
       await adminAudit(corePool, { adminId: job.admin_id, businessId: job.business_id, action: "admin.provisioning_failed", meta: { step: cur?.key, error: msg } }).catch(() => {});
     }
   } finally {
     running.delete(jobId);
   }
+}
+
+/* =====================================================================================================
+ * Moving a shared business into its own database (Super admin → Databases → Move to own database).
+ * The business is paused (status "provisioning": its users see "being set up"), backed up, copied row by row into
+ * faatix_<slug>_db, the row counts are compared, then the registry switches to the new database and the old rows are
+ * removed from the central database (images are kept there too). Any failure: the new database is dropped, the business
+ * gets its old status back and keeps working from the central database.
+ * ===================================================================================================== */
+// platform tables: they stay in the central database and are never copied or removed
+const PLATFORM_TABLES = new Set(["plans", "subscriptions", "subscription_payments", "business_notes", "contact_messages", "support_tickets", "support_messages",
+  "announcements", "blocked_ips", "platform_settings", "trial_records", "business_domains", "database_registry", "provisioning_jobs", "business_modules", "backups",
+  "business_types", "platform_admins", "platform_roles", "platform_permissions", "app_migrations", "schema_versions", "businesses"]);
+// rows without a business_id: copied with their parent row
+const CHILD_TABLES = { device_events: ["device_id", "devices"], gold_buy_events: ["gold_buy_id", "gold_buys"], payroll_lines: ["run_id", "payroll_runs"],
+  recipe_lines: ["recipe_id", "recipes"], roll_events: ["roll_id", "fabric_rolls"], stock_movement_batches: ["movement_id", "stock_movements"],
+  tailoring_events: ["order_id", "tailoring_orders"], warranty_events: ["warranty_id", "warranties"] };
+const KEEP_IN_CORE = new Set(["stored_files"]);   // old image links (/files/<key>) keep working
+
+const MOVE_STEPS = ["pause", "backup", "database", "user", "schema", "copy", "verify", "switch"];
+
+async function tablesToMove(conn, coreDb) {
+  const [rows] = await conn.query(
+    `SELECT t.TABLE_NAME n, EXISTS (SELECT 1 FROM information_schema.COLUMNS c WHERE c.TABLE_SCHEMA = t.TABLE_SCHEMA AND c.TABLE_NAME = t.TABLE_NAME AND c.COLUMN_NAME = 'business_id') has_bid
+       FROM information_schema.TABLES t WHERE t.TABLE_SCHEMA = ? AND t.TABLE_TYPE = 'BASE TABLE' ORDER BY t.TABLE_NAME`, [coreDb]);
+  return rows.filter((r) => !PLATFORM_TABLES.has(r.n) && (Number(r.has_bid) || CHILD_TABLES[r.n])).map((r) => r.n);
+}
+async function commonColumns(conn, a, b, table) {
+  const [rows] = await conn.query(
+    `SELECT c1.COLUMN_NAME n FROM information_schema.COLUMNS c1 JOIN information_schema.COLUMNS c2 ON c2.TABLE_SCHEMA = ? AND c2.TABLE_NAME = c1.TABLE_NAME AND c2.COLUMN_NAME = c1.COLUMN_NAME
+      WHERE c1.TABLE_SCHEMA = ? AND c1.TABLE_NAME = ? ORDER BY c1.ORDINAL_POSITION`, [b, a, table]);
+  return rows.map((r) => r.n);
+}
+const whereOf = (table, alias = "x") => (CHILD_TABLES[table]
+  ? { join: ` JOIN ${q(CHILD_TABLES[table][1])} p ON p.id = ${alias}.${q(CHILD_TABLES[table][0])}`, cond: "p.business_id = ?" }
+  : { join: "", cond: `${alias}.business_id = ?` });
+async function countIn(conn, dbName, table, bid) {
+  const w = whereOf(table);
+  const [[c]] = await conn.query(`SELECT COUNT(*) n FROM ${q(dbName)}.${q(table)} x${w.join.replace(/JOIN `/, `JOIN ${q(dbName)}.\``)} WHERE ${w.cond}`, [bid]);
+  return Number(c.n);
+}
+
+async function runMoveJob(job, steps) {
+  const payload = JSON.parse(job.payload || "{}");
+  const bid = job.business_id;
+  const coreDb = env.db.database;
+  const [[biz]] = await corePool.query("SELECT * FROM businesses WHERE id = ?", [bid]);
+  const dbName = dbNameFor(biz.slug, bid);
+  const conn = await corePool.getConnection();
+  try {
+    for (const s of steps) {
+      await setStep(job.id, steps, s.key, "running");
+      if (s.key === "pause") {
+        await corePool.query("UPDATE businesses SET status = 'provisioning' WHERE id = ?", [bid]);
+        await corePool.query("UPDATE database_registry SET status = 'migrating', last_error = NULL WHERE business_id = ?", [bid]);
+        forgetTenant(bid);
+      } else if (s.key === "backup") {
+        const { makeBackup } = await import("./backups.js");
+        const b = await makeBackup({ scope: "business", businessId: bid, adminId: job.admin_id });
+        if (b.status !== "done") throw new Error(`Backup failed: ${b.error || "unknown"}`);
+      } else if (s.key === "database") {
+        await conn.query(`DROP DATABASE IF EXISTS ${q(dbName)}`);   // a half-made copy from an earlier attempt (never in use: the registry still says shared)
+        await conn.query(`CREATE DATABASE ${q(dbName)} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`);
+      } else if (s.key === "user") {
+        if (env.tenantDbUsers) {
+          const user = dbUserFor(biz.slug, bid);
+          const password = crypto.randomBytes(24).toString("base64url");
+          await conn.query("CREATE USER IF NOT EXISTS ?@? IDENTIFIED BY ?", [user, env.tenantDbUserHost, password]);
+          await conn.query("ALTER USER ?@? IDENTIFIED BY ?", [user, env.tenantDbUserHost, password]);
+          await conn.query(`GRANT ALL PRIVILEGES ON ${q(dbName)}.* TO ?@?`, [user, env.tenantDbUserHost]);
+          payload.db = { user, password: encryptSecret(password) };
+        } else payload.db = { user: null, password: null };
+        await corePool.query("UPDATE provisioning_jobs SET payload = ? WHERE id = ?", [JSON.stringify(payload), job.id]);
+      } else if (s.key === "schema") {
+        const p = adminPoolFor(dbName);
+        try { await runWithPool({ pool: p, businessId: bid, dedicated: true }, () => migrate({ db: { ...env.db, database: dbName }, core: false })); }
+        finally { await p.end().catch(() => {}); }
+      } else if (s.key === "copy") {
+        const tables = await tablesToMove(conn, coreDb);
+        await conn.query("SET FOREIGN_KEY_CHECKS = 0");
+        await conn.beginTransaction();
+        // the business row, then every table: only the columns both databases have
+        const bcols = (await commonColumns(conn, coreDb, dbName, "businesses")).map(q).join(", ");
+        await conn.query(`INSERT INTO ${q(dbName)}.businesses (${bcols}) SELECT ${bcols} FROM ${q(coreDb)}.businesses WHERE id = ?`, [bid]);
+        for (const t of tables) {
+          const cols = await commonColumns(conn, coreDb, dbName, t);
+          if (!cols.length) continue;
+          const w = whereOf(t);
+          await conn.query(`INSERT INTO ${q(dbName)}.${q(t)} (${cols.map(q).join(", ")}) SELECT ${cols.map((c) => `x.${q(c)}`).join(", ")}
+            FROM ${q(coreDb)}.${q(t)} x${w.join.replace(/JOIN `/, `JOIN ${q(coreDb)}.\``)} WHERE ${w.cond}`, [bid]);
+        }
+        await conn.commit();
+        await conn.query("SET FOREIGN_KEY_CHECKS = 1");
+        payload.tables = tables;
+      } else if (s.key === "verify") {
+        const bad = [];
+        for (const t of payload.tables || []) {
+          const [a, b] = [await countIn(conn, coreDb, t, bid), await countIn(conn, dbName, t, bid)];
+          if (a !== b) bad.push(`${t}: ${a} → ${b}`);
+        }
+        if (bad.length) throw new Error(`Row counts differ (${bad.slice(0, 5).join("; ")})`);
+      } else if (s.key === "switch") {
+        await corePool.query(
+          `UPDATE database_registry SET mode = 'dedicated', db_name = ?, db_host = NULL, db_port = NULL, db_user = ?, db_password_enc = ?, status = 'ready',
+                  schema_version = ?, last_migrated_at = UTC_TIMESTAMP(), last_error = NULL WHERE business_id = ?`,
+          [dbName, payload.db?.user || null, payload.db?.password || null, SCHEMA_VERSION, bid]);
+        await corePool.query("UPDATE businesses SET status = ? WHERE id = ?", [payload.prevStatus || "active", bid]);
+        forgetTenant(bid);
+        await mirrorToTenant(bid);
+        // the old rows leave the central database (they are in the new database and in the backup)
+        await conn.query("SET FOREIGN_KEY_CHECKS = 0");
+        await conn.beginTransaction();
+        for (const t of [...(payload.tables || [])].sort((a, b) => Number(Boolean(CHILD_TABLES[b])) - Number(Boolean(CHILD_TABLES[a])))) {
+          if (KEEP_IN_CORE.has(t)) continue;
+          if (CHILD_TABLES[t]) {
+            const [fk, parent] = CHILD_TABLES[t];
+            await conn.query(`DELETE x FROM ${q(t)} x JOIN ${q(parent)} p ON p.id = x.${q(fk)} WHERE p.business_id = ?`, [bid]);
+          } else if (t === "audit_logs") {
+            await conn.query("DELETE FROM audit_logs WHERE business_id = ? AND platform_admin_id IS NULL", [bid]);   // super admin actions stay central
+          } else {
+            await conn.query(`DELETE FROM ${q(t)} WHERE business_id = ?`, [bid]);
+          }
+        }
+        await conn.commit();
+        await conn.query("SET FOREIGN_KEY_CHECKS = 1");
+      }
+      await setStep(job.id, steps, s.key, "done");
+    }
+    await corePool.query("UPDATE provisioning_jobs SET status = 'succeeded', finished_at = UTC_TIMESTAMP(), payload = NULL WHERE id = ?", [job.id]);
+    await adminAudit(corePool, { adminId: job.admin_id, businessId: bid, action: "admin.business_moved", meta: { database: dbName, tables: (payload.tables || []).length } });
+  } catch (err) {
+    await conn.rollback().catch(() => {});
+    await conn.query("SET FOREIGN_KEY_CHECKS = 1").catch(() => {});
+    // back to how it was: shared database, old status; the half-made copy is removed
+    const [[reg]] = await corePool.query("SELECT mode FROM database_registry WHERE business_id = ?", [bid]);
+    if (reg?.mode !== "dedicated") {
+      await conn.query(`DROP DATABASE IF EXISTS ${q(dbName)}`).catch(() => {});
+      await corePool.query("UPDATE database_registry SET status = 'ready', last_error = ? WHERE business_id = ?", [safeError(err), bid]);
+      await corePool.query("UPDATE businesses SET status = ? WHERE id = ? AND status = 'provisioning'", [payload.prevStatus || "active", bid]);
+    }
+    forgetTenant(bid);
+    throw err;
+  } finally {
+    conn.release();
+  }
+}
+
+/** Starts moving a shared business into its own database; returns the job id. */
+export async function startMove(businessId, adminId) {
+  const reg = await registryOf(businessId);
+  const [[biz]] = await corePool.query("SELECT id, status FROM businesses WHERE id = ?", [businessId]);
+  if (!biz || !reg) return { error: "notFound" };
+  if (reg.mode !== "shared" || reg.status !== "ready") return { error: "notShared" };
+  if (["pending", "provisioning"].includes(biz.status)) return { error: "notReady" };
+  const [j] = await corePool.query("INSERT INTO provisioning_jobs (business_id, status, payload, admin_id) VALUES (?, 'pending', ?, ?)",
+    [businessId, JSON.stringify({ kind: "move", prevStatus: biz.status }), adminId]);
+  runJob(j.insertId);
+  return { jobId: j.insertId };
 }
 
 /** Jobs left "running" by a restart become "failed" (so they can be retried). */

@@ -68,7 +68,7 @@ const en = {
     slugTaken: "Another business already uses this address.", passwordWeak: "At least 8 characters.", invalidDomain: "Not a valid domain, e.g. shop.example.com.", useSubdomain: "Addresses under the Faatix domain are subdomains — change the subdomain instead.",
     domainTaken: "This domain is already added.", notProvisioned: "The business can't be activated before its setup has finished.", tenantKeyMissing: "TENANT_DB_KEY is not set on the server, so own databases can't be created.",
     notFailed: "Only a failed setup can be retried.", jobExpired: "This setup can't be retried (its data is gone). Register the business again.", sharedDatabase: "This business uses the shared central database.",
-    notReady: "The database isn't ready yet.", migrationFailed: "The migration failed. See the last error on the Databases page.", backupFailed: "The backup failed. Check the server log and the backup folder.", businessNotReady: "This business is still being set up.", twoFactorWrong: "The code is wrong or too old. Try the newest code.", notYourself: "You can't change your own role or disable yourself.",
+    notReady: "The database isn't ready yet.", migrationFailed: "The migration failed. See the last error on the Databases page.", backupFailed: "The backup failed. Check the server log and the backup folder.", businessNotReady: "This business is still being set up.", moduleDisabled: "This part of Faatix is switched off for your business. Contact Faatix to turn it on.", notShared: "This business already has its own database.", twoFactorWrong: "The code is wrong or too old. Try the newest code.", notYourself: "You can't change your own role or disable yourself.",
     lastOwner: "There must always be at least one active owner.", noSubscription: "This business has no plan yet. Give it a plan first.", invalidIp: "Not a valid IP address.", ownIp: "That is your own IP address.", adminPasswordWeak: "Use at least 10 characters with letters and numbers.", lineLocked: "This line can't change (serial / IMEI, roll or recipe). Cancel the invoice and make a new one.", useNewInvoice: "Products sold with serial numbers / IMEIs, from rolls or through recipes can't be added by an edit. Make a new invoice.", lockedLineRemoved: "Lines sold with serial numbers / IMEIs, from rolls or through recipes can't be removed by an edit. Cancel the invoice instead.", customerHasPayments: "This invoice has payments, so its customer can't change.", draftNoTracked: "Products with serial numbers / IMEIs or from rolls can't be in a draft.", draftNoPayment: "A draft can't be paid. Post it first.", notDraft: "This invoice isn't a draft.", cancelledNoEdit: "A cancelled invoice can't be edited.", invoiceChanged: "Someone changed this invoice meanwhile. Reload it.", noChanges: "Nothing was changed.", invoiceEditNeedsApproval: "These changes need a manager's approval.", cannotApproveEdit: "This user can't approve invoice changes.", cannotApprovePrice: "This user can't approve prices below the minimum.",
     trackingNeedsZeroStock: "The tracking method can only change while the product has no stock.",
     trackedNoReverse: "Serial / IMEI stock is corrected with Adjust (choose the devices).", devicesAdjustOnly: "Use Add / Subtract with the devices.",
@@ -463,9 +463,11 @@ const en = {
       next: "Next", back: "Back", create: "Register and set up", creating: "Registering…", reviewHelp: "Check the details. Setting up takes a few seconds; the business is active only when every step has succeeded."
     },
     prov: {
-      title: "Setting up {name}", steps: { database: "Create the database", user: "Create its restricted database user", schema: "Create all tables (current schema)", data: "Owner, roles, settings and first branch", activate: "Activate the business" },
+      title: "Setting up {name}", steps: { database: "Create the database", user: "Create its restricted database user", schema: "Create all tables (current schema)", data: "Owner, roles, settings and first branch", activate: "Activate the business",
+        pause: "Pause the business (its users wait)", backup: "Back up its data", copy: "Copy every row into the new database", verify: "Compare the row counts", switch: "Switch to the new database" },
       status: { waiting: "Waiting", running: "Working…", done: "Done", failed: "Failed" },
       succeeded: "{name} is ready and active.", failed: "Setup stopped: {error}", retry: "Try again", stillInactive: "The business stays inactive (nobody can sign in) until setup succeeds.",
+      moveTitle: "Moving {name} to its own database", moved: "{name} now works from its own database.", moveUndone: "Nothing changed: the business went back to the shared database and works as before. You can try again.",
       signinAt: "Sign-in address", ownerLogin: "Owner's sign-in (shown once — copy it now)", openBusiness: "Open the business page", another: "Register another business", attempts: "Attempt {n}"
     },
     hosting: {
@@ -482,7 +484,8 @@ const en = {
       own: "Own database", sharedMode: "Central (shared)", size: "Size", tables: "Tables", user: "Database user", lastMigrated: "Last migration", lastBackup: "Last backup",
       test: "Test", testOk: "Connected in {ms} ms as {user} · schema {v} · {users} users", testFail: "Could not connect ({error})",
       migrate: "Migrate", migrateAll: "Run migrations on all own databases", migrated: "Brought to version {v}", migratedAll: "{n} databases checked, {f} failed",
-      never: "Never", error: "Last error", status: "Status", business: "Business", database: "Database", filterOwn: "Own databases", filterShared: "Shared", filterAll: "All"
+      never: "Never", error: "Last error", move: "Move to own database",
+      moveConfirm: "Move {name} to its own database? Its users are paused for a moment while the data is backed up, copied and checked. If anything fails, it stays as it is now.", status: "Status", business: "Business", database: "Database", filterOwn: "Own databases", filterShared: "Shared", filterAll: "All"
     },
     backups: {
       title: "Backups", sub: "Backups are made by the server as compressed JSON files: the central database, or one business (its own database, or its rows in the central one).",
@@ -501,6 +504,7 @@ const en = {
       database: "Database", dedicated: "Own database", shared: "Central (shared)", signin: "Sign-in", setup: "Setup", viewSetup: "View setup", copy: "Copy", copied: "Copied",
       expire: "Mark expired", archive: "Archive", setupFailed: "Setup failed at “{step}”. Open the setup page to retry."
     },
+    modules: { title: "Modules", help: "Switch off modules this business shouldn't use. They disappear from its app, and the server refuses changes in them; data already recorded is kept." },
     settings: { backups: "Backups", daily: "Make a backup of every database once a day", keep: "Automatic backups kept per database" }
   },
   adminDash: {
@@ -974,7 +978,7 @@ const so = {
     slugTaken: "Ganacsi kale ayaa isticmaala cinwaankan.", passwordWeak: "Ugu yaraan 8 xaraf.", invalidDomain: "Domain sax ah ma aha, tusaale shop.example.com.", useSubdomain: "Cinwaannada domain-ka Faatix waa subdomain — beddel subdomain-ka.",
     domainTaken: "Domain-kan horay ayaa loo daray.", notProvisioned: "Ganacsiga lama hawlgelin karo inta diyaarintiisu aysan dhammaan.", tenantKeyMissing: "TENANT_DB_KEY laguma dejin server-ka, sidaa darteed kayd xog gaar ah lama samayn karo.",
     notFailed: "Diyaarin fashilantay oo keliya ayaa dib loo isku dayi karaa.", jobExpired: "Diyaarintan dib looma isku dayi karo (xogteedii way baxday). Mar kale diiwaan geli ganacsiga.", sharedDatabase: "Ganacsigan wuxuu isticmaalaa kaydka xogta dhexe ee la wadaago.",
-    notReady: "Kaydka xogta weli diyaar ma aha.", migrationFailed: "Cusboonaysiintu way fashilantay. Eeg khaladkii u dambeeyay bogga Kaydadka xogta.", backupFailed: "Nuqul-kaydintu way fashilantay. Hubi log-ga server-ka iyo galka nuqulada.", businessNotReady: "Ganacsigan weli waa la diyaarinayaa.", twoFactorWrong: "Koodhku waa khalad ama waa duug. Isku day koodhka ugu cusub.", notYourself: "Ma beddeli kartid doorkaaga mana dami kartid naftaada.",
+    notReady: "Kaydka xogta weli diyaar ma aha.", migrationFailed: "Cusboonaysiintu way fashilantay. Eeg khaladkii u dambeeyay bogga Kaydadka xogta.", backupFailed: "Nuqul-kaydintu way fashilantay. Hubi log-ga server-ka iyo galka nuqulada.", businessNotReady: "Ganacsigan weli waa la diyaarinayaa.", moduleDisabled: "Qaybtan Faatix waa laga damiyay ganacsigaaga. La xiriir Faatix si loo shido.", notShared: "Ganacsigan horay ayuu u leeyahay kayd u gaar ah.", twoFactorWrong: "Koodhku waa khalad ama waa duug. Isku day koodhka ugu cusub.", notYourself: "Ma beddeli kartid doorkaaga mana dami kartid naftaada.",
     lastOwner: "Had iyo jeer waa inuu jiraa ugu yaraan hal milkiile oo firfircoon.", noSubscription: "Ganacsigan weli qorshe ma leh. Marka hore sii qorshe.", invalidIp: "Ciwaan IP sax ah ma aha.", ownIp: "Taasi waa ciwaankaaga IP.", adminPasswordWeak: "Isticmaal ugu yaraan 10 xaraf oo xarfo iyo tiro leh.", lineLocked: "Safkan isma beddeli karo (serial / IMEI, duub ama cunto-karis). Jooji qaansheegta oo samee mid cusub.", useNewInvoice: "Alaabta serial / IMEI, duub ama cunto-karis lagu iibiyo laguma dari karo beddel. Samee qaansheeg cusub.", lockedLineRemoved: "Safafka serial / IMEI, duub ama cunto-karis lagama saari karo beddel. Halkii jooji qaansheegta.", customerHasPayments: "Qaansheegtan lacag ayaa lagu bixiyay, sidaa darteed macmiilkeeda isma beddeli karo.", draftNoTracked: "Alaabta serial / IMEI leh ama duubka ka timaada qabyo kuma jiri karto.", draftNoPayment: "Qabyo lacag laguma bixin karo. Marka hore diiwaangeli.", notDraft: "Qaansheegtan qabyo ma aha.", cancelledNoEdit: "Qaansheeg la joojiyay wax lagama beddeli karo.", invoiceChanged: "Qof kale ayaa qaansheegtan beddelay. Dib u soo deji.", noChanges: "Waxba lama beddelin.", invoiceEditNeedsApproval: "Isbeddeladan waxay u baahan yihiin ansixinta maamule.", cannotApproveEdit: "Isticmaalahan ma ansixin karo isbeddelka qaansheegta.", cannotApprovePrice: "Isticmaalahan ma ansixin karo qiimaha ka hooseeya kan ugu yar.",
     trackingNeedsZeroStock: "Habka raacidda waxaa la beddeli karaa kaliya marka alaabtu kayd la'aan tahay.",
     trackedNoReverse: "Kaydka serial / IMEI waxaa lagu saxaa Hagaaji (dooro qalabka).", devicesAdjustOnly: "Isticmaal Ku dar / Ka jar adiga oo dooranaya qalabka.",
@@ -1369,9 +1373,11 @@ const so = {
       next: "Xiga", back: "Dib", create: "Diiwaan geli oo diyaari", creating: "Waa la diiwaan gelinayaa…", reviewHelp: "Hubi xogta. Diyaarintu waxay qaadataa dhowr ilbiriqsi; ganacsigu wuxuu firfircoonaanayaa marka tallaabo kasta guulaysato."
     },
     prov: {
-      title: "Diyaarinta {name}", steps: { database: "Samee kaydka xogta", user: "Samee isticmaalaha xaddidan", schema: "Samee dhammaan miisaska", data: "Milkiilaha, doorarka, dejinta iyo laanta koowaad", activate: "Hawlgeli ganacsiga" },
+      title: "Diyaarinta {name}", steps: { database: "Samee kaydka xogta", user: "Samee isticmaalaha xaddidan", schema: "Samee dhammaan miisaska", data: "Milkiilaha, doorarka, dejinta iyo laanta koowaad", activate: "Hawlgeli ganacsiga",
+        pause: "Hakad geli ganacsiga (isticmaalayaashu way sugayaan)", backup: "Kaydi xogtiisa", copy: "Koobi saf kasta kaydka cusub", verify: "Is barbar dhig tirada safafka", switch: "U wareeji kaydka cusub" },
       status: { waiting: "Sugaya", running: "Waa la shaqaynayaa…", done: "Dhammaaday", failed: "Fashilmay" },
       succeeded: "{name} waa diyaar oo waa firfircoon yahay.", failed: "Diyaarintu way joogsatay: {error}", retry: "Isku day mar kale", stillInactive: "Ganacsigu wuu firfircoonaan doonaa (qofna ma soo geli karo) ilaa diyaarintu guulaysato.",
+      moveTitle: "{name} waxaa loo wareejinayaa kayd u gaar ah", moved: "{name} hadda wuxuu ka shaqeeyaa kaydkiisa gaarka ah.", moveUndone: "Waxba isma beddelin: ganacsigu wuxuu ku noqday kaydka la wadaago oo sidii hore u shaqeeyaa. Mar kale isku day.",
       signinAt: "Cinwaanka gelitaanka", ownerLogin: "Gelitaanka milkiilaha (hal mar ayaa la tusayaa — hadda koobiyee)", openBusiness: "Fur bogga ganacsiga", another: "Diiwaan geli ganacsi kale", attempts: "Isku day {n}"
     },
     hosting: {
@@ -1388,7 +1394,8 @@ const so = {
       own: "Kayd gaar ah", sharedMode: "Dhexe (la wadaago)", size: "Cabbir", tables: "Miisas", user: "Isticmaalaha kaydka", lastMigrated: "Cusboonaysiintii u dambaysay", lastBackup: "Nuqulkii u dambeeyay",
       test: "Tijaabi", testOk: "Wuu xiriiray {ms} ms gudahood sida {user} · schema {v} · {users} isticmaale", testFail: "Lama xiriiri karo ({error})",
       migrate: "Cusboonaysii", migrateAll: "Cusboonaysii dhammaan kaydadka gaarka ah", migrated: "Waxaa la gaarsiiyay nooca {v}", migratedAll: "{n} kayd ayaa la hubiyay, {f} way fashilmeen",
-      never: "Weligeed", error: "Khaladkii u dambeeyay", status: "Xaalad", business: "Ganacsi", database: "Kayd", filterOwn: "Kaydad gaar ah", filterShared: "La wadaago", filterAll: "Dhammaan"
+      never: "Weligeed", error: "Khaladkii u dambeeyay", move: "U wareeji kayd gaar ah",
+      moveConfirm: "{name} ma u wareejinaysaa kayd u gaar ah? Isticmaalayaashiisa waa la hakinayaa wax yar inta xogta la kaydinayo, la koobinayo oo la hubinayo. Haddii wax fashilmaan, sidiisa ayuu ku sii jiri doonaa.", status: "Xaalad", business: "Ganacsi", database: "Kayd", filterOwn: "Kaydad gaar ah", filterShared: "La wadaago", filterAll: "Dhammaan"
     },
     backups: {
       title: "Nuqulada kaydka", sub: "Server-ka ayaa sameeya nuqulada sida faylal JSON ah oo la cufay: kaydka dhexe, ama hal ganacsi (kaydkiisa gaarka ah, ama safafkiisa kaydka dhexe).",
@@ -1407,6 +1414,7 @@ const so = {
       database: "Kaydka xogta", dedicated: "Kayd gaar ah", shared: "Dhexe (la wadaago)", signin: "Gelitaan", setup: "Diyaarin", viewSetup: "Eeg diyaarinta", copy: "Koobiyee", copied: "La koobiyeeyay",
       expire: "U calaamadee dhacay", archive: "Kaydi", setupFailed: "Diyaarintu waxay ku fashilantay “{step}”. Fur bogga diyaarinta si aad mar kale isku dayto."
     },
+    modules: { title: "Qaybaha", help: "Dami qaybaha uusan ganacsigan isticmaalin. Waxay ka baxayaan app-kiisa, server-kuna wuu diidayaa isbeddel lagu sameeyo; xogta horay loo diiwaan geliyay waa la hayaa." },
     settings: { backups: "Nuqulada kaydka", daily: "Maalin kasta samee nuqul kayd kasta", keep: "Nuqulada tooska ah ee la hayo kayd kasta" }
   },
   adminDash: {

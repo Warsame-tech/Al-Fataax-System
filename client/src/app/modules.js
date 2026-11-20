@@ -40,11 +40,11 @@ export const MODULES = [
 
 export const QUICK_ACTIONS = [
   { key: "newSale",        to: "/app/m/pos",        icon: "cart",    tone: "orange", perm: "sales.create" },
-  { key: "newInvoice",     to: "/app/invoices/new", icon: "receipt", tone: "blue",   perm: "invoices.create" },
+  { key: "newInvoice",     to: "/app/invoices/new", icon: "receipt", tone: "blue",   perm: "invoices.create", module: "invoices" },
   { key: "addProduct",     to: "/app/m/products",   icon: "package", tone: "navy",   perm: "products.edit" },
   { key: "addStock",       to: "/app/m/stock?tab=add", icon: "layers", tone: "green", perm: "stock.add" },
-  { key: "recordPurchase", to: "/app/m/purchases",  icon: "truck",   tone: "green",  perm: "purchases.create" },
-  { key: "addExpense",     to: "/app/m/expenses",   icon: "wallet",  tone: "red",    perm: "expenses.create" }
+  { key: "recordPurchase", to: "/app/m/purchases",  icon: "truck",   tone: "green",  perm: "purchases.create", module: "purchases" },
+  { key: "addExpense",     to: "/app/m/expenses",   icon: "wallet",  tone: "red",    perm: "expenses.create", module: "expenses" }
 ];
 
 export const moduleById = (id) => MODULES.find((m) => m.id === id);
