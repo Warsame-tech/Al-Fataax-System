@@ -1,0 +1,10 @@
+/* Website-only additions (the "Request a demo / send us a message" form) */
+.contact-form { display: grid; gap: 12px; margin-top: 22px; padding: 22px; border-radius: 22px; background: #fff; border: 1px solid var(--line); box-shadow: var(--shadow); }
+.contact-form__head { display: flex; align-items: flex-start; gap: 12px; }
+.contact-form__head > .icon { width: 40px; height: 40px; padding: 9px; flex: none; border-radius: 12px; background: var(--orange-50); color: var(--orange-600); }
+.contact-form__head h3 { margin: 0; font-size: 1.2rem; color: var(--navy); }
+.contact-form__head p { margin: 2px 0 0; color: var(--muted); }
+.contact-form__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.contact-form__msg { grid-column: 1 / -1; }
+.contact-form .btn { justify-self: start; }
+@media (max-width: 700px) { .contact-form__grid { grid-template-columns: 1fr; } }

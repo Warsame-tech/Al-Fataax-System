@@ -10,7 +10,7 @@ const limiter = rateLimit({ windowMs: 60 * 60 * 1000, limit: 5, handler: (req, r
 const clean = (v, max) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 /*
- * POST /api/contact { name, email?, phone?, message } — the website's "Send us a message" form.
+ * POST /api/contact { name, business?, email?, phone?, message } — the website's "Send us a message" form.
  * Saved for the super admin (Support → Website messages); 5 messages an hour per visitor.
  */
 router.post("/", limiter, async (req, res, next) => {
@@ -18,6 +18,7 @@ router.post("/", limiter, async (req, res, next) => {
     const name = clean(req.body?.name, 120);
     const email = clean(req.body?.email, 190);
     const phone = clean(req.body?.phone, 40);
+    const business = clean(req.body?.business, 160);
     const message = clean(req.body?.message, 4000);
     const errors = {};
     if (!name) errors.name = "required";
@@ -25,7 +26,7 @@ router.post("/", limiter, async (req, res, next) => {
     if (!email && !phone) errors.phone = "emailOrPhone";
     if (email && !EMAIL.test(email)) errors.email = "invalidEmail";
     if (Object.keys(errors).length) return res.status(400).json({ code: "validation", errors });
-    await pool.query("INSERT INTO contact_messages (name, email, phone, message, ip) VALUES (?, ?, ?, ?, ?)", [name, email || null, phone || null, message, req.ip]);
+    await pool.query("INSERT INTO contact_messages (name, business_name, email, phone, message, ip) VALUES (?, ?, ?, ?, ?, ?)", [name, business || null, email || null, phone || null, message, req.ip]);
     res.status(201).json({ code: "sent" });
   } catch (err) { next(err); }
 });

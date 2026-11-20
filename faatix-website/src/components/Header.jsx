@@ -5,7 +5,7 @@ import Logo from "./Logo.jsx";
 import LanguageSwitch from "./LanguageSwitch.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import useActiveSection from "../hooks/useActiveSection.js";
-import { useAuth } from "../auth/AuthContext.jsx";
+import { site } from "../config/site.js";
 
 /* The site is one page: menu items scroll to sections on the home page. */
 export const NAV_ITEMS = [
@@ -25,8 +25,6 @@ export default function Header() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const active = useActiveSection(SECTION_IDS, pathname === "/");
-  const { status: authStatus } = useAuth();
-  const signedIn = authStatus === "signedIn";
 
   useEffect(() => { setOpen(false); }, [pathname, hash]);
 
@@ -74,14 +72,8 @@ export default function Header() {
 
         <div className="site-header__actions">
           <LanguageSwitch />
-          {signedIn ? (
-            <Link className="btn btn--primary btn--sweep btn--signin site-header__signin" to="/app">{t("app.dashboard")}</Link>
-          ) : (
-            <>
-              <Link className="site-header__signup" to="/register">{t("nav.signup")}</Link>
-              <Link className="btn btn--primary btn--sweep btn--signin site-header__signin" to="/signin">{t("nav.signin")}</Link>
-            </>
-          )}
+          <Link className="site-header__signup" to={sectionLink("contact")}>{t("nav.signup")}</Link>
+          <a className="btn btn--primary btn--sweep btn--signin site-header__signin" href={site.signInUrl}>{t("nav.signin")}</a>
           <button
             className="nav-toggle"
             type="button"
@@ -98,14 +90,10 @@ export default function Header() {
       <div className="mobile-nav" id="mobile-nav" hidden={!open}>
         <div className="container">
           <ul>{links("mobile-nav__link")}</ul>
-          {signedIn ? (
-            <Link className="btn btn--primary btn--sweep btn--signin btn--block" to="/app">{t("app.dashboard")}</Link>
-          ) : (
-            <div className="mobile-nav__auth">
-              <Link className="btn btn--outline btn--block" to="/register">{t("nav.signup")}</Link>
-              <Link className="btn btn--primary btn--sweep btn--signin btn--block" to="/signin">{t("nav.signin")}</Link>
-            </div>
-          )}
+          <div className="mobile-nav__auth">
+            <Link className="btn btn--outline btn--block" to={sectionLink("contact")} onClick={() => setOpen(false)}>{t("nav.signup")}</Link>
+            <a className="btn btn--primary btn--sweep btn--signin btn--block" href={site.signInUrl}>{t("nav.signin")}</a>
+          </div>
         </div>
       </div>
     </header>

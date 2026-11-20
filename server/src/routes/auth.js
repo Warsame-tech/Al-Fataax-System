@@ -42,7 +42,11 @@ function validateRegistration(b) {
 }
 
 /* ---------- POST /api/auth/register ---------- */
-router.post("/register", imageUpload.single("logo"), async (req, res, next) => {
+/*
+ * Self sign-up is closed: businesses are registered by Faatix in the super admin area.
+ * ALLOW_SELF_SIGNUP=true turns the old self-service registration back on (e.g. for a local demo).
+ */
+router.post("/register", (req, res, next) => (process.env.ALLOW_SELF_SIGNUP === "true" ? next() : res.status(403).json({ code: "registrationClosed" })), imageUpload.single("logo"), async (req, res, next) => {
   const file = req.file;
   const { data, errors } = validateRegistration(req.body || {});
   if (file && !imageType(file.buffer)) errors.logo = "invalidLogo";

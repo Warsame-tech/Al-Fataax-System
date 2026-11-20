@@ -13,7 +13,9 @@
     "build": "npm ci --prefix server --omit=dev && npm ci --prefix client --include=dev && npm run build --prefix client",
     "build:client": "npm run build --prefix client",
     "start": "npm start --prefix server",
-    "db:seed": "npm run db:seed --prefix server"
+    "db:seed": "npm run db:seed --prefix server",
+    "dev:website": "npm run dev --prefix faatix-website",
+    "build:website": "npm ci --prefix faatix-website --include=dev && npm run build --prefix faatix-website"
   },
   "devDependencies": {
     "concurrently": "9.0.1"

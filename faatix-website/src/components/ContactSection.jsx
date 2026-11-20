@@ -68,7 +68,7 @@ export default function ContactSection() {
 
 function MessageForm() {
   const { t } = useLanguage();
-  const [f, setF] = useState({ name: "", phone: "", email: "", message: "" });
+  const [f, setF] = useState({ name: "", business: "", phone: "", email: "", message: "" });
   const [state, setState] = useState({ busy: false, sent: false, errors: {}, error: null });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const send = async (e) => {
@@ -76,7 +76,7 @@ function MessageForm() {
     setState({ busy: true, sent: false, errors: {}, error: null });
     try {
       await apiRequest("/api/contact", { method: "POST", body: f });
-      setF({ name: "", phone: "", email: "", message: "" });
+      setF({ name: "", business: "", phone: "", email: "", message: "" });
       setState({ busy: false, sent: true, errors: {}, error: null });
     } catch (err) {
       setState({ busy: false, sent: false, errors: err?.data?.errors || {}, error: err?.data?.code === "tooManyAttempts" ? "contact.form.tooMany" : err?.data?.errors ? null : "contact.form.failed" });
@@ -88,6 +88,7 @@ function MessageForm() {
       <div className="contact-form__head"><Icon name="message" /><div><h3>{t("contact.form.title")}</h3><p>{t("contact.form.sub")}</p></div></div>
       <div className="contact-form__grid">
         <input className={"input" + bad("name")} value={f.name} onChange={set("name")} placeholder={t("contact.form.name")} aria-label={t("contact.form.name")} maxLength={120} />
+        <input className={"input" + bad("business")} value={f.business} onChange={set("business")} placeholder={t("contact.form.business")} aria-label={t("contact.form.business")} maxLength={160} />
         <input className={"input" + bad("phone")} type="tel" value={f.phone} onChange={set("phone")} placeholder={t("contact.form.phone")} aria-label={t("contact.form.phone")} maxLength={40} />
         <input className={"input" + bad("email")} type="email" value={f.email} onChange={set("email")} placeholder={t("contact.form.email")} aria-label={t("contact.form.email")} maxLength={190} />
         <textarea className={"input contact-form__msg" + bad("message")} rows="3" value={f.message} onChange={set("message")} placeholder={t("contact.form.message")} aria-label={t("contact.form.message")} maxLength={4000} />

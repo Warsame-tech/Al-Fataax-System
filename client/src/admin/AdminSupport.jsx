@@ -110,7 +110,7 @@ export function Messages({ can }) {
           {d.data.messages.map((x) => (
             <article key={x.id} className={`msg-card is-${x.status}`}>
               <header>
-                <strong>{x.name}</strong>
+                <strong>{x.name}{x.business && <span className="muted"> · {x.business}</span>}</strong>
                 <span className="muted">{date(x.createdAt, lang, true)}</span>
                 <span className={`badge-status badge-status--${x.status === "new" ? "partially_paid" : x.status === "closed" ? "cancelled" : "paid"}`}>{t(`ui.support.msgStatuses.${x.status}`)}</span>
               </header>

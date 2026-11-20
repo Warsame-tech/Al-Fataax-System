@@ -1044,3 +1044,8 @@ textarea.input { min-height: 140px; resize: vertical; }
   color: var(--navy, #0d1440);
 }
 .input.input--type option { font-family: "Segoe UI", Arial, Helvetica, sans-serif; font-size: 1.05rem; font-weight: 700; }
+
+/* Sign-in as the app's first page (no website header / footer) */
+.auth--page { min-height: 100vh; min-height: 100dvh; display: flex; flex-direction: column; justify-content: center; position: relative; }
+.auth__top { position: absolute; top: 16px; right: 16px; }
+[dir="rtl"] .auth__top { right: auto; left: 16px; }

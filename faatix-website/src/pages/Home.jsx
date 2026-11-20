@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { sectionLink } from "../components/Header.jsx";
 import Icon from "../components/Icon.jsx";
 import HeroArt from "../components/HeroArt.jsx";
 import FeatureGrid from "../components/FeatureGrid.jsx";
@@ -44,7 +45,7 @@ export default function Home() {
               ))}
             </h1>
             <div className="hero__actions" style={{ "--i": n }}>
-              <Link className="btn btn--cta btn--sweep" to="/register">
+              <Link className="btn btn--cta btn--sweep" to={sectionLink("contact")}>
                 <span>{t("common.startTrial")}</span><Icon name="arrow-right" />
               </Link>
             </div>

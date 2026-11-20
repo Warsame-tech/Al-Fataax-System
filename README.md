@@ -83,62 +83,43 @@ On a real business server, change the sample passwords or skip the seed.
 ## Project structure
 
 ```
-client/
-  public/         favicon.png
+client/           the business app + super admin (opens on /signin)
   src/
-    assets/       faatix-logo.png, faatix-logo-light.png (footer), hero-person.webp
-    components/   Header, Footer, Logo, LanguageSwitch, Icon, HeroArt, FeatureGrid, Blob,
-                  WhoSection, AboutSection, PricingSection, ContactSection,
-                  BuildingArt, StoreArt (illustrations), Layout
-    pages/        Home (the whole public site), SignIn, Register, NotFound
+    assets/       faatix-logo.png, faatix-logo-light.png
+    components/   Logo, LanguageSwitch, Icon (shared UI pieces)
+    pages/        SignIn, NotFound, OnlineOrder
     auth/         AuthContext.jsx (signed-in user + business, RequireAuth)
     app/          AppLayout, Dashboard, ModulePage, InvoiceView, ui.jsx, pages/ (one file per module)
-    admin/        AdminApp.jsx (Super Admin panel)
-    config/       site.js (contact phones/emails, optional section photos)
-    i18n/         translations.js (all EN/SO text), LanguageContext.jsx
-    services/     api.js, authService.js (register, sign-in, sign-out)
-    hooks/        usePageTitle, useReveal, useActiveSection (menu highlight)
-    styles/       styles.css (public site), app.css + modules.css (business app)
+    admin/        AdminApp.jsx and the super admin pages
+    i18n/         translations.js + appStrings.js (all EN/SO text), LanguageContext.jsx
+    services/     api.js, authService.js
+    styles/       styles.css (sign-in / shared), app.css + modules.css (business app)
+faatix-website/   the public marketing website — a separate Vite project (see its README)
+  static-version/ the earlier plain-HTML website, kept for reference
 server/
   src/
-    config/       env.js, db.js (MySQL pool)
+    config/       env.js, db.js (MySQL pool), migrate.js
     middleware/   auth.js (session check, roles, audit log)
-    routes/       auth, dashboard, products, sales, invoices, purchases, parties, money, reports, account, admin
-    scripts/      initDb.js, seedSample.js
+    routes/       auth, dashboard, products, sales, invoices, purchases, parties, money, reports, account, admin …
+    scripts/      initDb.js, seedSample.js, adminPassword.js
 database/
   schema.sql      creates the `faatix` database with all tables (safe to re-run)
 server/uploads/   uploaded business logos (not committed to git)
-static-version/   the earlier (green) plain-HTML version, kept for reference
 ```
 
-## How the site is organised
+## App and website
 
-The public website is **one page** (`/`): Hero, Features, Who Can Use, About, Pricing and
-Contact. The menu items scroll to those sections (`/#features`, `/#who`, `/#about`,
-`/#pricing`, `/#contact`).
-**Sign up** (`/register`) and **Sign in** (`/signin`) are separate pages. After signing in,
-the business application lives under `/app`.
-
-The hero slogan uses **Saira**, section names use **Kanit**, the menu uses **Kanit**, and body text uses **Outfit**
-(all from Google Fonts).
-
-## Changing images
-
-- Logo: replace `client/src/assets/faatix-logo.png` and the white-text
-  `faatix-logo-light.png` (used on navy backgrounds).
-- Hero photo: replace `client/src/assets/hero-person.webp` (transparent background).
-  Its size is set by `.hero-figure` in `styles.css`; the floating card is positioned
-  as percentages of the photo (`.chip--invoice`) so it stays on his shoulder.
-- Business photos (Who can use Faatix?): `client/public/images/who/biz-1.webp` … `biz-12.webp`,
-  numbered in the same order as the list (1 = Supermarkets … 12 = Service businesses).
-- Building photos (About, Get in touch): `client/public/images/about-building.webp` and
-  `contact-building.webp` (mockups with the Faatix sign). Paths are set in
-  `client/src/config/site.js`; set one to `null` to show the drawn illustration instead.
-
-## Placeholders to fill in
-
-- Phone numbers and emails: `client/src/config/site.js`.
-- Footer links "What's new", "Help center", "Privacy policy", "Terms of service".
+- **The app** (`client/`) starts on the sign-in page: `/` → `/signin`. After signing in, the business
+  application lives under `/app`; the super admin area is `/admin`.
+- **Self sign-up is closed.** Businesses are registered by Faatix in the super admin area.
+  `POST /api/auth/register` answers `403 registrationClosed` (set `ALLOW_SELF_SIGNUP=true` to turn it back on for a local demo).
+- **The website** (`faatix-website/`) is its own project: `npm run dev:website` (http://localhost:5174),
+  `npm run build:website`. "Request a demo" opens its contact form, which lands in
+  Super admin → Support → Website messages (with the business name). "Sign in" opens the app.
+- Environment: the website uses `VITE_API_URL` and `VITE_APP_URL`; the API allows the website's origin(s) on
+  `/api/contact` only, via `WEBSITE_ORIGIN` (comma separated); the app may set `VITE_WEBSITE_URL` so its sign-in page
+  links back to the website.
+- Website text, images and contact placeholders now live in `faatix-website/src` (`config/site.js`, `public/images`).
 
 ## Editing text and translations
 

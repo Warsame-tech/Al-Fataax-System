@@ -37,6 +37,8 @@ export const env = {
   isProd,
   port: Number(process.env.PORT) || 5000,
   clientOrigin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+  // the public website(s) allowed to call the contact endpoints, comma separated (e.g. https://faatix.com,https://www.faatix.com)
+  websiteOrigins: (process.env.WEBSITE_ORIGIN || (process.env.NODE_ENV === "production" ? "" : "http://localhost:5174")).split(",").map((s) => s.trim().replace(/\/$/, "")).filter(Boolean),
   jwtSecret: process.env.JWT_SECRET || "dev-only-secret-change-me",
   sessionDays: Number(process.env.SESSION_DAYS) || 7,
   trialDays: Number(process.env.TRIAL_DAYS) || 15,

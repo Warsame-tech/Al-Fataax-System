@@ -1,8 +1,5 @@
-import { Routes, Route } from "react-router-dom";
-import Layout from "./components/Layout.jsx";
-import Home from "./pages/Home.jsx";
+import { Routes, Route, Navigate } from "react-router-dom";
 import SignIn from "./pages/SignIn.jsx";
-import Register from "./pages/Register.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import { RequireAuth } from "./auth/AuthContext.jsx";
 import AppLayout from "./app/AppLayout.jsx";
@@ -17,7 +14,7 @@ import OnlineOrder, { OrderTracking } from "./pages/OnlineOrder.jsx";
 
 /*
  * Route map.
- *   Public site:  /  (one page: sections), /signin, /register
+ *   Start:        /  -> /signin (the public website is a separate project: /faatix-website; businesses are registered by Faatix)
  *   Business app: /app (dashboard), /app/m/:id (modules), /app/invoices/:id, /app/products/bulk (bulk product registration)
  *   Online ordering (food businesses, no sign-in): /order/:code, /order/:code/track/:tracking
  * The API enforces authentication and tenant isolation on every request;
@@ -26,12 +23,9 @@ import OnlineOrder, { OrderTracking } from "./pages/OnlineOrder.jsx";
 export default function App() {
   return (
     <Routes>
-      <Route element={<Layout />}>
-        <Route index element={<Home />} />
-        <Route path="signin" element={<SignIn />} />
-        <Route path="register" element={<Register />} />
-        <Route path="*" element={<NotFound />} />
-      </Route>
+      <Route index element={<Navigate to="/signin" replace />} />
+      <Route path="signin" element={<SignIn />} />
+      <Route path="register" element={<Navigate to="/signin" replace />} />
 
       <Route path="app" element={<RequireAuth><AppLayout /></RequireAuth>}>
         <Route index element={<Dashboard />} />
@@ -47,6 +41,7 @@ export default function App() {
       <Route path="admin/*" element={<AdminApp />} />
       <Route path="order/:code" element={<OnlineOrder />} />
       <Route path="order/:code/track/:tracking" element={<OrderTracking />} />
+      <Route path="*" element={<NotFound />} />
     </Routes>
   );
 }

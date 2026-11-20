@@ -969,6 +969,7 @@ TABLES.push(
 );
 COLUMNS.push(
   // super admin role and two-step sign-in (authenticator app)
+  { table: "contact_messages", column: "business_name", ddl: "ALTER TABLE contact_messages ADD COLUMN business_name VARCHAR(160) NULL AFTER name" },
   { table: "platform_admins", column: "role", ddl: "ALTER TABLE platform_admins ADD COLUMN role VARCHAR(20) NOT NULL DEFAULT 'admin' AFTER email, ADD COLUMN totp_secret VARCHAR(64) NULL AFTER role, ADD COLUMN totp_enabled TINYINT(1) NOT NULL DEFAULT 0 AFTER totp_secret" },
   // "sign everyone out": sessions of this business started before it stop working
   { table: "businesses", column: "sessions_valid_after", ddl: "ALTER TABLE businesses ADD COLUMN sessions_valid_after DATETIME NULL" }

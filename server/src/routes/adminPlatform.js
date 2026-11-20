@@ -239,7 +239,7 @@ export function platformRoutes(router) {
     const st = ["new", "read", "closed"].includes(req.query.status) ? req.query.status : null;
     const [rows] = await pool.query(`SELECT m.*, pa.username handled_by_name FROM contact_messages m LEFT JOIN platform_admins pa ON pa.id = m.handled_by
       ${st ? "WHERE m.status = ?" : ""} ORDER BY m.created_at DESC LIMIT 500`, st ? [st] : []);
-    res.json({ messages: rows.map((m) => ({ id: m.id, name: m.name, email: m.email, phone: m.phone, message: m.message, status: m.status, replyNote: m.reply_note || "",
+    res.json({ messages: rows.map((m) => ({ id: m.id, name: m.name, business: m.business_name || "", email: m.email, phone: m.phone, message: m.message, status: m.status, replyNote: m.reply_note || "",
       handledBy: m.handled_by_name, handledAt: m.handled_at, createdAt: m.created_at })) });
   }));
   router.patch("/messages/:id", requireAdminPerm("support"), ah(async (req, res) => {

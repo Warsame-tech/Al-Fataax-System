@@ -49,7 +49,15 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 
 app.set("trust proxy", 1); // correct client IP behind a hosting proxy (rate limiting, audit)
 app.disable("x-powered-by");
-app.use(cors({ origin: env.clientOrigin, credentials: true }));
+// the app's own origin (with cookies); the public website may call only the contact endpoints, without cookies
+const websiteOrigins = new Set(env.websiteOrigins);
+app.use("/api/contact", cors((req, cb) => {
+  const origin = req.header("Origin");
+  if (origin && websiteOrigins.has(origin)) return cb(null, { origin, credentials: false });
+  cb(null, { origin: env.clientOrigin, credentials: true });
+}));
+const appCors = cors({ origin: env.clientOrigin, credentials: true });
+app.use((req, res, next) => (req.path.startsWith("/api/contact") ? next() : appCors(req, res, next)));
 app.use(express.json({ limit: "1mb" }));
 app.use(cookieParser());
 

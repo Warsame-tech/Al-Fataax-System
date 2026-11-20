@@ -15,7 +15,7 @@ export default function NotFound() {
           <h1>{t("common.notFoundTitle")}</h1>
           <p>{t("common.notFoundText")}</p>
           <div className="hero__actions">
-            <Link className="btn btn--primary btn--lg" to="/"><Icon name="arrow-left" /><span>{t("common.backHome")}</span></Link>
+            <Link className="btn btn--primary btn--lg" to="/signin"><Icon name="arrow-left" /><span>{t("common.backHome")}</span></Link>
           </div>
         </div>
       </div>

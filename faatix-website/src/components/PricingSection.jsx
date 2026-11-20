@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import { sectionLink } from "./Header.jsx";
 import Icon from "./Icon.jsx";
 import SectionTitle from "./SectionTitle.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
@@ -44,7 +45,7 @@ export default function PricingSection() {
                       <li key={item}><Icon name="check" /><span>{item}</span></li>
                     ))}
                   </ul>
-                  <Link className="plan__btn" to="/register">{t(`pricing.${plan.cta}`)}</Link>
+                  <Link className="plan__btn" to={sectionLink("contact")}>{t(`pricing.${plan.cta}`)}</Link>
                 </div>
               </article>
             );

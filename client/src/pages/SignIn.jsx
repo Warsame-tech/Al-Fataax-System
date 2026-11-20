@@ -1,13 +1,16 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import Logo from "../components/Logo.jsx";
+import LanguageSwitch from "../components/LanguageSwitch.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
 import usePageTitle from "../hooks/usePageTitle.js";
 import { signIn } from "../services/authService.js";
 
 const PERKS = ["about.check1", "about.check2", "about.check3"];
+// the public website (separate project); when set, "Back to home" and "Contact Faatix" go there
+const WEBSITE = (import.meta.env.VITE_WEBSITE_URL || "").replace(/\/$/, "");
 
 export default function SignIn() {
   const { t } = useLanguage();
@@ -41,7 +44,8 @@ export default function SignIn() {
   }
 
   return (
-    <section className="auth">
+    <section className="auth auth--page">
+      <div className="auth__top"><LanguageSwitch /></div>
       <div className="container">
         <div className="auth__shell">
           <aside className="auth__aside">
@@ -53,7 +57,7 @@ export default function SignIn() {
           </aside>
 
           <div className="auth__form">
-            <Link className="auth__back" to="/"><Icon name="arrow-left" /><span>{t("signin.back")}</span></Link>
+            {WEBSITE && <a className="auth__back" href={WEBSITE}><Icon name="arrow-left" /><span>{t("signin.back")}</span></a>}
             <h1>{t("signin.title")}</h1>
             <p>{t("signin.subtitle")}</p>
 
@@ -91,7 +95,7 @@ export default function SignIn() {
               </button>
             </form>
 
-            <p className="auth__alt">{t("signin.noAccount")} <Link className="text-link" to="/register">{t("signin.trial")}</Link></p>
+            <p className="auth__alt">{t("signin.noAccount")} {t("signin.byFaatix")}{WEBSITE && <> <a className="text-link" href={WEBSITE + "/#contact"}>{t("signin.contact")}</a></>}</p>
           </div>
         </div>
       </div>
