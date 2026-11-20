@@ -8,6 +8,8 @@ import usePageTitle from "../hooks/usePageTitle.js";
 import { signIn } from "../services/authService.js";
 import { apiRequest, fileUrl, getTenant, setTenant } from "../services/api.js";
 import faatixMark from "../assets/faatix-logo.png";
+import faatixLight from "../assets/faatix-logo-light.png";
+import { fill } from "../app/format.js";
 import "../styles/signin.css";
 
 const REMEMBER_KEY = "faatix.rememberUser";
@@ -80,43 +82,66 @@ export default function SignIn() {
 
   return (
     <main className={`signin${dark ? " signin--dark" : ""}`}>
-      <span className="signin__orb signin__orb--a" aria-hidden="true" />
-      <span className="signin__orb signin__orb--b" aria-hidden="true" />
-      <span className="signin__orb signin__orb--c" aria-hidden="true" />
-
-      <div className="signin__top">
-        <LanguageSwitch />
-        <button type="button" className="signin__theme" onClick={() => setDark((v) => !v)} aria-pressed={dark} aria-label={t("signin.theme")} title={t("signin.theme")}>
-          <Icon name={dark ? "sun" : "moon"} />
-        </button>
-      </div>
-
-      <section className="signin__card" aria-labelledby="signin-title">
-        <div className={`signin__mark${biz && !logo ? " signin__mark--initials" : ""}`}>
-          {tenant.loading ? <span className="signin__mark-wait" /> : biz ? (logo ? <img src={logo} alt={biz.name} /> : <span>{initials(biz.name)}</span>) : <img src={faatixMark} alt="Faatix" />}
+      {/* left: the brand panel — the business's logo and name (or Faatix) on solid navy */}
+      <aside className="signin__brand" aria-hidden={tenant.loading ? "true" : undefined}>
+        <span className="signin__ring signin__ring--a" aria-hidden="true" />
+        <span className="signin__ring signin__ring--b" aria-hidden="true" />
+        <span className="signin__dots" aria-hidden="true" />
+        <div className="signin__brand-top">
+          {biz ? <span className="signin__chip"><Icon name="store" /> {t("signin.businessPortal")}</span> : <img className="signin__faatix" src={faatixLight} alt="Faatix" />}
         </div>
-        {biz && <p className="signin__business">{biz.name}</p>}
+        <div className="signin__brand-main">
+          <div className={`signin__mark${biz && !logo ? " signin__mark--initials" : ""}`}>
+            {tenant.loading ? <span className="signin__mark-wait" /> : biz ? (logo ? <img src={logo} alt={biz.name} /> : <span>{initials(biz.name)}</span>) : <img src={faatixMark} alt="Faatix" />}
+          </div>
+          <h2 className="signin__brand-name">{biz ? biz.name : "Faatix"}</h2>
+          <p className="signin__brand-text">{t("signin.panelTitle")}</p>
+          <ul className="signin__perks">
+            {[["receipt", "signin.perkSales"], ["package", "signin.perkStock"], ["chart-line", "signin.perkReports"]].map(([icon, key]) => (
+              <li key={key}><span><Icon name={icon} /></span>{t(key)}</li>
+            ))}
+          </ul>
+        </div>
+        <p className="signin__powered">{biz ? <>{t("signin.poweredBy")} <img src={faatixLight} alt="Faatix" /></> : `© ${new Date().getFullYear()} Faatix`}</p>
+      </aside>
+
+      {/* right: the form */}
+      <section className="signin__side" aria-labelledby="signin-title">
+        <div className="signin__top">
+          <LanguageSwitch />
+          <button type="button" className="signin__theme" onClick={() => setDark((v) => !v)} aria-pressed={dark} aria-label={t("signin.theme")} title={t("signin.theme")}>
+            <Icon name={dark ? "sun" : "moon"} />
+          </button>
+        </div>
+        <div className="signin__card">
+        <span className="signin__hello"><Icon name="lock" /> {t("signin.secure")}</span>
         <h1 id="signin-title">{t("signin.welcome")}</h1>
-        <p className="signin__sub">{t("signin.continue")}</p>
+        <p className="signin__sub">{biz ? fill(t("signin.continueTo"), { name: biz.name }) : t("signin.continue")}</p>
 
         {tenant.missing && <p className="signin__note" role="status"><Icon name="info" /> {t("signin.linkNotFound")}</p>}
         {biz && biz.status !== "active" && <p className="signin__note signin__note--warn" role="status"><Icon name="alert" /> {t(biz.status === "notReady" ? "signin.businessNotReady" : "signin.businessSuspended")}</p>}
 
         <form className="signin__form" onSubmit={handleSubmit} noValidate>
-          <label className="signin__field">
-            <Icon name="user" />
-            <input name="username" autoComplete="username" autoCapitalize="none" spellCheck="false" required aria-label={t("signin.email")}
-              placeholder={t("signin.email")} value={form.username} onChange={update} />
-          </label>
-          <label className="signin__field">
-            <Icon name="lock" />
-            <input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required aria-label={t("signin.password")}
-              placeholder={t("signin.password")} value={form.password} onChange={update} />
-            <button className="signin__eye" type="button" aria-controls="password" aria-pressed={showPassword}
-              aria-label={t(showPassword ? "signin.hide" : "signin.show")} onClick={() => setShowPassword((v) => !v)}>
-              <Icon name={showPassword ? "eye" : "eye-off"} />
-            </button>
-          </label>
+          <div className="signin__group">
+            <label htmlFor="username">{t("signin.email")}</label>
+            <div className="signin__field">
+              <Icon name="user" />
+              <input id="username" name="username" autoComplete="username" autoCapitalize="none" spellCheck="false" required
+                placeholder={t("signin.emailPh")} value={form.username} onChange={update} />
+            </div>
+          </div>
+          <div className="signin__group">
+            <label htmlFor="password">{t("signin.password")}</label>
+            <div className="signin__field">
+              <Icon name="lock" />
+              <input id="password" name="password" type={showPassword ? "text" : "password"} autoComplete="current-password" required
+                placeholder={t("signin.passwordPh")} value={form.password} onChange={update} />
+              <button className="signin__eye" type="button" aria-controls="password" aria-pressed={showPassword}
+                aria-label={t(showPassword ? "signin.hide" : "signin.show")} onClick={() => setShowPassword((v) => !v)}>
+                <Icon name={showPassword ? "eye" : "eye-off"} />
+              </button>
+            </div>
+          </div>
 
           <div className="signin__row">
             <label className="signin__check">
@@ -131,19 +156,20 @@ export default function SignIn() {
           <p className="signin__error" role="alert" hidden={!status}>{status && t(`signin.${status}`)}</p>
 
           <button className="signin__submit" type="submit" disabled={loading}>
+            {loading && <span className="signin__btn-spin" aria-hidden="true" />}
             <span>{t(loading ? "signin.loading" : "signin.submit")}</span>
-            <span className="signin__submit-go" aria-hidden="true"><Icon name="arrow-right" /></span>
+            {!loading && <Icon name="arrow-right" />}
           </button>
         </form>
 
+        <div className="signin__divider" />
         {biz ? (
-          <button type="button" className="signin__other" onClick={useAnother}>{t("signin.otherBusiness")}</button>
+          <button type="button" className="signin__other" onClick={useAnother}><Icon name="swap" /> {t("signin.otherBusiness")}</button>
         ) : (
           <p className="signin__other signin__other--text">{t("signin.noAccount")} {t("signin.byFaatix")}</p>
         )}
+        </div>
       </section>
-
-      <p className="signin__powered">{biz ? <>{t("signin.poweredBy")} <img src={faatixMark} alt="Faatix" /></> : "© Faatix"}</p>
     </main>
   );
 }
