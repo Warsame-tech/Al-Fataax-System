@@ -3,7 +3,7 @@ import SignIn from "./pages/SignIn.jsx";
 import NotFound from "./pages/NotFound.jsx";
 import { RequireAuth } from "./auth/AuthContext.jsx";
 import AppLayout from "./app/AppLayout.jsx";
-import Dashboard from "./app/Dashboard.jsx";
+import Dashboard, { GroupPage } from "./app/Dashboard.jsx";
 import ModulePage from "./app/ModulePage.jsx";
 import InvoiceView from "./app/InvoiceView.jsx";
 import { InvoiceForm } from "./app/pages/Invoices.jsx";
@@ -30,6 +30,7 @@ export default function App() {
 
       <Route path="app" element={<RequireAuth><AppLayout /></RequireAuth>}>
         <Route index element={<Dashboard />} />
+        <Route path="g/:id" element={<GroupPage />} />
         <Route path="m/:id" element={<ModulePage />} />
         <Route path="invoices/new" element={<InvoiceForm />} />
         <Route path="invoices/:id/edit" element={<InvoiceForm />} />

@@ -288,8 +288,18 @@ const translations = {
         recordPurchase: "Record purchase",
         addExpense: "Add expense"
       },
+      groups: {
+        sales: "Sales", stock: "Products & stock", purchasing: "Purchasing", money: "Money & reports", business: "Business", count: "{n} sections",
+        help: {
+          sales: "Selling: the POS, invoices, customers and everything around a sale.",
+          stock: "Your products and the stock in every location.",
+          purchasing: "Buying from suppliers: purchases, orders and what you owe.",
+          money: "Money in and money out: expenses and income, cash and bank, the business overview and reports.",
+          business: "Your business: its details, branches, staff and roles, employees, settings, activity, your profile and help."
+        }
+      },
       sections: {
-        modules: "All modules",
+        modules: "Your business",
         recent: "Recent activity",
         lowStock: "Low-stock alerts",
         best: "Best-selling products"
@@ -740,8 +750,18 @@ const translations = {
         recordPurchase: "Diiwaan geli iibsi",
         addExpense: "Ku dar kharash"
       },
+      groups: {
+        sales: "Iibka", stock: "Alaabta & kaydka", purchasing: "Iibsiga", money: "Lacagta & warbixinnada", business: "Ganacsiga", count: "{n} qaybood",
+        help: {
+          sales: "Iibinta: POS-ka, qaansheegyada, macaamiisha iyo wax kasta oo iib la xiriira.",
+          stock: "Alaabtaada iyo kaydka goob kasta.",
+          purchasing: "Ka iibsashada alaab-qeybiyeyaasha: iibsiyada, dalabaadka iyo waxa lagugu leeyahay.",
+          money: "Lacagta soo gasha iyo ta baxda: kharashka iyo dakhliga, lacagta caddaanka ah iyo bangiga, guudmarka ganacsiga iyo warbixinnada.",
+          business: "Ganacsigaaga: xogtiisa, laamaha, shaqaalaha iyo doorarka, shaqaalaha mushaharka, dejinta, dhaqdhaqaaqa, xogtaada iyo caawimaad."
+        }
+      },
       sections: {
-        modules: "Dhammaan qaybaha",
+        modules: "Ganacsigaaga",
         recent: "Dhaqdhaqaaqa dhowaa",
         lowStock: "Digniinta kaydka yar",
         best: "Alaabta ugu iibka badan"

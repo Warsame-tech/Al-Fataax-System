@@ -13,7 +13,7 @@ import Reports from "./pages/Reports.jsx";
 import Overview from "./pages/Overview.jsx";
 import Stock from "./pages/Stock.jsx";
 import { Expenses, Cashbook } from "./pages/MoneyPages.jsx";
-import { Staff, BusinessInfo, Settings, Profile, Subscription, Audit } from "./pages/AccountPages.jsx";
+import { Staff, BusinessInfo, Settings, Profile, Audit } from "./pages/AccountPages.jsx";
 import Support from "./pages/Support.jsx";
 import { DevicesPage, WarrantiesPage } from "./Devices.jsx";
 import { MetalRatesPage, UsedGoldPage } from "./Jewelry.jsx";
@@ -55,7 +55,6 @@ const SCREENS = {
   staff: Staff,
   business: BusinessInfo,
   profile: Profile,
-  subscription: Subscription,
   support: Support,
   settings: Settings,
   audit: Audit

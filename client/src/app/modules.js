@@ -32,7 +32,6 @@ export const MODULES = [
   { id: "staff",        icon: "user-key",    color: "#475569", perm: "staff.manage" },
   { id: "business",     icon: "briefcase",   color: "#2c3494", perm: null },
   { id: "profile",      icon: "user",        color: "#f2712f", perm: null },
-  { id: "subscription", icon: "credit-card", color: "#7c3aed", perm: null },
   { id: "support",      icon: "message",     color: "#2373f4", perm: null },
   { id: "settings",     icon: "settings",    color: "#475569", perm: null },
   { id: "audit",        icon: "activity",    color: "#0f9488", perm: "audit.view" }
@@ -48,3 +47,16 @@ export const QUICK_ACTIONS = [
 ];
 
 export const moduleById = (id) => MODULES.find((m) => m.id === id);
+
+/*
+ * The dashboard shows a few group buttons instead of every module: each opens a page with that group's modules
+ * (/app/g/<group>). A module belongs to one group; the screens inside are unchanged.
+ */
+export const GROUPS = [
+  { id: "sales",      icon: "cart",      color: "#2373f4", modules: ["pos", "invoices", "customers", "tables", "kitchen", "promotions", "shifts", "warranties", "tailoring"] },
+  { id: "stock",      icon: "package",   color: "#d97706", modules: ["products", "stock", "menu", "devices", "rolls", "metalRates", "usedGold", "waste"] },
+  { id: "purchasing", icon: "truck",     color: "#7c3aed", modules: ["purchases", "suppliers"] },
+  { id: "money",      icon: "wallet",    color: "#dc2626", modules: ["overview", "expenses", "cashbook", "reports"] },
+  { id: "business",   icon: "briefcase", color: "#2c3494", modules: ["business", "branches", "staff", "hr", "settings", "audit", "profile", "support"] }
+];
+export const groupOf = (moduleId) => GROUPS.find((g) => g.modules.includes(moduleId))?.id || null;

@@ -3,7 +3,8 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { groupOf } from "./modules.js";
 import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
@@ -71,8 +72,15 @@ export function useSubmit() {
 }
 
 /* ---------- layout ---------- */
-export function PageHeader({ icon, title, actions, back = "/app" }) {
+export function PageHeader({ icon, title, actions, back }) {
   const { t } = useLanguage();
+  const { pathname } = useLocation();
+  // by default a module's back arrow returns to its group's page (the dashboard groups), else to the dashboard
+  if (back === undefined) {
+    const m = /^\/app\/m\/([\w-]+)/.exec(pathname);
+    const g = m && groupOf(m[1]);
+    back = g ? `/app/g/${g}` : "/app";
+  }
   return (
     <header className="page-head">
       <div className="page-head__left">
