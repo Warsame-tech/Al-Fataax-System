@@ -49,13 +49,10 @@ export const QUICK_ACTIONS = [
 export const moduleById = (id) => MODULES.find((m) => m.id === id);
 
 /*
- * The dashboard shows a few group buttons instead of every module: each opens a page with that group's modules
- * (/app/g/<group>). A module belongs to one group; the screens inside are unchanged.
+ * Two dashboard buttons combine related modules (money in / out, and running the business); each opens a page with
+ * its modules (/app/g/<group>). Every other module keeps its own button on the dashboard.
  */
 export const GROUPS = [
-  { id: "sales",      icon: "cart",      color: "#2373f4", modules: ["pos", "invoices", "customers", "tables", "kitchen", "promotions", "shifts", "warranties", "tailoring"] },
-  { id: "stock",      icon: "package",   color: "#d97706", modules: ["products", "stock", "menu", "devices", "rolls", "metalRates", "usedGold", "waste"] },
-  { id: "purchasing", icon: "truck",     color: "#7c3aed", modules: ["purchases", "suppliers"] },
   { id: "money",      icon: "wallet",    color: "#dc2626", modules: ["overview", "expenses", "cashbook", "reports"] },
   { id: "business",   icon: "briefcase", color: "#2c3494", modules: ["business", "branches", "staff", "hr", "settings", "audit", "profile", "support"] }
 ];

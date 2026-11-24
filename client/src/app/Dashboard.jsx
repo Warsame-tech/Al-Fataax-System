@@ -10,9 +10,8 @@ import { ClockCard } from "./Hr.jsx";
 import { ACTIONS, useShortcuts, Kbd } from "./Shortcuts.jsx";
 
 /*
- * Business dashboard: quick actions, then one button per group of modules (Sales, Products & stock, Purchasing,
- * Money & reports, Business). A group opens its own page with its modules (GroupPage); a group with a single
- * module the user can open goes straight to it. Totals, activity and stock alerts live in "Business overview".
+ * Business dashboard: quick actions, then a button per module, and two combined buttons (Money & reports, Business)
+ * that open a page with their modules (GroupPage); a combined button with a single module goes straight to it. Totals, activity and stock alerts live in "Business overview".
  */
 /** The modules this user may open (permissions, business type, modules switched off by Faatix). */
 export function useVisibleModules() {
@@ -63,6 +62,10 @@ export default function Dashboard() {
   // the keyboard shortcut of each tile / quick action, shown on it (Shortcuts.jsx)
   const { keyOf } = useShortcuts();
   const groups = useVisibleGroups();
+  const visible = useVisibleModules();
+  const grouped = new Set(groups.flatMap((g) => g.modules));
+  const single = visible.filter((m) => !grouped.has(m.id));   // every module outside the combined buttons keeps its own button
+  const moduleKey = (id) => keyOf(ACTIONS.find((x) => x.to === `/app/m/${id}`)?.id);
   usePageTitle("meta.app");
 
   return (
@@ -86,15 +89,20 @@ export default function Dashboard() {
 
       <section className="dash-block" aria-labelledby="mod-title">
         <h2 id="mod-title" className="dash-title">{t("app.sections.modules")}</h2>
-        <nav className="dash-groups" aria-labelledby="mod-title">
+        <nav className="dash-tiles" aria-labelledby="mod-title">
+          {single.map((mod) => (
+            <Link key={mod.id} to={`/app/m/${mod.id}`} className="dash-tile" style={{ "--tile": mod.color }}>
+              <span className="dash-tile__icon"><Icon name={mod.icon} /></span>
+              <span className="dash-tile__label">{t(`app.modules.${mod.id}`)}</span>
+              <Kbd combo={moduleKey(mod.id)} className="dash-tile__kbd" />
+            </Link>
+          ))}
+          {/* the combined buttons: money in / out, and running the business */}
           {groups.map((g) => (
-            <Link key={g.id} to={g.items.length === 1 ? `/app/m/${g.items[0].id}` : `/app/g/${g.id}`} className="dash-group" style={{ "--tile": g.color }}>
-              <span className="dash-group__head">
-                <span className="dash-tile__icon"><Icon name={g.icon} /></span>
-                <span className="dash-group__title"><strong>{t(`app.groups.${g.id}`)}</strong><small>{fill(t("app.groups.count"), { n: g.items.length })}</small></span>
-                <Icon name="arrow-right" className="dash-group__go" />
-              </span>
-              <span className="dash-group__list">{g.items.map((m) => <span key={m.id}><Icon name={m.icon} />{t(`app.modules.${m.id}`)}</span>)}</span>
+            <Link key={g.id} to={g.items.length === 1 ? `/app/m/${g.items[0].id}` : `/app/g/${g.id}`} className="dash-tile dash-tile--group" style={{ "--tile": g.color }}>
+              <span className="dash-tile__icon"><Icon name={g.icon} /></span>
+              <span className="dash-tile__label">{t(`app.groups.${g.id}`)}</span>
+              <small className="dash-tile__count">{fill(t("app.groups.count"), { n: g.items.length })}</small>
             </Link>
           ))}
         </nav>
