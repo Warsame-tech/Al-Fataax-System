@@ -1,8 +1,9 @@
 /*
  * Shared building blocks for the business application screens.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { Link, useNavigate } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { useAuth } from "../auth/AuthContext.jsx";
@@ -277,4 +278,107 @@ export function parseCsv(text) {
   }
   if (cell || row.length) { row.push(cell); rows.push(row); }
   return rows.filter((r) => r.some((x) => x.trim() !== ""));
+}
+
+/* ---------- action menu ----------
+ * One button that opens a list of related actions (secondary actions, or a table row's actions).
+ *   items: [{ label, icon?, onClick? | to?, danger?, disabled?, hint? } | { divider: true } | false]  (false / null are skipped,
+ *          so `can("x") && {...}` keeps permission checks exactly where they were)
+ *   label: the button's text (e.g. "Import & export"); without it the button is a ⋮ icon (row actions)
+ * The list opens below (or above, near the bottom of the screen) and is drawn on top of the page, so it is never cut off
+ * inside a scrolling table. On phones it is a sheet at the bottom. Esc, a click outside, or choosing an item closes it;
+ * ↑ ↓ Home End move between the items.
+ */
+export function ActionMenu({ items, label, icon, small = false, primary = false, title, className = "" }) {
+  const { t } = useLanguage();
+  const navigate = useNavigate();
+  const list = (items || []).filter(Boolean);
+  const real = list.filter((i) => !i.divider);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState(null);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+  const sheet = typeof window !== "undefined" && window.matchMedia?.("(max-width: 600px)").matches;
+
+  const close = useCallback((focusBack = true) => { setOpen(false); setPos(null); if (focusBack) btnRef.current?.focus(); }, []);
+
+  // place the list next to the button (inside the window), once it has its size
+  useLayoutEffect(() => {
+    if (!open || sheet || !menuRef.current || !btnRef.current) return;
+    const b = btnRef.current.getBoundingClientRect();
+    const m = menuRef.current.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    const rtl = document.dir === "rtl" || document.documentElement.dir === "rtl";
+    let left = rtl ? b.left : b.right - m.width;
+    left = Math.max(8, Math.min(left, vw - m.width - 8));
+    let top = b.bottom + 6;
+    if (top + m.height > vh - 8 && b.top - m.height - 6 > 8) top = b.top - m.height - 6;
+    setPos({ left, top: Math.max(8, Math.min(top, vh - m.height - 8)) });
+  }, [open, sheet]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const outside = (e) => { if (!menuRef.current?.contains(e.target) && !btnRef.current?.contains(e.target)) close(false); };
+    const keys = (e) => {
+      const els = [...(menuRef.current?.querySelectorAll("[role=menuitem]:not([disabled])") || [])];
+      const i = els.indexOf(document.activeElement);
+      if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); close(); }            // only the menu closes (not a dialog under it)
+      else if (e.key === "ArrowDown") { e.preventDefault(); els[(i + 1) % els.length]?.focus(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); els[(i - 1 + els.length) % els.length]?.focus(); }
+      else if (e.key === "Home") { e.preventDefault(); els[0]?.focus(); }
+      else if (e.key === "End") { e.preventDefault(); els[els.length - 1]?.focus(); }
+      else if (e.key === "Tab") close(false);
+    };
+    // scrolling the page or resizing the window closes it (scrolling inside the list doesn't)
+    const away = (e) => { if (!(e.target instanceof Node) || !menuRef.current?.contains(e.target)) close(false); };
+    document.addEventListener("pointerdown", outside, true);
+    document.addEventListener("keydown", keys, true);
+    window.addEventListener("resize", away);
+    window.addEventListener("scroll", away, true);
+    requestAnimationFrame(() => menuRef.current?.querySelector("[role=menuitem]:not([disabled])")?.focus());
+    return () => {
+      document.removeEventListener("pointerdown", outside, true);
+      document.removeEventListener("keydown", keys, true);
+      window.removeEventListener("resize", away);
+      window.removeEventListener("scroll", away, true);
+    };
+  }, [open, close]);
+
+  if (!real.length) return null;
+  const choose = (item) => {
+    if (item.disabled) return;
+    close(false);
+    if (item.to) navigate(item.to);
+    else item.onClick?.();
+  };
+  const kebab = !label;
+  const btnClass = kebab ? `icon-btn action-menu__kebab${className ? ` ${className}` : ""}`
+    : `btn ${primary ? "btn--primary" : "btn--outline"}${small ? " btn--sm" : ""} action-menu__btn${className ? ` ${className}` : ""}`;
+
+  return (
+    <>
+      <button ref={btnRef} type="button" className={btnClass} aria-haspopup="menu" aria-expanded={open}
+        title={kebab ? title || t("ui.common.moreActions") : title} aria-label={kebab ? title || t("ui.common.moreActions") : undefined}
+        onClick={() => (open ? close() : setOpen(true))}>
+        {kebab ? <Icon name="more" /> : <>{icon && <Icon name={icon} />}<span>{label}</span><Icon name="chevron-down" className="action-menu__chev" /></>}
+      </button>
+      {open && createPortal(
+        <>
+          {sheet && <div className="action-menu__scrim" aria-hidden="true" />}
+          <div ref={menuRef} role="menu" aria-label={label || title || t("ui.common.moreActions")}
+            className={"action-menu" + (sheet ? " action-menu--sheet" : "")}
+            style={sheet ? undefined : pos ? { left: pos.left, top: pos.top } : { left: -9999, top: 0, visibility: "hidden" }}>
+            {sheet && <div className="action-menu__title">{label || title || t("ui.common.moreActions")}</div>}
+            {list.map((item, i) => item.divider ? <div key={`d${i}`} className="action-menu__sep" role="separator" /> : (
+              <button key={item.key || item.label} type="button" role="menuitem" disabled={item.disabled}
+                className={"action-menu__item" + (item.danger ? " is-danger" : "")} onClick={() => choose(item)}>
+                {item.icon ? <Icon name={item.icon} /> : <span className="action-menu__dot" />}
+                <span className="action-menu__text">{item.label}{item.hint && <small>{item.hint}</small>}</span>
+              </button>
+            ))}
+            {sheet && <button type="button" className="action-menu__cancel" onClick={() => close()}>{t("ui.common.cancel")}</button>}
+          </div>
+        </>, document.body)}
+    </>
+  );
 }

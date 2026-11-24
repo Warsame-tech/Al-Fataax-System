@@ -6,7 +6,7 @@ import { useAuth } from "../auth/AuthContext.jsx";
 import { apiRequest, fileUrl } from "../services/api.js";
 import usePageTitle from "../hooks/usePageTitle.js";
 import { money, qty, date, fill } from "./format.js";
-import { usePerm, ReasonModal } from "./ui.jsx";
+import { usePerm, ReasonModal, ActionMenu } from "./ui.jsx";
 import { PaymentModal } from "./pages/Parties.jsx";
 import { savePdf } from "./pdf.js";
 import { PriceDetailLine } from "./Jewelry.jsx";
@@ -73,21 +73,21 @@ export default function InvoiceView({ preview = false }) {
       <div className="invoice-toolbar no-print">
         <Link className="auth__back" to="/app/m/invoices"><Icon name="arrow-left" /><span>{t("invoice.back")}</span></Link>
         <div className="form-actions">
-          {!preview && <button type="button" className="btn btn--outline" onClick={() => setModal("history")}><Icon name="history" /><span>{t("ui.invEdit.history")}</span></button>}
-          {!preview && editPerm && can(editPerm) && <Link className="btn btn--outline" to={`/app/invoices/${inv.id}/edit`}><Icon name="settings" /><span>{t("ui.invEdit.edit")}</span></Link>}
           {!preview && inv.status === "draft" && can("invoices.create") && <button type="button" className="btn btn--navy" onClick={post}><Icon name="check" /><span>{t("ui.invEdit.post")}</span></button>}
-          {!preview && can("invoices.cancel") && inv.status !== "cancelled" && (inv.paid === 0 || can("invoices.editPaid")) && (
-            <button type="button" className="btn btn--danger" onClick={() => setModal(inv.paid > 0 ? "cancelRefund" : "cancel")}><Icon name="x" /><span>{t("ui.invoices.cancelInvoice")}</span></button>
-          )}
           {!preview && can("payments.receive") && ["unpaid", "partially_paid", "overdue"].includes(inv.status) && inv.balance > 0 && (
             <button type="button" className="btn btn--navy" onClick={() => setModal("pay")}><Icon name="wallet" /><span>{t("ui.invoices.recordPayment")}</span></button>
           )}
-          <button type="button" className="btn btn--outline" onClick={() => window.print()}>
+          <button type="button" className="btn btn--primary" onClick={() => window.print()}>
             <Icon name="printer" /><span>{t("invoice.printOnly")}</span>
           </button>
-          <button type="button" className="btn btn--primary" onClick={exportPdf} disabled={savingPdf}>
-            <Icon name="download" /><span>{t(savingPdf ? "invoice.savingPdf" : "invoice.savePdf")}</span>
-          </button>
+          <ActionMenu label={t("ui.common.more")} items={[
+            { label: t(savingPdf ? "invoice.savingPdf" : "invoice.savePdf"), icon: "download", onClick: exportPdf, disabled: savingPdf },
+            !preview && editPerm && can(editPerm) && { label: t("ui.invEdit.edit"), icon: "pencil", to: `/app/invoices/${inv.id}/edit` },
+            !preview && { label: t("ui.invEdit.history"), icon: "history", onClick: () => setModal("history") },
+            !preview && can("invoices.cancel") && inv.status !== "cancelled" && (inv.paid === 0 || can("invoices.editPaid")) && { divider: true },
+            !preview && can("invoices.cancel") && inv.status !== "cancelled" && (inv.paid === 0 || can("invoices.editPaid")) &&
+              { label: t("ui.invoices.cancelInvoice"), icon: "x", danger: true, onClick: () => setModal(inv.paid > 0 ? "cancelRefund" : "cancel") }
+          ]} />
         </div>
       </div>
 

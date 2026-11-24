@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { apiRequest } from "../services/api.js";
-import { useApi, useSubmit, Field, FormError, Loading, EmptyState, StatusBadge, Modal, DateRange, daysAgo, isoDate, downloadCsv } from "../app/ui.jsx";
+import { useApi, useSubmit, Field, FormError, Loading, EmptyState, StatusBadge, Modal, DateRange, daysAgo, isoDate, downloadCsv, ActionMenu } from "../app/ui.jsx";
 import { date, fill, money } from "../app/format.js";
 
 /*
@@ -59,8 +59,11 @@ export function Subscriptions({ can }) {
               <td><span className={`badge-status badge-status--${s.status === "active" ? "paid" : s.status === "cancelled" ? "cancelled" : "overdue"}`}>{t(`ui.billing.statuses.${s.status}`)}</span></td>
               <td className="row-actions">
                 {can("billing") && s.status !== "cancelled" && <button type="button" className="btn btn--primary btn--sm" onClick={() => setPaying(s)}><Icon name="wallet" /><span>{t("ui.billing.recordPayment")}</span></button>}
-                {can("billing") && <button type="button" className="icon-btn" title={t("ui.billing.changePlan")} onClick={() => setGiving({ id: s.businessId, name: s.business, planId: s.planId, cycle: s.cycle })}><Icon name="settings" /></button>}
-                {can("billing") && s.status !== "cancelled" && <button type="button" className="icon-btn" title={t("ui.billing.cancel")} onClick={() => setCancelling(s)}><Icon name="x" /></button>}
+                {can("billing") && <ActionMenu title={s.business} items={[
+                  { label: t("ui.billing.changePlan"), icon: "settings", onClick: () => setGiving({ id: s.businessId, name: s.business, planId: s.planId, cycle: s.cycle }) },
+                  s.status !== "cancelled" && { divider: true },
+                  s.status !== "cancelled" && { label: t("ui.billing.cancel"), icon: "x", danger: true, onClick: () => setCancelling(s) }
+                ]} />}
               </td>
             </tr>
           ))}</tbody>

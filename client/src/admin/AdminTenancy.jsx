@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { apiRequest } from "../services/api.js";
-import { useApi, useSubmit, Field, FormError, Loading, EmptyState, StatusBadge, SearchBox, Modal, useErrorText } from "../app/ui.jsx";
+import { useApi, useSubmit, Field, FormError, Loading, EmptyState, StatusBadge, SearchBox, Modal, useErrorText, ActionMenu } from "../app/ui.jsx";
 import { date, fill } from "../app/format.js";
 
 /*
@@ -478,9 +478,11 @@ export function Databases() {
               <td>{x.lastMigratedAt ? date(x.lastMigratedAt, lang, true) : "—"}</td>
               <td>{x.lastBackupAt ? date(x.lastBackupAt, lang, true) : t("ui.tenancy.db.never")}</td>
               <td className="row-actions">
-                {x.status === "ready" && <button type="button" className="btn btn--outline btn--sm" onClick={() => test(x)} disabled={busy === `t${x.businessId}`}>{t("ui.tenancy.db.test")}</button>}
-                {x.mode === "dedicated" && x.status === "ready" && <button type="button" className="btn btn--outline btn--sm" onClick={() => migrate(x)} disabled={busy === `m${x.businessId}`}>{t("ui.tenancy.db.migrate")}</button>}
                 {x.mode === "shared" && x.status === "ready" && !["pending", "provisioning"].includes(x.businessStatus) && <button type="button" className="btn btn--primary btn--sm" onClick={() => move(x)} disabled={busy === `v${x.businessId}`}><Icon name="database" /><span>{t("ui.tenancy.db.move")}</span></button>}
+                <ActionMenu title={x.name} items={[
+                  x.status === "ready" && { label: t("ui.tenancy.db.test"), icon: "activity", onClick: () => test(x), disabled: busy === `t${x.businessId}` },
+                  x.mode === "dedicated" && x.status === "ready" && { label: t("ui.tenancy.db.migrate"), icon: "refresh", onClick: () => migrate(x), disabled: busy === `m${x.businessId}` }
+                ]} />
                 {result[x.businessId] && <small className={result[x.businessId].ok ? "slug-ok" : "slug-bad"}>{result[x.businessId].text}</small>}
               </td>
             </tr>

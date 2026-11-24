@@ -3,9 +3,10 @@
  * Use {name}-style placeholders with fill() from app/format.js.
  */
 const en = {
+  groups: { setup: "Setup", importExport: "Import & export", printExport: "Print & export", access: "Access & account", status: "Status" },
   common: {
     save: "Save", saving: "Saving…", cancel: "Cancel", close: "Close", edit: "Edit", add: "Add", delete: "Delete", view: "View",
-    search: "Search", searchPh: "Search…", all: "All", actions: "Actions", confirm: "Confirm", back: "Back", print: "Print / PDF",
+    search: "Search", searchPh: "Search…", all: "All", actions: "Actions", more: "More", moreActions: "More actions", confirm: "Confirm", back: "Back", print: "Print / PDF",
     exportCsv: "Export Excel (CSV)", from: "From", to: "To", apply: "Apply", total: "Total", subtotal: "Subtotal", discount: "Discount",
     paid: "Paid", balance: "Balance", amount: "Amount", date: "Date", status: "Status", notes: "Notes", name: "Name", phone: "Phone",
     email: "Email", address: "Address", description: "Description", category: "Category", method: "Payment method", reference: "Reference",
@@ -915,9 +916,10 @@ const en = {
 };
 
 const so = {
+  groups: { setup: "Habaynta", importExport: "Soo geli & dhoofi", printExport: "Daabac & dhoofi", access: "Gelitaanka & akoonka", status: "Xaaladda" },
   common: {
     save: "Kaydi", saving: "Waa la kaydinayaa…", cancel: "Jooji", close: "Xir", edit: "Wax ka beddel", add: "Ku dar", delete: "Tirtir", view: "Eeg",
-    search: "Raadi", searchPh: "Raadi…", all: "Dhammaan", actions: "Ficillo", confirm: "Xaqiiji", back: "Dib u noqo", print: "Daabac / PDF",
+    search: "Raadi", searchPh: "Raadi…", all: "Dhammaan", actions: "Ficillo", more: "Wax kale", moreActions: "Ficillo kale", confirm: "Xaqiiji", back: "Dib u noqo", print: "Daabac / PDF",
     exportCsv: "U dhoofi Excel (CSV)", from: "Laga bilaabo", to: "Ilaa", apply: "Codso", total: "Wadarta", subtotal: "Wadarta hoose", discount: "Dhimis",
     paid: "La bixiyay", balance: "Haraaga", amount: "Qaddarka", date: "Taariikhda", status: "Xaaladda", notes: "Xusuus", name: "Magaca", phone: "Taleefan",
     email: "Iimayl", address: "Cinwaan", description: "Faahfaahin", category: "Qaybta", method: "Habka lacag-bixinta", reference: "Tixraac",

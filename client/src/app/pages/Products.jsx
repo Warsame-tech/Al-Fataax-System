@@ -4,7 +4,7 @@ import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { useAuth } from "../../auth/AuthContext.jsx";
 import { apiRequest, fileUrl } from "../../services/api.js";
-import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, Modal, Field, FormError, Money, EmptyState, Loading, SearchBox, downloadCsv, parseCsv } from "../ui.jsx";
+import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, Modal, Field, FormError, Money, EmptyState, Loading, SearchBox, downloadCsv, parseCsv, ActionMenu } from "../ui.jsx";
 import { fill, qty, date } from "../format.js";
 import CameraScanner from "../CameraScanner.jsx";
 import { FoundCard } from "../ProductPicker.jsx";
@@ -172,12 +172,18 @@ export default function Products() {
     <div className="page">
       <PageHeader icon="package" title={t("ui.products.title")} actions={
         <>
-          {can("products.edit") && <button type="button" className="btn btn--outline" onClick={() => setLists(true)}><Icon name="layers" /><span>{t("ui.lists.title")}</span></button>}
-          {can("settings.edit") && profile.electronics && <button type="button" className="btn btn--outline" onClick={() => setSpecSettings(true)}><Icon name="layers" /><span>{t("ui.products.specFields")}</span></button>}
-          {can("settings.edit") && <button type="button" className="btn btn--outline" onClick={() => setSettings(true)}><Icon name="settings" /><span>{t("ui.products.settings")}</span></button>}
-          <button type="button" className="btn btn--outline" onClick={exportCsv}><Icon name="download" /><span>{t("ui.common.exportCsv")}</span></button>
-          {can("products.edit") && <button type="button" className="btn btn--outline" onClick={() => setImporting(true)}><Icon name="upload" /><span>{t("ui.products.import")}</span></button>}
-          {can("products.edit") && <Link className="btn btn--outline" to="/app/products/bulk"><Icon name="layers" /><span>{t("ui.bulk.open")}</span></Link>}
+          {/* setup: lists (categories, brands…), spec fields, product settings */}
+          <ActionMenu label={t("ui.groups.setup")} icon="settings" items={[
+            can("products.edit") && { label: t("ui.lists.title"), icon: "layers", onClick: () => setLists(true) },
+            can("settings.edit") && profile.electronics && { label: t("ui.products.specFields"), icon: "layers", onClick: () => setSpecSettings(true) },
+            can("settings.edit") && { label: t("ui.products.settings"), icon: "settings", onClick: () => setSettings(true) }
+          ]} />
+          {/* bring products in / take them out */}
+          <ActionMenu label={t("ui.groups.importExport")} icon="upload" items={[
+            can("products.edit") && { label: t("ui.bulk.open"), icon: "layers", to: "/app/products/bulk" },
+            can("products.edit") && { label: t("ui.products.import"), icon: "upload", onClick: () => setImporting(true) },
+            { label: t("ui.common.exportCsv"), icon: "download", onClick: exportCsv }
+          ]} />
           {can("products.edit") && <button type="button" className="btn btn--primary" onClick={() => setEditing(EMPTY)}><Icon name="plus" /><span>{t("ui.products.add")}</span></button>}
         </>
       } />
@@ -306,15 +312,14 @@ export default function Products() {
                   {profile.batches && <td>{p.trackBatches ? <ExpiryCell value={p.nextExpiry} soonDays={profile.expirySoonDays} /> : <span className="muted">{t("ui.products.notTracked")}</span>}</td>}
                   {costView && <td className="num"><Money value={Math.round(p.stock * p.costPrice * 10000) / 10000} /></td>}
                   <td className="row-actions">
-                    <button type="button" className="icon-btn" title={t("ui.products.history")} onClick={() => setHistory(p)}><Icon name="history" /></button>
-                    {can("stock.adjust") && p.isActive && <Link className="icon-btn" title={t("ui.stock.adjust")} to={`/app/m/stock?tab=adjust&product=${p.id}`}><Icon name="swap" /></Link>}
-                    {can("products.edit") && groups && <button type="button" className="icon-btn" title={t("ui.products.addVariant")} onClick={() => setEditing(variantTemplate(p))}><Icon name="copy" /></button>}
-                    {can("products.edit") && <button type="button" className="icon-btn" title={t("ui.common.edit")} onClick={() => setEditing(p)}><Icon name="settings" /></button>}
-                    {can("products.edit") && (
-                      <button type="button" className="icon-btn" title={t(p.isActive ? "ui.products.archive" : "ui.products.restore")} onClick={() => setStatus(p, p.isActive)}>
-                        <Icon name={p.isActive ? "archive" : "archive-restore"} />
-                      </button>
-                    )}
+                    {can("products.edit") && <button type="button" className="icon-btn" title={t("ui.common.edit")} aria-label={t("ui.common.edit")} onClick={() => setEditing(p)}><Icon name="pencil" /></button>}
+                    <ActionMenu title={p.name} items={[
+                      { label: t("ui.products.history"), icon: "history", onClick: () => setHistory(p) },
+                      can("stock.adjust") && p.isActive && { label: t("ui.stock.adjust"), icon: "swap", to: `/app/m/stock?tab=adjust&product=${p.id}` },
+                      can("products.edit") && groups && { label: t("ui.products.addVariant"), icon: "copy", onClick: () => setEditing(variantTemplate(p)) },
+                      can("products.edit") && { divider: true },
+                      can("products.edit") && { label: t(p.isActive ? "ui.products.archive" : "ui.products.restore"), icon: p.isActive ? "archive" : "archive-restore", danger: p.isActive, onClick: () => setStatus(p, p.isActive) }
+                    ]} />
                   </td>
                 </tr>
               ))}

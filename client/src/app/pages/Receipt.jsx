@@ -3,7 +3,7 @@ import { Link, useParams } from "react-router-dom";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest, fileUrl } from "../../services/api.js";
-import { useApi, usePerm, useMoney, useSubmit, Loading, EmptyState, ReasonModal, StatusBadge, Modal, Field, FormError } from "../ui.jsx";
+import { useApi, usePerm, useMoney, useSubmit, Loading, EmptyState, ReasonModal, StatusBadge, Modal, Field, FormError, ActionMenu } from "../ui.jsx";
 import { qty, date, fill } from "../format.js";
 import { savePdf } from "../pdf.js";
 import { PriceDetailLine } from "../Jewelry.jsx";
@@ -64,10 +64,13 @@ export default function Receipt() {
           <div className="seg" role="group" aria-label={t("ui.receipt.paper")}>
             {["58", "80"].map((w) => <button key={w} type="button" aria-pressed={paper === w} onClick={() => choosePaper(w)}>{w} mm</button>)}
           </div>
-          {can("sales.cancel") && s.status === "completed" && items.some((i) => i.rolls?.length && i.baseQty > 0) && <button type="button" className="btn btn--outline" onClick={() => setReturning(true)}><Icon name="scissors" /><span>{t("ui.fabric.returnPart")}</span></button>}
-          {can("sales.cancel") && s.status === "completed" && <button type="button" className="btn btn--danger" onClick={() => setCancelling(true)}><Icon name="x" /><span>{t("ui.pos.cancelSale")}</span></button>}
-          <button type="button" className="btn btn--outline" onClick={() => window.print()}><Icon name="printer" /><span>{t("invoice.printOnly")}</span></button>
-          <button type="button" className="btn btn--primary" onClick={exportPdf} disabled={savingPdf}><Icon name="download" /><span>{t(savingPdf ? "invoice.savingPdf" : "invoice.savePdf")}</span></button>
+          <button type="button" className="btn btn--primary" onClick={() => window.print()}><Icon name="printer" /><span>{t("invoice.printOnly")}</span></button>
+          <ActionMenu label={t("ui.common.more")} items={[
+            { label: t(savingPdf ? "invoice.savingPdf" : "invoice.savePdf"), icon: "download", onClick: exportPdf, disabled: savingPdf },
+            can("sales.cancel") && s.status === "completed" && items.some((i) => i.rolls?.length && i.baseQty > 0) && { label: t("ui.fabric.returnPart"), icon: "scissors", onClick: () => setReturning(true) },
+            can("sales.cancel") && s.status === "completed" && { divider: true },
+            can("sales.cancel") && s.status === "completed" && { label: t("ui.pos.cancelSale"), icon: "x", danger: true, onClick: () => setCancelling(true) }
+          ]} />
         </div>
       </div>
 

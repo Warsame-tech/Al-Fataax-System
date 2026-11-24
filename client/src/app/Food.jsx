@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { apiRequest, fileUrl } from "../services/api.js";
-import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, Modal, Field, FormError, EmptyState, Loading, SearchBox, ReasonModal, DateRange, daysAgo, isoDate, PaymentFields } from "./ui.jsx";
+import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, useErrorText, Modal, Field, FormError, EmptyState, Loading, SearchBox, ReasonModal, DateRange, daysAgo, isoDate, PaymentFields, ActionMenu } from "./ui.jsx";
 import { date, fill, qty } from "./format.js";
 import { useProfile } from "./profile.js";
 import SearchSelect from "./SearchSelect.jsx";
@@ -215,13 +215,16 @@ export function FoodPos() {
                   <button type="button" className="btn btn--primary btn--sm" onClick={() => act("accept")}><Icon name="check" /><span>{t("ui.online.accept")}</span></button>
                   <button type="button" className="btn btn--danger btn--sm" onClick={() => setModal("reject")}>{t("ui.online.reject")}</button></>}
                 {o.service === "delivery" && ["sent", "preparing", "ready", "served"].includes(o.status) && <button type="button" className="btn btn--outline btn--sm" onClick={() => setModal("dispatch")}><Icon name="truck" /><span>{t("ui.online.dispatch")}</span></button>}
-                <button type="button" className="btn btn--outline btn--sm" onClick={() => printKitchenTicket(t, o)}><Icon name="printer" /><span>{t("ui.food.kitchenTicket")}</span></button>
                 {o.unsent > 0 && <button type="button" className="btn btn--outline btn--sm" onClick={() => act("send")}><Icon name="send" /><span>{t("ui.food.sendRest")}</span></button>}
-                {o.service === "dine_in" && profile.food?.tables && !o.saleId && <button type="button" className="btn btn--outline btn--sm" onClick={() => setModal("move")}><Icon name="swap" /><span>{t("ui.food.moveTable")}</span></button>}
                 {["ready", "preparing", "sent"].includes(o.status) && o.service !== "delivery" && <button type="button" className="btn btn--outline btn--sm" onClick={() => act("status", { status: "served" })}><Icon name="check" /><span>{t("ui.food.markServed")}</span></button>}
                 {o.service === "delivery" && o.status === "on_the_way" && <button type="button" className="btn btn--outline btn--sm" onClick={() => setModal("delivered")}><Icon name="check" /><span>{t("ui.food.markDelivered")}</span></button>}
                 {o.saleId && <button type="button" className="btn btn--primary btn--sm" onClick={async () => { await act("status", { status: "completed" }); newOrder(); }}><Icon name="check" /><span>{t("ui.food.complete")}</span></button>}
-                {can("sales.cancel") && !o.saleId && <button type="button" className="btn btn--danger btn--sm" onClick={() => setModal("cancel")}>{t("ui.food.cancelOrder")}</button>}
+                <ActionMenu label={t("ui.common.more")} small items={[
+                  { label: t("ui.food.kitchenTicket"), icon: "printer", onClick: () => printKitchenTicket(t, o) },
+                  o.service === "dine_in" && profile.food?.tables && !o.saleId && { label: t("ui.food.moveTable"), icon: "swap", onClick: () => setModal("move") },
+                  can("sales.cancel") && !o.saleId && { divider: true },
+                  can("sales.cancel") && !o.saleId && { label: t("ui.food.cancelOrder"), icon: "x", danger: true, onClick: () => setModal("cancel") }
+                ]} />
               </div>
             </div>
           )}
@@ -628,13 +631,25 @@ function OrderBoard({ closed, service: fixedService = "" }) {
               <td className="num">{m(o.total)}</td>
               <td>{o.saleId ? <Link to={`/app/sales/${o.saleId}`}>{o.receiptNo}</Link> : <span className="muted">{t("ui.food.unpaid")}</span>}{o.balance > 0 && <small className="cell-sub is-neg">{t("ui.common.balance")} {m(o.balance)}</small>}</td>
               <td className="row-actions">
-                {!closed && <Link className="btn btn--outline btn--sm" to={`/app/m/pos?order=${o.id}`}>{t("ui.common.view")}</Link>}
-                {!closed && !o.saleId && o.items.filter((i) => i.status !== "cancelled").length > 1 && <button type="button" className="btn btn--outline btn--sm" onClick={() => setSplit(o)}>{t("ui.food.splitBill")}</button>}
-                {!closed && o.status === "received" && o.source === "online" && <><button type="button" className="btn btn--primary btn--sm" onClick={() => act(o, "accept", {})}>{t("ui.online.accept")}</button>
-                  <button type="button" className="btn btn--outline btn--sm" onClick={() => setModal({ kind: "reject", order: o })}>{t("ui.online.reject")}</button></>}
-                {!closed && o.service === "delivery" && ["sent", "preparing", "ready", "served"].includes(o.status) && <button type="button" className="btn btn--outline btn--sm" onClick={() => setModal({ kind: "dispatch", order: o })}>{t("ui.online.dispatch")}</button>}
-                {!closed && o.service === "delivery" && o.status === "on_the_way" && <button type="button" className="btn btn--outline btn--sm" onClick={() => setModal({ kind: "delivered", order: o })}>{t("ui.food.markDelivered")}</button>}
-                {!closed && o.saleId && <button type="button" className="btn btn--primary btn--sm" onClick={() => act(o, "status", { status: "completed" })}>{t("ui.food.complete")}</button>}
+                {!closed && (() => {
+                  // the order's next step stays on the row; every other action is in the ⋮ menu
+                  const steps = [
+                    o.status === "received" && o.source === "online" && { label: t("ui.online.accept"), icon: "check", onClick: () => act(o, "accept", {}) },
+                    o.saleId && { label: t("ui.food.complete"), icon: "check", onClick: () => act(o, "status", { status: "completed" }) },
+                    o.service === "delivery" && ["sent", "preparing", "ready", "served"].includes(o.status) && { label: t("ui.online.dispatch"), icon: "truck", onClick: () => setModal({ kind: "dispatch", order: o }) },
+                    o.service === "delivery" && o.status === "on_the_way" && { label: t("ui.food.markDelivered"), icon: "check", onClick: () => setModal({ kind: "delivered", order: o }) }
+                  ].filter(Boolean);
+                  const [next, ...rest] = steps;
+                  return <>
+                    <Link className="btn btn--outline btn--sm" to={`/app/m/pos?order=${o.id}`}>{t("ui.common.view")}</Link>
+                    {next && <button type="button" className="btn btn--primary btn--sm" onClick={next.onClick}>{next.label}</button>}
+                    <ActionMenu title={o.number} items={[
+                      ...rest,
+                      !o.saleId && o.items.filter((i) => i.status !== "cancelled").length > 1 && { label: t("ui.food.splitBill"), icon: "copy", onClick: () => setSplit(o) },
+                      o.status === "received" && o.source === "online" && { label: t("ui.online.reject"), icon: "x", danger: true, onClick: () => setModal({ kind: "reject", order: o }) }
+                    ]} />
+                  </>;
+                })()}
               </td>
             </tr>
           ))}</tbody>
@@ -1001,9 +1016,12 @@ function Reservations() {
               <td className="row-actions">
                 {r.status === "booked" && <>
                   <Link className="btn btn--primary btn--sm" to={r.tableId ? `/app/m/pos?table=${r.tableId}` : "/app/m/pos"} onClick={() => act(r, "seated")}>{t("ui.resv.seat")}</Link>
-                  <button type="button" className="btn btn--outline btn--sm" onClick={() => setEditing(r)}>{t("ui.common.edit")}</button>
-                  <button type="button" className="btn btn--outline btn--sm" onClick={() => act(r, "no_show")}>{t("ui.resv.noShow")}</button>
-                  <button type="button" className="btn btn--outline btn--sm" onClick={() => setCancelling(r)}>{t("ui.common.cancel")}</button></>}
+                  <ActionMenu title={r.name} items={[
+                    { label: t("ui.common.edit"), icon: "pencil", onClick: () => setEditing(r) },
+                    { label: t("ui.resv.noShow"), icon: "clock", onClick: () => act(r, "no_show") },
+                    { divider: true },
+                    { label: t("ui.common.cancel"), icon: "x", danger: true, onClick: () => setCancelling(r) }
+                  ]} /></>}
                 {r.status === "seated" && <button type="button" className="btn btn--outline btn--sm" onClick={() => act(r, "completed")}>{t("ui.resv.done")}</button>}
               </td>
             </tr>

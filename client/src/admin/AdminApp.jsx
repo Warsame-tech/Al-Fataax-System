@@ -3,7 +3,7 @@ import { Link, Navigate, Route, Routes, useLocation, useNavigate, useParams, use
 import Icon from "../components/Icon.jsx";
 import { SUPPORTED, useLanguage } from "../i18n/LanguageContext.jsx";
 import { apiRequest, fileUrl } from "../services/api.js";
-import { useApi, useSubmit, Field, FormError, Loading, EmptyState, StatusBadge, SearchBox, ReasonModal, Modal } from "../app/ui.jsx";
+import { useApi, useSubmit, Field, FormError, Loading, EmptyState, StatusBadge, SearchBox, ReasonModal, Modal, ActionMenu } from "../app/ui.jsx";
 import { date, fill, money } from "../app/format.js";
 import usePageTitle from "../hooks/usePageTitle.js";
 import logo from "../assets/faatix-logo.png";
@@ -326,14 +326,20 @@ function BusinessDetail({ can }) {
         <div className="form-actions admin-biz__actions">
           {settingUp && <Link className="btn btn--primary" to={`/admin/businesses/${b.id}/setup`}><Icon name="activity" /><span>{t("ui.tenancy.detail.viewSetup")}</span></Link>}
           {can("businesses") && !settingUp && b.status !== "active" && <button type="button" className="btn btn--primary" onClick={() => setStatus("active", "")}>{t("ui.admin.activate")}</button>}
-          {can("businesses") && b.status === "active" && <button type="button" className="btn btn--danger" onClick={() => setModal("suspended")}>{t("ui.admin.suspend")}</button>}
-          {can("businesses") && !settingUp && !["expired", "archived", "deactivated"].includes(b.status) && <button type="button" className="btn btn--outline" onClick={() => setModal("expired")}>{t("ui.tenancy.detail.expire")}</button>}
-          {can("businesses") && !settingUp && b.status !== "archived" && <button type="button" className="btn btn--outline" onClick={() => setModal("archived")}><Icon name="archive" /><span>{t("ui.tenancy.detail.archive")}</span></button>}
-          {can("businesses") && !settingUp && b.status !== "deactivated" && <button type="button" className="btn btn--outline" onClick={() => setModal("deactivated")}>{t("ui.admin.deactivate")}</button>}
-          {can("businesses") && <button type="button" className="btn btn--outline" onClick={() => setModal("edit")}><Icon name="settings" /><span>{t("ui.platform.editDetails")}</span></button>}
-          {can("businesses") && trial && !s && <button type="button" className="btn btn--outline" onClick={() => setModal("extend")}><Icon name="clock" /><span>{t("ui.admin.extend")}</span></button>}
-          {can("businesses") && owner && <button type="button" className="btn btn--outline" onClick={resetOwner}><Icon name="lock" /><span>{t("ui.platform.resetOwner")}</span></button>}
-          {can("security") && <button type="button" className="btn btn--outline" onClick={signOutAll}><Icon name="log-out" /><span>{t("ui.platform.signOutAll")}</span></button>}
+          {can("businesses") && <button type="button" className="btn btn--outline" onClick={() => setModal("edit")}><Icon name="pencil" /><span>{t("ui.platform.editDetails")}</span></button>}
+          {/* the owner's account and the sessions */}
+          <ActionMenu label={t("ui.groups.access")} icon="user-key" items={[
+            can("businesses") && trial && !s && { label: t("ui.admin.extend"), icon: "clock", onClick: () => setModal("extend") },
+            can("businesses") && owner && { label: t("ui.platform.resetOwner"), icon: "lock", onClick: resetOwner },
+            can("security") && { label: t("ui.platform.signOutAll"), icon: "log-out", onClick: signOutAll }
+          ]} />
+          {/* the business's status: suspend, expire, archive, deactivate */}
+          {can("businesses") && !settingUp && <ActionMenu label={t("ui.groups.status")} icon="shield-check" items={[
+            b.status === "active" && { label: t("ui.admin.suspend"), icon: "lock", danger: true, onClick: () => setModal("suspended") },
+            !["expired", "archived", "deactivated"].includes(b.status) && { label: t("ui.tenancy.detail.expire"), icon: "clock", onClick: () => setModal("expired") },
+            b.status !== "archived" && { label: t("ui.tenancy.detail.archive"), icon: "archive", onClick: () => setModal("archived") },
+            b.status !== "deactivated" && { label: t("ui.admin.deactivate"), icon: "x", danger: true, onClick: () => setModal("deactivated") }
+          ]} />}
         </div>
         {msg && <p className="form-status form-status--success">{msg}</p>}
         {provisioning?.status === "failed" && <p className="form-status form-status--error"><Icon name="alert" /> {fill(t("ui.tenancy.detail.setupFailed"), { step: t(`ui.tenancy.prov.steps.${provisioning.step}`) })} <Link to={`/admin/businesses/${b.id}/setup`}>{t("ui.tenancy.detail.viewSetup")}</Link></p>}

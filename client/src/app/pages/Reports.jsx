@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
-import { PageHeader, useApi, useMoney, Loading, EmptyState, DateRange, daysAgo, isoDate, downloadCsv } from "../ui.jsx";
+import { PageHeader, useApi, useMoney, Loading, EmptyState, DateRange, daysAgo, isoDate, downloadCsv, ActionMenu } from "../ui.jsx";
 import { qty, date } from "../format.js";
 import { savePdf } from "../pdf.js";
 
@@ -44,11 +44,11 @@ export default function Reports() {
   return (
     <div className="page">
       <PageHeader icon="file-chart" title={t("ui.reports.title")} actions={
-        <>
-          <button type="button" className="btn btn--outline" onClick={exportCsv} disabled={!d}><Icon name="download" /><span>{t("ui.common.exportCsv")}</span></button>
-          <button type="button" className="btn btn--outline" onClick={() => window.print()}><Icon name="printer" /><span>{t("invoice.printOnly")}</span></button>
-          <button type="button" className="btn btn--outline" onClick={exportPdf} disabled={!d || savingPdf}><Icon name="download" /><span>{t(savingPdf ? "invoice.savingPdf" : "invoice.savePdf")}</span></button>
-        </>
+        <ActionMenu label={t("ui.groups.printExport")} icon="printer" items={[
+          { label: t("invoice.printOnly"), icon: "printer", onClick: () => window.print() },
+          { label: t(savingPdf ? "invoice.savingPdf" : "invoice.savePdf"), icon: "download", onClick: exportPdf, disabled: !d || savingPdf },
+          { label: t("ui.common.exportCsv"), icon: "download", onClick: exportCsv, disabled: !d }
+        ]} />
       } />
       <div className="report-types no-print">
         {TYPES.map((x) => (

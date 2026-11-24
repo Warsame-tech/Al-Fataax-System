@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import Icon from "../../components/Icon.jsx";
 import { useLanguage } from "../../i18n/LanguageContext.jsx";
 import { apiRequest } from "../../services/api.js";
-import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, Field, FormError, Money, EmptyState, Loading, SearchBox, PaymentFields, StatusBadge, DateRange, daysAgo, isoDate, Modal, ReasonModal } from "../ui.jsx";
+import { PageHeader, Tabs, useApi, usePerm, useSubmit, useMoney, Field, FormError, Money, EmptyState, Loading, SearchBox, PaymentFields, StatusBadge, DateRange, daysAgo, isoDate, Modal, ReasonModal, ActionMenu } from "../ui.jsx";
 import LineItems from "./LineItems.jsx";
 import SearchSelect from "../SearchSelect.jsx";
 import { PaymentModal } from "./Parties.jsx";
@@ -89,9 +89,13 @@ function PurchaseDetail({ id, onClose }) {
       <div className="statement-foot">
         {["draft", "ordered"].includes(p.status) ? <span className="muted">{t(`ui.status.${p.status}`)}</span> : <span>{t("ui.common.balance")}: <Money value={p.balance} className="strong" /></span>}
         <div className="form-actions">
-          {can("purchases.cancel") && ["draft", "ordered", "partial", "received"].includes(p.status) && p.paid === 0 && <button type="button" className="btn btn--danger" onClick={() => setModal("cancel")}>{t(["draft", "ordered"].includes(p.status) ? "ui.purchases.cancelOrder" : "ui.purchases.cancel")}</button>}
-          {can("purchases.cancel") && received && <button type="button" className="btn btn--outline" onClick={() => setModal("return")}><Icon name="arrow-up-right" /><span>{t("ui.purchases.returnToSupplier")}</span></button>}
-          {can("purchases.create") && p.status === "partial" && <button type="button" className="btn btn--outline" onClick={() => setModal("close")}>{t("ui.purchases.closeOrder")}</button>}
+          <ActionMenu label={t("ui.common.more")} items={[
+            can("purchases.create") && p.status === "partial" && { label: t("ui.purchases.closeOrder"), icon: "check", onClick: () => setModal("close") },
+            can("purchases.cancel") && received && { label: t("ui.purchases.returnToSupplier"), icon: "arrow-up-right", onClick: () => setModal("return") },
+            can("purchases.cancel") && ["draft", "ordered", "partial", "received"].includes(p.status) && p.paid === 0 && { divider: true },
+            can("purchases.cancel") && ["draft", "ordered", "partial", "received"].includes(p.status) && p.paid === 0 &&
+              { label: t(["draft", "ordered"].includes(p.status) ? "ui.purchases.cancelOrder" : "ui.purchases.cancel"), icon: "x", danger: true, onClick: () => setModal("cancel") }
+          ]} />
           {can("purchases.create") && p.status === "draft" && <button type="button" className="btn btn--primary" onClick={() => run("confirm")}><Icon name="check" /><span>{t("ui.purchases.confirmOrder")}</span></button>}
           {can("purchases.create") && open && <button type="button" className="btn btn--primary" onClick={() => setModal("receive")}><Icon name="check" /><span>{t("ui.purchases.receive")}</span></button>}
           {can("purchases.pay") && received && p.balance > 0 && <button type="button" className="btn btn--primary" onClick={() => setPaying(true)}><Icon name="wallet" /><span>{t("ui.purchases.pay")}</span></button>}
