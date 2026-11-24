@@ -15,6 +15,7 @@ import Stock from "./pages/Stock.jsx";
 import { Expenses, Cashbook } from "./pages/MoneyPages.jsx";
 import { Staff, BusinessInfo, Settings, Profile, Audit } from "./pages/AccountPages.jsx";
 import Accounting from "./Accounting.jsx";
+import PdfReports from "./PdfReports.jsx";
 import Support from "./pages/Support.jsx";
 import { DevicesPage, WarrantiesPage } from "./Devices.jsx";
 import { MetalRatesPage, UsedGoldPage } from "./Jewelry.jsx";
@@ -52,6 +53,7 @@ const SCREENS = {
   branches: BranchesPage,
   expenses: Expenses,
   accounting: Accounting,
+  pdfReports: PdfReports,
   cashbook: Cashbook,
   reports: Reports,
   staff: Staff,

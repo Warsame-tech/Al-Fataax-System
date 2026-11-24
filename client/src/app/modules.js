@@ -28,6 +28,7 @@ export const MODULES = [
   { id: "expenses",     icon: "wallet",      color: "#dc2626", perm: "expenses.view" },
   { id: "cashbook",     icon: "book-open",   color: "#2373f4", perm: "cash.view" },
   { id: "reports",      icon: "file-chart",  color: "#0f9488", perm: "reports.view" },
+  { id: "pdfReports",   icon: "printer",     color: "#2c3494", perm: ["reports.view", "customers.view", "suppliers.view", "products.view", "sales.view", "accounting.view"] },
   { id: "hr",           icon: "users",       color: "#0f766e", perm: ["hr.view", "hr.payroll"] },
   { id: "branches",     icon: "store",       color: "#d97706", perm: ["settings.edit", "staff.manage"] },
   { id: "staff",        icon: "user-key",    color: "#475569", perm: "staff.manage" },
@@ -54,9 +55,9 @@ export const moduleById = (id) => MODULES.find((m) => m.id === id);
  * its modules (/app/g/<group>). Every other module keeps its own button on the dashboard.
  */
 export const GROUPS = [
-  { id: "money", icon: "wallet", color: "#dc2626", modules: ["accounting", "overview", "expenses", "cashbook", "reports"],
+  { id: "money", icon: "wallet", color: "#dc2626", modules: ["accounting", "overview", "expenses", "cashbook", "reports", "pdfReports"],
     // the group's page shows its modules in these sections, as simple links
-    sections: [{ id: "books", modules: ["accounting"] }, { id: "moneyFlow", modules: ["expenses", "cashbook"] }, { id: "insight", modules: ["overview", "reports"] }] },
+    sections: [{ id: "books", modules: ["accounting"] }, { id: "moneyFlow", modules: ["expenses", "cashbook"] }, { id: "insight", modules: ["overview", "reports", "pdfReports"] }] },
   { id: "business", icon: "briefcase", color: "#2c3494", modules: ["business", "branches", "staff", "hr", "settings", "audit", "profile", "support"],
     sections: [{ id: "company", modules: ["business", "branches", "settings"] }, { id: "people", modules: ["staff", "hr", "profile"] }, { id: "help", modules: ["audit", "support"] }] }
 ];

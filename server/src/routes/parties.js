@@ -100,6 +100,49 @@ function readPayment(body) {
 }
 export { readPayment };
 
+/**
+ * A customer's or supplier's statement: every document and payment with the running balance; with a period, what came
+ * before it is the opening balance. Used by GET /:id/statement and the PDF reports (routes/pdfReports.js).
+ */
+export async function partyStatement(pool, bid, isCustomer, party, range = {}) {
+  const [rows] = isCustomer
+    ? await pool.query(
+      `SELECT * FROM (
+         SELECT 'invoice' kind, invoice_no ref, CAST(issue_date AS DATETIME) at, total debit, 0 credit, status, id, due_date, NULL amount, 'invoice' doc_kind, id doc_id
+           FROM invoices WHERE business_id = ? AND customer_id = ? AND status NOT IN ('draft','cancelled')
+         UNION ALL SELECT 'sale', receipt_no, sold_at, total, 0, status, id, NULL, NULL, 'sale', id FROM sales WHERE business_id = ? AND customer_id = ? AND status = 'completed'
+         UNION ALL SELECT IF(cp.amount < 0, 'refund', 'payment'),
+                COALESCE(NULLIF(cp.reference, 'REFUND'), (SELECT s.receipt_no FROM sales s WHERE s.id = cp.sale_id), (SELECT i.invoice_no FROM invoices i WHERE i.id = cp.invoice_id), ''),
+                cp.paid_at, IF(cp.amount < 0, -cp.amount, 0), IF(cp.amount < 0, 0, cp.amount), cp.method, cp.id, NULL, NULL,
+                IF(cp.sale_id IS NOT NULL, 'sale', IF(cp.invoice_id IS NOT NULL, 'invoice', NULL)), COALESCE(cp.sale_id, cp.invoice_id)
+           FROM customer_payments cp WHERE cp.business_id = ? AND cp.customer_id = ?
+         UNION ALL SELECT 'cancelled', receipt_no, sold_at, 0, 0, status, id, NULL, total, 'sale', id FROM sales WHERE business_id = ? AND customer_id = ? AND status = 'cancelled'
+         UNION ALL SELECT 'return', s.receipt_no, r.returned_at, 0, 0, 'returned', r.id, NULL, r.total, 'sale', s.id FROM returns r JOIN sales s ON s.id = r.sale_id
+                    WHERE r.business_id = ? AND r.type = 'sale' AND s.customer_id = ? AND s.status <> 'cancelled'
+       ) t ORDER BY at, FIELD(kind, 'invoice', 'sale', 'cancelled', 'return', 'payment', 'refund'), id`, [bid, party.id, bid, party.id, bid, party.id, bid, party.id, bid, party.id])
+    : await pool.query(
+      `SELECT * FROM (
+         SELECT 'purchase' kind, purchase_no ref, purchased_at at, total debit, 0 credit, status, id, NULL due_date FROM purchases WHERE business_id = ? AND supplier_id = ? AND status IN ('received', 'partial')
+         UNION ALL SELECT 'payment', COALESCE(reference, ''), paid_at, 0, amount, method, id, NULL FROM supplier_payments WHERE business_id = ? AND supplier_id = ?
+       ) t ORDER BY at, kind DESC, id`, [bid, party.id, bid, party.id]);
+  let bal = 0;
+  const all = rows.map((r) => {
+    bal = round2(bal + num(r.debit) - num(r.credit));
+    return { kind: r.kind, ref: r.ref, at: r.at, debit: num(r.debit), credit: num(r.credit), status: r.status, id: r.id, dueDate: r.due_date, balance: bal,
+      ...(r.amount !== undefined && r.amount !== null ? { amount: num(r.amount) } : {}), ...(r.doc_kind ? { docKind: r.doc_kind, docId: r.doc_id } : {}) };
+  });
+  // a period: what came before it is the opening balance
+  const day = (v) => (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
+  const from = /^\d{4}-\d{2}-\d{2}$/.test(range.from || "") ? range.from : null;
+  const to = /^\d{4}-\d{2}-\d{2}$/.test(range.to || "") ? range.to : null;
+  const before = from ? all.filter((l) => day(l.at) < from) : [];
+  const opening = before.length ? before[before.length - 1].balance : 0;
+  const lines = all.filter((l) => (!from || day(l.at) >= from) && (!to || day(l.at) <= to));
+  const sum = (k) => round2(lines.reduce((s, l) => s + l[k], 0));
+  return { party: { id: party.id, name: party.name, phone: party.phone, email: party.email, address: party.address }, lines, balance: bal,
+    period: { from, to, opening, debit: sum("debit"), credit: sum("credit"), closing: lines.length ? lines[lines.length - 1].balance : opening } };
+}
+
 /* ---------- router factory (customers & suppliers share the same shape) ---------- */
 function partyRouter(kind) {
   const isCustomer = kind === "customers";
@@ -224,44 +267,8 @@ function partyRouter(kind) {
    * with from, the lines before it make the opening balance.
    */
   router.get("/:id/statement", requirePerm(`${perm}.view`), ah(async (req, res) => {
-    const bid = req.business.id;
-    const party = await ensureOwned(pool, table, id(req.params.id), bid);
-    const [rows] = isCustomer
-      ? await pool.query(
-        `SELECT * FROM (
-           SELECT 'invoice' kind, invoice_no ref, CAST(issue_date AS DATETIME) at, total debit, 0 credit, status, id, due_date, NULL amount, 'invoice' doc_kind, id doc_id
-             FROM invoices WHERE business_id = ? AND customer_id = ? AND status NOT IN ('draft','cancelled')
-           UNION ALL SELECT 'sale', receipt_no, sold_at, total, 0, status, id, NULL, NULL, 'sale', id FROM sales WHERE business_id = ? AND customer_id = ? AND status = 'completed'
-           UNION ALL SELECT IF(cp.amount < 0, 'refund', 'payment'),
-                  COALESCE(NULLIF(cp.reference, 'REFUND'), (SELECT s.receipt_no FROM sales s WHERE s.id = cp.sale_id), (SELECT i.invoice_no FROM invoices i WHERE i.id = cp.invoice_id), ''),
-                  cp.paid_at, IF(cp.amount < 0, -cp.amount, 0), IF(cp.amount < 0, 0, cp.amount), cp.method, cp.id, NULL, NULL,
-                  IF(cp.sale_id IS NOT NULL, 'sale', IF(cp.invoice_id IS NOT NULL, 'invoice', NULL)), COALESCE(cp.sale_id, cp.invoice_id)
-             FROM customer_payments cp WHERE cp.business_id = ? AND cp.customer_id = ?
-           UNION ALL SELECT 'cancelled', receipt_no, sold_at, 0, 0, status, id, NULL, total, 'sale', id FROM sales WHERE business_id = ? AND customer_id = ? AND status = 'cancelled'
-           UNION ALL SELECT 'return', s.receipt_no, r.returned_at, 0, 0, 'returned', r.id, NULL, r.total, 'sale', s.id FROM returns r JOIN sales s ON s.id = r.sale_id
-                      WHERE r.business_id = ? AND r.type = 'sale' AND s.customer_id = ? AND s.status <> 'cancelled'
-         ) t ORDER BY at, FIELD(kind, 'invoice', 'sale', 'cancelled', 'return', 'payment', 'refund'), id`, [bid, party.id, bid, party.id, bid, party.id, bid, party.id, bid, party.id])
-      : await pool.query(
-        `SELECT * FROM (
-           SELECT 'purchase' kind, purchase_no ref, purchased_at at, total debit, 0 credit, status, id, NULL due_date FROM purchases WHERE business_id = ? AND supplier_id = ? AND status IN ('received', 'partial')
-           UNION ALL SELECT 'payment', COALESCE(reference, ''), paid_at, 0, amount, method, id, NULL FROM supplier_payments WHERE business_id = ? AND supplier_id = ?
-         ) t ORDER BY at, kind DESC, id`, [bid, party.id, bid, party.id]);
-    let bal = 0;
-    const all = rows.map((r) => {
-      bal = round2(bal + num(r.debit) - num(r.credit));
-      return { kind: r.kind, ref: r.ref, at: r.at, debit: num(r.debit), credit: num(r.credit), status: r.status, id: r.id, dueDate: r.due_date, balance: bal,
-        ...(r.amount !== undefined && r.amount !== null ? { amount: num(r.amount) } : {}), ...(r.doc_kind ? { docKind: r.doc_kind, docId: r.doc_id } : {}) };
-    });
-    // a period: what came before it is the opening balance
-    const day = (v) => (v instanceof Date ? v.toISOString() : String(v)).slice(0, 10);
-    const from = /^\d{4}-\d{2}-\d{2}$/.test(req.query.from || "") ? req.query.from : null;
-    const to = /^\d{4}-\d{2}-\d{2}$/.test(req.query.to || "") ? req.query.to : null;
-    const before = from ? all.filter((l) => day(l.at) < from) : [];
-    const opening = before.length ? before[before.length - 1].balance : 0;
-    const lines = all.filter((l) => (!from || day(l.at) >= from) && (!to || day(l.at) <= to));
-    const sum = (k) => round2(lines.reduce((s, l) => s + l[k], 0));
-    res.json({ party: { id: party.id, name: party.name, phone: party.phone, email: party.email, address: party.address }, lines, balance: bal,
-      period: { from, to, opening, debit: sum("debit"), credit: sum("credit"), closing: lines.length ? lines[lines.length - 1].balance : opening } });
+    const party = await ensureOwned(pool, table, id(req.params.id), req.business.id);
+    res.json(await partyStatement(pool, req.business.id, isCustomer, party, { from: req.query.from, to: req.query.to }));
   }));
 
   /* POST /:id/payments — customer pays us / we pay supplier (oldest first) */

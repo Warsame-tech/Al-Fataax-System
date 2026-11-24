@@ -320,3 +320,6 @@ router.post("/sync", requirePerm("accounting.manage"), ah(async (req, res) => {
 }));
 
 export default router;
+
+/* shared with the PDF reports (routes/pdfReports.js): the same books, no second calculation */
+export { balances, cashBasis, openDocs, shapeDocs, byParty, aging, settingsOf, sumType };

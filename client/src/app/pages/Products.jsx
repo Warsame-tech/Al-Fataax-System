@@ -315,6 +315,7 @@ export default function Products() {
                     {can("products.edit") && <button type="button" className="icon-btn" title={t("ui.common.edit")} aria-label={t("ui.common.edit")} onClick={() => setEditing(p)}><Icon name="pencil" /></button>}
                     <ActionMenu title={p.name} items={[
                       { label: t("ui.products.history"), icon: "history", onClick: () => setHistory(p) },
+                      { label: t("ui.rpt.productPdf"), icon: "printer", to: `/app/m/pdfReports?report=product_details&product=${p.id}` },
                       can("stock.adjust") && p.isActive && { label: t("ui.stock.adjust"), icon: "swap", to: `/app/m/stock?tab=adjust&product=${p.id}` },
                       can("products.edit") && groups && { label: t("ui.products.addVariant"), icon: "copy", onClick: () => setEditing(variantTemplate(p)) },
                       can("products.edit") && { divider: true },

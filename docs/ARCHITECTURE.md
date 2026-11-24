@@ -124,6 +124,17 @@ One double-entry engine for every business: server/src/lib/accounting.js (books)
 
 Next phases (not built yet): opening balances wizard, unpaid / partly paid expenses, cash registers per branch, multi-currency with exchange rates, tax management, cash flow statement, branch accounting report, manual journal entries and custom accounts, period closing, bank reconciliation.
 
+## PDF reports (Report center)
+
+Money & reports, then Report center (client/src/app/PdfReports.jsx). Two categories:
+
+* **Individual:** one customer (profile, statement, history, payments, outstanding), supplier (the same), product (details, stock history, sales, purchases, profitability), invoice, purchase, expenses, payment records, one branch.
+* **Summary & consolidated:** business performance (day / week / month / year), profit and loss, customer and supplier directories, balances, performance; product catalog, inventory valuation, stock summary, low stock, best and least selling, profitability comparison, stock movements; sales summary, by branch, by payment method; purchasing summary and returns; income statement, balance sheet, trial balance, general ledger, cash flow, receivables and payables, expense analysis; branch performance, sales and inventory comparisons.
+
+* **Data:** server/src/routes/pdfReports.js holds the catalogue. Each report is one function over the business’s own records (its database, its business_id) and returns sections, columns, rows and totals. Statements reuse partyStatement (routes/parties.js); finance reports reuse the accounting books (routes/accounting.js) after bringing them up to date.
+* **Access:** each report has a permission; cost and profit columns need costs.view; finance needs the accounting module (and Advanced mode for the books); branch-bound users stay in their branches.
+* **PDF:** client/src/app/reportPdf.js (jsPDF + jspdf-autotable) is one template for all reports: the logo, name and contacts, title, subject, period, generated date, summary figures, details, and tables whose headers repeat on every page, with totals; the footer has the business name and page x of y. Preview on screen, Download PDF, Print.
+
 ## Not done yet
 
 * Putting a business database on another MySQL server (the registry can hold host / port per business, but registering and

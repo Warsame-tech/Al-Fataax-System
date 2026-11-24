@@ -43,6 +43,7 @@ import { filesRouter } from "./lib/files.js";
 import searchRoutes from "./routes/search.js";
 import supportRoutes from "./routes/support.js";
 import accountingRoutes from "./routes/accounting.js";
+import pdfReportRoutes from "./routes/pdfReports.js";
 import { blockIpMiddleware, startBillingJob } from "./lib/platform.js";
 import { tenantContext } from "./lib/tenancy.js";
 import { migrateAllBusinessDbs, recoverJobs } from "./lib/provisioning.js";
@@ -133,6 +134,7 @@ app.use("/api/audit", auditRouter);
 app.use("/api/search", searchRoutes);
 app.use("/api/support", supportRoutes);
 app.use("/api/accounting", accountingRoutes);
+app.use("/api/pdf-reports", pdfReportRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api", (req, res) => res.status(404).json({ code: "notFound" }));
 

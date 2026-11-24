@@ -2015,3 +2015,47 @@ tr.acc-docs .table { background: transparent; }
 .acc-settings .db-choice__opt { margin-top: 8px; }
 .acc-mode-pick { display: grid; gap: 6px; margin-top: 14px; }
 @media print { .acc-page .tabs, .acc-reports__nav, .page-head { display: none !important; } .acc-reports { grid-template-columns: 1fr; } }
+
+/* ---------- report center (app/PdfReports.jsx) ---------- */
+.rpt-layout { grid-template-columns: 290px minmax(0, 1fr); }
+@media (max-width: 900px) { .rpt-layout { grid-template-columns: 1fr; } }
+.rpt-nav { max-height: calc(100vh - 220px); overflow-y: auto; }
+@media (max-width: 900px) { .rpt-nav { max-height: none; } }
+.rpt-nav__group + .rpt-nav__group { margin-top: 10px; }
+.rpt-nav .group-section__title { display: flex; align-items: center; gap: 6px; margin: 8px 0 2px; }
+.rpt-nav .group-section__title .icon { width: 14px; height: 14px; }
+.rpt-nav .group-link { padding: 9px 8px; }
+.rpt-nav .group-link__text strong { font-size: .92rem; font-weight: 500; }
+.rpt-desc { margin: 4px 0 14px; }
+.rpt-filters { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 12px; align-items: end; }
+.rpt-field { display: grid; gap: 5px; position: relative; }
+.rpt-field > span:first-child { font-size: .82rem; font-weight: 600; color: var(--muted); }
+.rpt-period { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.rpt-picker__list { position: absolute; z-index: 30; top: 100%; left: 0; right: 0; max-height: 260px; overflow-y: auto; margin: 4px 0 0; padding: 4px; list-style: none;
+  background: #fff; border: 1px solid var(--line); border-radius: 12px; box-shadow: 0 14px 30px -14px rgba(14, 16, 53, .3); }
+.rpt-picker__list li.muted { padding: 8px 10px; }
+.rpt-picker__list button { display: flex; flex-direction: column; width: 100%; padding: 8px 10px; border: 0; border-radius: 8px; background: none; font: inherit; text-align: start; cursor: pointer; color: var(--navy); }
+.rpt-picker__list button:hover, .rpt-picker__list button[aria-selected="true"] { background: var(--soft); }
+.rpt-picker__list small { color: var(--muted); font-size: .78rem; }
+.rpt-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 16px 0 6px; padding-top: 14px; border-top: 1px solid var(--line); }
+.rpt-actions .link-btn { display: inline-flex; align-items: center; gap: 5px; }
+.rpt-actions .link-btn .icon { width: 15px; height: 15px; }
+.rpt-preview { margin-top: 16px; padding: 22px; border: 1px solid var(--line); border-radius: 14px; background: #fff; }
+.rpt-preview__head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 14px; padding-bottom: 12px; border-bottom: 3px solid var(--orange); }
+.rpt-preview__biz { display: flex; gap: 12px; align-items: center; }
+.rpt-preview__biz img { height: 46px; width: auto; max-width: 110px; object-fit: contain; }
+.rpt-preview__biz div, .rpt-preview__title { display: flex; flex-direction: column; }
+.rpt-preview__biz strong { color: var(--navy); font-size: 1.05rem; }
+.rpt-preview__biz small, .rpt-preview__title small { color: var(--muted); font-size: .8rem; }
+.rpt-preview__title { align-items: flex-end; text-align: end; }
+.rpt-preview__title strong { color: var(--navy); font-size: 1.15rem; }
+.rpt-preview__title span { color: var(--navy); font-weight: 600; font-size: .9rem; }
+.rpt-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; margin: 14px 0; }
+.rpt-stats div { display: flex; flex-direction: column; padding: 9px 12px; border-radius: 10px; background: var(--soft); }
+.rpt-stats small { color: var(--muted); font-size: .76rem; }
+.rpt-stats b { color: var(--navy); font-size: 1.02rem; }
+.rpt-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 0 20px; margin: 10px 0; }
+.rpt-details div { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: .9rem; }
+.rpt-details dt { color: var(--muted); } .rpt-details dd { margin: 0; font-weight: 600; color: var(--navy); text-align: end; }
+.rpt-section h3 { margin: 16px 0 8px; font-size: .98rem; color: var(--navy); }
+.rpt-strong td { font-weight: 700; }

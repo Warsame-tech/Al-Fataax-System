@@ -294,7 +294,8 @@ const translations = {
         desc: {
           accounting: "Profit, cash & bank, customer and supplier debts, financial reports.",
           expenses: "Record what you spend and other income.", cashbook: "Cash and bank accounts, transfers and balances.",
-          overview: "Today's totals, recent activity and stock alerts.", reports: "Sales, profit, stock and money reports.",
+          overview: "Today's totals, recent activity and stock alerts.",
+          pdfReports: "Professional PDF reports: customers, suppliers, products, sales, finance and branches.", reports: "Sales, profit, stock and money reports.",
           business: "Name, logo, contact details and business type.", branches: "Your branches, their stock and staff.", settings: "Invoices, receipts, currency and preferences.",
           staff: "Who can sign in and what each role may do.", hr: "Employees, attendance and payroll.", profile: "Your name, password and language.",
           audit: "Who did what, and when.", support: "Ask Faatix for help and read the answers."
@@ -347,7 +348,7 @@ const translations = {
         profile: "My profile",
         business: "Business info",
         staff: "Staff & roles",
-        subscription: "Subscription", support: "Help & support", accounting: "Accounting",
+        subscription: "Subscription", support: "Help & support", accounting: "Accounting", pdfReports: "Report center",
         settings: "Settings",
         audit: "Activity log",
         devices: "Devices (serial / IMEI)",
@@ -765,7 +766,8 @@ const translations = {
         desc: {
           accounting: "Faa'iidada, caddaanka & bangiga, deynta macaamiisha iyo alaab-qeybiyeyaasha, warbixinnada maaliyadda.",
           expenses: "Diiwaan geli waxaad bixiso iyo dakhli kale.", cashbook: "Xisaabaadka caddaanka iyo bangiga, wareejinta iyo hadhaaga.",
-          overview: "Wadarta maanta, dhaqdhaqaaqa dhowaa iyo digniinta kaydka.", reports: "Warbixinnada iibka, faa'iidada, kaydka iyo lacagta.",
+          overview: "Wadarta maanta, dhaqdhaqaaqa dhowaa iyo digniinta kaydka.",
+          pdfReports: "Warbixinno PDF ah: macaamiisha, alaab-qeybiyeyaasha, alaabta, iibka, maaliyadda iyo laamaha.", reports: "Warbixinnada iibka, faa'iidada, kaydka iyo lacagta.",
           business: "Magaca, astaanta, xiriirka iyo nooca ganacsiga.", branches: "Laamahaaga, kaydkooda iyo shaqaalahooda.", settings: "Qaansheegyada, rasiidhada, lacagta iyo doorashooyinka.",
           staff: "Cidda soo geli karta iyo waxa door kastaa samayn karo.", hr: "Shaqaalaha, imaanshaha iyo mushaharka.", profile: "Magacaaga, furahaaga iyo luqaddaada.",
           audit: "Cidda samaysay wixii, iyo goorta.", support: "Weydii Faatix caawimaad oo akhri jawaabaha."
@@ -818,7 +820,7 @@ const translations = {
         profile: "Xogta qaaska ah",
         business: "Xogta ganacsiga",
         staff: "Shaqaalaha & doorarka",
-        subscription: "Xirmada", support: "Caawimaad & taageero", accounting: "Xisaabaadka",
+        subscription: "Xirmada", support: "Caawimaad & taageero", accounting: "Xisaabaadka", pdfReports: "Xarunta warbixinnada",
         settings: "Dejinta",
         audit: "Diiwaanka dhaqdhaqaaqa",
         devices: "Qalabka (serial / IMEI)",
