@@ -70,6 +70,20 @@ export const DATA_STEPS = [
     }
   },
   {
+    // Accounting: roles that could see reports may see the accounting pages too (managing it stays with the owner)
+    name: "accounting_permissions_v1",
+    async run(db) {
+      const [roles] = await db.query("SELECT id, permissions FROM roles");
+      for (const r of roles) {
+        let perms;
+        try { perms = JSON.parse(r.permissions || "[]"); } catch { perms = []; }
+        if (perms.includes("reports.view") && !perms.includes("accounting.view")) {
+          await db.query("UPDATE roles SET permissions = ? WHERE id = ?", [JSON.stringify([...perms, "accounting.view"]), r.id]);
+        }
+      }
+    }
+  },
+  {
     // New pricing permissions for existing roles, so nobody loses what they could do before:
     // "give discounts and change prices" → change prices; approving discounts → approving prices below the minimum;
     // product editors could see and change costs; roles that saw costs elsewhere (purchases, reports, stock) still see them.

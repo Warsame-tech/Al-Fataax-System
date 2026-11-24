@@ -290,8 +290,9 @@ const translations = {
       },
       groups: {
         sales: "Sales", stock: "Products & stock", purchasing: "Purchasing", money: "Money & reports", business: "Business", count: "{n} sections",
-        sections: { moneyFlow: "Money in & out", insight: "Overview & reports", company: "Your business", people: "People", help: "Activity & help", all: "Sections" },
+        sections: { books: "Books", moneyFlow: "Money in & out", insight: "Overview & reports", company: "Your business", people: "People", help: "Activity & help", all: "Sections" },
         desc: {
+          accounting: "Profit, cash & bank, customer and supplier debts, financial reports.",
           expenses: "Record what you spend and other income.", cashbook: "Cash and bank accounts, transfers and balances.",
           overview: "Today's totals, recent activity and stock alerts.", reports: "Sales, profit, stock and money reports.",
           business: "Name, logo, contact details and business type.", branches: "Your branches, their stock and staff.", settings: "Invoices, receipts, currency and preferences.",
@@ -346,7 +347,7 @@ const translations = {
         profile: "My profile",
         business: "Business info",
         staff: "Staff & roles",
-        subscription: "Subscription", support: "Help & support",
+        subscription: "Subscription", support: "Help & support", accounting: "Accounting",
         settings: "Settings",
         audit: "Activity log",
         devices: "Devices (serial / IMEI)",
@@ -760,8 +761,9 @@ const translations = {
       },
       groups: {
         sales: "Iibka", stock: "Alaabta & kaydka", purchasing: "Iibsiga", money: "Lacagta & warbixinnada", business: "Ganacsiga", count: "{n} qaybood",
-        sections: { moneyFlow: "Lacagta soo gasha & baxda", insight: "Guudmar & warbixinno", company: "Ganacsigaaga", people: "Dadka", help: "Dhaqdhaqaaq & caawimaad", all: "Qaybaha" },
+        sections: { books: "Buugaagta", moneyFlow: "Lacagta soo gasha & baxda", insight: "Guudmar & warbixinno", company: "Ganacsigaaga", people: "Dadka", help: "Dhaqdhaqaaq & caawimaad", all: "Qaybaha" },
         desc: {
+          accounting: "Faa'iidada, caddaanka & bangiga, deynta macaamiisha iyo alaab-qeybiyeyaasha, warbixinnada maaliyadda.",
           expenses: "Diiwaan geli waxaad bixiso iyo dakhli kale.", cashbook: "Xisaabaadka caddaanka iyo bangiga, wareejinta iyo hadhaaga.",
           overview: "Wadarta maanta, dhaqdhaqaaqa dhowaa iyo digniinta kaydka.", reports: "Warbixinnada iibka, faa'iidada, kaydka iyo lacagta.",
           business: "Magaca, astaanta, xiriirka iyo nooca ganacsiga.", branches: "Laamahaaga, kaydkooda iyo shaqaalahooda.", settings: "Qaansheegyada, rasiidhada, lacagta iyo doorashooyinka.",
@@ -816,7 +818,7 @@ const translations = {
         profile: "Xogta qaaska ah",
         business: "Xogta ganacsiga",
         staff: "Shaqaalaha & doorarka",
-        subscription: "Xirmada", support: "Caawimaad & taageero",
+        subscription: "Xirmada", support: "Caawimaad & taageero", accounting: "Xisaabaadka",
         settings: "Dejinta",
         audit: "Diiwaanka dhaqdhaqaaqa",
         devices: "Qalabka (serial / IMEI)",

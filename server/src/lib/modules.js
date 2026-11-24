@@ -24,8 +24,11 @@ export const SWITCHABLE = {
   warranties: ["/api/warranties"],
   rolls: ["/api/rolls"],
   tailoring: ["/api/tailoring"],
-  waste: ["/api/waste"]
+  waste: ["/api/waste"],
+  accounting: ["/api/accounting"]
 };
+// modules switched off completely (reading too): nothing else depends on their lists
+const WHOLE = new Set(["accounting"]);
 
 const cache = new Map();   // businessId → { at, list }
 export const forgetModules = (businessId) => cache.delete(Number(businessId));
@@ -41,7 +44,7 @@ export async function disabledModules(businessId) {
 
 /** The switched-off module a change request falls under (or null). */
 export function blockedModule(disabled, method, url) {
-  if (["GET", "HEAD", "OPTIONS"].includes(method)) return null;
+  const read = ["GET", "HEAD", "OPTIONS"].includes(method);
   const path = String(url || "").split("?")[0];
-  return disabled.find((m) => SWITCHABLE[m].some((p) => path === p || path.startsWith(`${p}/`))) || null;
+  return disabled.find((m) => (!read || WHOLE.has(m)) && SWITCHABLE[m].some((p) => path === p || path.startsWith(`${p}/`))) || null;
 }

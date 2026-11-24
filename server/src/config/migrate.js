@@ -1018,8 +1018,33 @@ COLUMNS.push(
   { table: "branches", column: "code", ddl: "ALTER TABLE branches ADD COLUMN code VARCHAR(20) NULL AFTER name" },
   { table: "branches", column: "manager_user_id", ddl: "ALTER TABLE branches ADD COLUMN manager_user_id INT UNSIGNED NULL AFTER phone" }
 );
+/*
+ * Accounting (lib/accounting.js): one double-entry engine for every business (Simple and Advanced mode share it).
+ *   acc_accounts  chart of accounts (system accounts by system_key; one per money account; categories become accounts)
+ *   acc_entries   one posting per source record and revision (sale, invoice, purchase, return, expense, money move…);
+ *                 a change posts a reversal and a new revision — posted entries are never edited or deleted
+ *   acc_lines     the debit / credit lines of each entry
+ *   acc_settings  cash or accrual basis, the first month of the financial year
+ */
+TABLES.push(
+  T("acc_accounts", `id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY, business_id INT UNSIGNED NOT NULL, code VARCHAR(20) NOT NULL, name VARCHAR(120) NOT NULL,
+    type VARCHAR(12) NOT NULL, system_key VARCHAR(80) NULL, money_kind VARCHAR(10) NULL, money_id INT UNSIGNED NULL, is_system TINYINT(1) NOT NULL DEFAULT 0,
+    is_active TINYINT(1) NOT NULL DEFAULT 1, description VARCHAR(255) NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_acc_code (business_id, code), UNIQUE KEY uq_acc_system (business_id, system_key), INDEX idx_acc_type (business_id, type)`),
+  T("acc_entries", `id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, business_id INT UNSIGNED NOT NULL, source_type VARCHAR(30) NOT NULL, source_id BIGINT UNSIGNED NOT NULL,
+    revision INT UNSIGNED NOT NULL DEFAULT 1, kind VARCHAR(10) NOT NULL DEFAULT 'post', is_current TINYINT(1) NOT NULL DEFAULT 1, fingerprint CHAR(40) NOT NULL,
+    entry_date DATE NOT NULL, branch_id INT UNSIGNED NULL, reference VARCHAR(80) NULL, description VARCHAR(255) NULL, party_type VARCHAR(10) NULL, party_id INT UNSIGNED NULL,
+    reverses_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_acc_entry (business_id, source_type, source_id, revision, kind), INDEX idx_acc_entry_date (business_id, entry_date), INDEX idx_acc_entry_current (business_id, source_type, is_current)`),
+  T("acc_lines", `id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, entry_id BIGINT UNSIGNED NOT NULL, business_id INT UNSIGNED NOT NULL, account_id INT UNSIGNED NOT NULL,
+    debit DECIMAL(14,4) NOT NULL DEFAULT 0, credit DECIMAL(14,4) NOT NULL DEFAULT 0, entry_date DATE NOT NULL, branch_id INT UNSIGNED NULL,
+    INDEX idx_acc_line_account (business_id, account_id, entry_date), INDEX idx_acc_line_entry (entry_id), INDEX idx_acc_line_date (business_id, entry_date)`),
+  T("acc_settings", `business_id INT UNSIGNED NOT NULL PRIMARY KEY, method VARCHAR(10) NOT NULL DEFAULT 'accrual', fy_start_month TINYINT UNSIGNED NOT NULL DEFAULT 1,
+    updated_by INT UNSIGNED NULL, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`)
+);
+
 /* the schema version every database is brought to (database_registry.schema_version, schema_versions) */
-export const SCHEMA_VERSION = 20261120;
+export const SCHEMA_VERSION = 20261124;
 const VIEWS = {
   platform_users: "SELECT id, username, email, role, status, totp_enabled AS two_factor, last_login_at, created_at FROM platform_admins",
   subscription_plans: "SELECT * FROM plans",

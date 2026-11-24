@@ -2,6 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
 import { pool, corePool } from "../config/db.js";
+import { accountingMode } from "./accounting.js";
 import { platformSettings, planOf } from "../lib/platform.js";
 import { env } from "../config/env.js";
 import { setSessionCookie, clearSessionCookie, requireAuth, audit } from "../middleware/auth.js";
@@ -164,6 +165,7 @@ router.get("/me", requireAuth, async (req, res, next) => {
     const plan = await planOf(pool, req.business.id);
     res.json({ user: req.user, business: { ...req.business, slug: core?.slug || null }, trial: trial[0] || null, permissions: req.user.permissions,
       disabledModules: req.business.disabledModules || [],
+      accountingMode: await accountingMode(req.business.id),
       subscription: plan ? { plan: plan.name, cycle: plan.cycle, status: plan.status, periodEnd: plan.current_period_end, maxUsers: plan.max_users, maxBranches: plan.max_branches, maxProducts: plan.max_products,
         features: (() => { try { return JSON.parse(plan.features || "[]"); } catch { return []; } })() } : null,
       branches: { list: req.branch.list, current: req.branch.filterId, fixed: req.branch.fixed } });

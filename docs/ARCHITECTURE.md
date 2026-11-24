@@ -109,6 +109,21 @@ Super admin → business page → **Modules**: invoices, customers, suppliers, p
 reports, HR, branches, devices, warranties, rolls, tailoring, waste (`server/src/lib/modules.js`). Off = hidden in the business's app, and the
 API refuses every change under its paths (403 `moduleDisabled`); reading stays allowed because other screens share those lists.
 
+## Accounting (Phase 1 done)
+
+One double-entry engine for every business: server/src/lib/accounting.js (books), routes/accounting.js (API), client/src/app/Accounting.jsx (screens).
+
+* **Switched on per business** by the super admin (business page, Modules: Accounting on/off, Simple or Advanced). Off closes the whole module (reading too).
+* **Simple:** Dashboard, Income, Expenses, Cash & bank, Customer debts, Supplier debts, Financial reports (profit & loss, income, expenses, cash & bank, customer and supplier debts with aging, transaction history), Settings (cash or accrual basis, financial year).
+* **Advanced:** the same, plus Balance sheet, Trial balance, General ledger and the Chart of accounts.
+* **Automatic:** the books are built from the records the modules already keep (sales, invoices, purchases, returns, expenses, other income, waste, stock adjustments and every money movement). Nothing is typed twice; a sale is never also income, a transfer is never income or expense.
+* **Safe:** each source record posts once (unique key on source and revision). When a record changes or is cancelled, a reversal entry and a new revision are added; posted entries are never edited or deleted. Every entry balances (checked before it is saved); a batch is one database transaction; one lock per business.
+* **Fresh:** the books catch up before any accounting page is read, at once after anything is saved.
+* **Tables (in each business database):** acc_accounts, acc_entries, acc_lines, acc_settings.
+* **Permissions:** accounting.view (roles that could see reports get it), accounting.manage (owner).
+
+Next phases (not built yet): opening balances wizard, unpaid / partly paid expenses, cash registers per branch, multi-currency with exchange rates, tax management, cash flow statement, branch accounting report, manual journal entries and custom accounts, period closing, bank reconciliation.
+
 ## Not done yet
 
 * Putting a business database on another MySQL server (the registry can hold host / port per business, but registering and

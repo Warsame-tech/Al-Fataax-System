@@ -322,12 +322,25 @@ export function tenancyRoutes(router) {
     res.json({ code: "saved" });
   }));
 
+  /* accounting: Simple (small businesses) or Advanced (medium: balance sheet, trial balance, ledger, chart of accounts) */
+  router.put("/businesses/:id/accounting-mode", requireAdminPerm("businesses"), ah(async (req, res) => {
+    const bid = id(req.params.id) || 0;
+    const mode = req.body?.mode === "advanced" ? "advanced" : req.body?.mode === "simple" ? "simple" : null;
+    if (!mode) throw badRequest({ mode: "required" });
+    const [[b]] = await db.query("SELECT id FROM businesses WHERE id = ?", [bid]);
+    if (!b) return res.status(404).json({ code: "notFound" });
+    await db.query("INSERT INTO business_modules (business_id, module, enabled) VALUES (?, 'accounting_advanced', ?) ON DUPLICATE KEY UPDATE enabled = VALUES(enabled)", [bid, mode === "advanced" ? 1 : 0]);
+    await adminAudit(db, { adminId: req.admin.id, businessId: bid, action: "admin.accounting_mode", meta: { mode }, ip: req.ip });
+    res.json({ code: "saved" });
+  }));
+
   /* ===================== modules per business ===================== */
   router.get("/businesses/:id/modules", ah(async (req, res) => {
     const bid = id(req.params.id) || 0;
     const [rows] = await db.query("SELECT module, enabled FROM business_modules WHERE business_id = ?", [bid]);
     const off = new Set(rows.filter((r) => !r.enabled).map((r) => r.module));
-    res.json({ modules: Object.keys(SWITCHABLE).map((m) => ({ id: m, enabled: !off.has(m) })) });
+    const adv = rows.find((r) => r.module === "accounting_advanced");
+    res.json({ modules: Object.keys(SWITCHABLE).map((m) => ({ id: m, enabled: !off.has(m) })), accountingMode: adv?.enabled ? "advanced" : "simple" });
   }));
   router.put("/businesses/:id/modules", requireAdminPerm("businesses"), ah(async (req, res) => {
     const bid = id(req.params.id) || 0;

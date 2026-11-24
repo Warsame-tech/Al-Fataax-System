@@ -3,6 +3,39 @@
  * Use {name}-style placeholders with fill() from app/format.js.
  */
 const en = {
+  acc: {
+    tabs: { dashboard: "Dashboard", income: "Income", expenses: "Expenses", cash: "Cash & bank", customers: "Customer debts", suppliers: "Supplier debts", reports: "Financial reports", settings: "Settings", books: "Chart of accounts" },
+    modes: { simple: "Simple", advanced: "Advanced" }, modeLabel: "Accounting type", modeByFaatix: "set by Faatix",
+    period: "Period", periods: { today: "Today", week: "This week", month: "This month", quarter: "This quarter", year: "This year", custom: "Custom dates" },
+    cards: { income: "Income", expenses: "Expenses", profit: "Net profit", cash: "Cash & bank", customers: "Customer debts", suppliers: "Supplier debts" },
+    vsPrevious: "vs previous period", noPrevious: "No previous period to compare", overdueAmount: "{amount} overdue", olderThan30: "{amount} older than 30 days",
+    chartTitle: "Income and expenses", outstanding: "Outstanding", total: "Total", recent: "Recent transactions", noData: "Nothing recorded in this period.",
+    reference: "Reference", description: "Description", type: "Type", amount: "Amount", account: "Account", debit: "Debit", credit: "Credit", balance: "Balance", code: "Code",
+    reversal: "Reversal", revision: "revision {n}", postedNote: "Posted entries are never changed: a correction adds a reversal and a new entry.",
+    sources: { sale: "Sale", invoice: "Invoice", purchase: "Purchase", return: "Return", expense: "Expense", other_income: "Other income", waste: "Waste", stock: "Stock adjustment", money: "Money movement",
+      customer_payment: "Customer payment", supplier_payment: "Supplier payment", refund: "Refund", transfer: "Transfer", adjustment: "Owner's money in / out", opening: "Opening balance",
+      warranty: "Warranty service", reservation: "Reservation deposit", tailoring: "Tailoring", gold_buy: "Gold bought" },
+    dir: { in: "money in", out: "money out" },
+    overdue: "Overdue", aging: "How old", buckets: { current: "Not due yet", d30: "1–30 days", d60: "31–60 days", d90: "61–90 days", d90plus: "Over 90 days" },
+    documents: "Documents", original: "Original", paid: "Paid", remaining: "Remaining", oldest: "Oldest", due: "Due", daysLate: "{n} days late",
+    receivePayment: "Receive payment", makePayment: "Pay supplier", owes: "Open balance: {amount}",
+    allocationNoteCustomer: "A payment settles the oldest open invoices and credit sales first.", allocationNoteSupplier: "A payment settles the oldest open purchases first.",
+    noCustomerDebts: "No customer owes you money.", noSupplierDebts: "You owe no supplier money.", booksNote: "In the books: {amount} (includes credit sales without a named customer)",
+    reports: { pnl: "Profit & loss", income: "Income report", expenses: "Expense report", cash: "Cash & bank report", receivables: "Customer debts", payables: "Supplier debts",
+      transactions: "Transaction history", balance: "Balance sheet", trial: "Trial balance", ledger: "General ledger" },
+    asAt: "As at", asAtDate: "As at {date}", print: "Print", excel: "Excel (CSV)", chooseAccount: "Choose an account",
+    revenue: "Income", totalRevenue: "Total income", cogs: "Cost of goods sold", totalCogs: "Total cost of goods sold", grossProfit: "Gross profit", totalExpenses: "Total expenses", netProfit: "Net profit",
+    cashBasis: "Cash basis: money received and paid", otherIncomeList: "Other income recorded", expenseList: "Expenses recorded",
+    opening: "Opening balance", moneyIn: "Money in", moneyOut: "Money out", closing: "Closing balance",
+    balanced: "Balanced", notBalanced: "Not balanced", assets: "What the business owns", liabilities: "What the business owes", equity: "Owner's share",
+    totalAssets: "Total assets", totalLiabilities: "Total liabilities", totalEquity: "Total owner's share", liabilitiesAndEquity: "Liabilities + owner's share", profitToDate: "Profit to date",
+    types: { asset: "Assets", liability: "Liabilities", equity: "Owner's share (equity)", revenue: "Income", cogs: "Cost of goods sold", expense: "Expenses" },
+    chartHelp: "Faatix keeps these accounts automatically from your sales, purchases, payments, expenses and stock. You can rename an account; its code and its entries never change.",
+    rename: "Rename", renameNote: "Only the name changes; everything posted to the account stays.",
+    method: "Accounting method", methods: { accrual: "Accrual basis", cash: "Cash basis" },
+    methodHelp: { accrual: "Income counts when you sell or invoice, expenses when they happen — even if not paid yet. Best for most businesses.", cash: "Income counts when money comes in, expenses when money goes out." },
+    financialYear: "Financial year", fyStart: "The financial year starts in", currency: "Currency", ownerOnly: "Only the owner (or a role with \"Manage accounting\") can change these."
+  },
   groups: { setup: "Setup", importExport: "Import & export", printExport: "Print & export", access: "Access & account", status: "Status" },
   common: {
     save: "Save", saving: "Saving…", cancel: "Cancel", close: "Close", edit: "Edit", add: "Add", delete: "Delete", view: "View",
@@ -69,7 +102,7 @@ const en = {
     slugTaken: "Another business already uses this address.", passwordWeak: "At least 8 characters.", invalidDomain: "Not a valid domain, e.g. shop.example.com.", useSubdomain: "Addresses under the Faatix domain are subdomains — change the subdomain instead.",
     domainTaken: "This domain is already added.", notProvisioned: "The business can't be activated before its setup has finished.", tenantKeyMissing: "TENANT_DB_KEY is not set on the server, so own databases can't be created.",
     notFailed: "Only a failed setup can be retried.", jobExpired: "This setup can't be retried (its data is gone). Register the business again.", sharedDatabase: "This business uses the shared central database.",
-    notReady: "The database isn't ready yet.", migrationFailed: "The migration failed. See the last error on the Databases page.", backupFailed: "The backup failed. Check the server log and the backup folder.", businessNotReady: "This business is still being set up.", moduleDisabled: "This part of Faatix is switched off for your business. Contact Faatix to turn it on.", notShared: "This business already has its own database.", twoFactorWrong: "The code is wrong or too old. Try the newest code.", notYourself: "You can't change your own role or disable yourself.",
+    notReady: "The database isn't ready yet.", migrationFailed: "The migration failed. See the last error on the Databases page.", backupFailed: "The backup failed. Check the server log and the backup folder.", businessNotReady: "This business is still being set up.", advancedAccounting: "This is part of Advanced accounting. Ask Faatix to switch it on.", moduleDisabled: "This part of Faatix is switched off for your business. Contact Faatix to turn it on.", notShared: "This business already has its own database.", twoFactorWrong: "The code is wrong or too old. Try the newest code.", notYourself: "You can't change your own role or disable yourself.",
     lastOwner: "There must always be at least one active owner.", noSubscription: "This business has no plan yet. Give it a plan first.", invalidIp: "Not a valid IP address.", ownIp: "That is your own IP address.", adminPasswordWeak: "Use at least 10 characters with letters and numbers.", lineLocked: "This line can't change (serial / IMEI, roll or recipe). Cancel the invoice and make a new one.", useNewInvoice: "Products sold with serial numbers / IMEIs, from rolls or through recipes can't be added by an edit. Make a new invoice.", lockedLineRemoved: "Lines sold with serial numbers / IMEIs, from rolls or through recipes can't be removed by an edit. Cancel the invoice instead.", customerHasPayments: "This invoice has payments, so its customer can't change.", draftNoTracked: "Products with serial numbers / IMEIs or from rolls can't be in a draft.", draftNoPayment: "A draft can't be paid. Post it first.", notDraft: "This invoice isn't a draft.", cancelledNoEdit: "A cancelled invoice can't be edited.", invoiceChanged: "Someone changed this invoice meanwhile. Reload it.", noChanges: "Nothing was changed.", invoiceEditNeedsApproval: "These changes need a manager's approval.", cannotApproveEdit: "This user can't approve invoice changes.", cannotApprovePrice: "This user can't approve prices below the minimum.",
     trackingNeedsZeroStock: "The tracking method can only change while the product has no stock.",
     trackedNoReverse: "Serial / IMEI stock is corrected with Adjust (choose the devices).", devicesAdjustOnly: "Use Add / Subtract with the devices.",
@@ -507,7 +540,8 @@ const en = {
       database: "Database", dedicated: "Own database", shared: "Central (shared)", signin: "Sign-in", setup: "Setup", viewSetup: "View setup", copy: "Copy", copied: "Copied",
       expire: "Mark expired", archive: "Archive", setupFailed: "Setup failed at “{step}”. Open the setup page to retry."
     },
-    modules: { title: "Modules", help: "Switch off modules this business shouldn't use. They disappear from its app, and the server refuses changes in them; data already recorded is kept." },
+    modules: { title: "Modules", help: "Switch off modules this business shouldn't use. They disappear from its app, and the server refuses changes in them; data already recorded is kept.",
+      accountingType: "Accounting type", accountingHelp: { simple: "Simple: dashboard, income, expenses, cash & bank, customer and supplier debts, financial reports.", advanced: "Advanced: everything in Simple, plus the balance sheet, trial balance, general ledger and chart of accounts." } },
     settings: { backups: "Backups", daily: "Make a backup of every database once a day", keep: "Automatic backups kept per database" }
   },
   adminDash: {
@@ -869,7 +903,7 @@ const en = {
     "cash.view": "See cash and bank balances", "cash.edit": "Add money, transfers and bank accounts",
     "stock.view": "See stock, movements and valuation", "stock.add": "Add stock and opening stock", "stock.adjust": "Adjust stock, counts and reversals",
     "stock.transfer": "Transfer stock between locations", "stock.locations": "Manage stock locations",
-    "reports.view": "See reports", "audit.view": "See the activity log"
+    "reports.view": "See reports", "audit.view": "See the activity log", "accounting.view": "See accounting (books, debts, financial reports)", "accounting.manage": "Manage accounting (method, financial year, account names)"
   },
   business: {
     title: "Business info", logo: "Logo", removeLogo: "Remove logo", ownerName: "Owner name", type: "Business type", created: "Registered on",
@@ -921,6 +955,39 @@ const en = {
 };
 
 const so = {
+  acc: {
+    tabs: { dashboard: "Guudmar", income: "Dakhli", expenses: "Kharashyo", cash: "Caddaan & bangi", customers: "Deynta macaamiisha", suppliers: "Deynta alaab-qeybiyeyaasha", reports: "Warbixinnada maaliyadda", settings: "Dejin", books: "Jaantuska xisaabaadka" },
+    modes: { simple: "Fudud", advanced: "Horumarsan" }, modeLabel: "Nooca xisaabaadka", modeByFaatix: "Faatix ayaa dejisa",
+    period: "Muddo", periods: { today: "Maanta", week: "Toddobaadkan", month: "Bishan", quarter: "Rubucan", year: "Sannadkan", custom: "Taariikho gaar ah" },
+    cards: { income: "Dakhli", expenses: "Kharashyo", profit: "Faa'iidada saafiga ah", cash: "Caddaan & bangi", customers: "Deynta macaamiisha", suppliers: "Deynta alaab-qeybiyeyaasha" },
+    vsPrevious: "marka la barbar dhigo muddadii hore", noPrevious: "Muddo hore oo la barbar dhigo ma jirto", overdueAmount: "{amount} waqtigeedii way dhaaftay", olderThan30: "{amount} ka weyn 30 maalmood",
+    chartTitle: "Dakhliga iyo kharashka", outstanding: "Lacagaha maqan", total: "Wadarta", recent: "Dhaqdhaqaaqyadii u dambeeyay", noData: "Muddadan wax lama diiwaan gelin.",
+    reference: "Tixraac", description: "Faahfaahin", type: "Nooc", amount: "Qaddar", account: "Xisaab", debit: "Deyn (Debit)", credit: "Dayn bixin (Credit)", balance: "Hadhaa", code: "Kood",
+    reversal: "Dib u celin", revision: "nooca {n}", postedNote: "Diiwaannada la gudbiyay marna lama beddelo: sixitaanku wuxuu ku daraa dib u celin iyo diiwaan cusub.",
+    sources: { sale: "Iib", invoice: "Qaansheeg", purchase: "Iibsi", return: "Celin", expense: "Kharash", other_income: "Dakhli kale", waste: "Qashin", stock: "Hagaajin kayd", money: "Dhaqdhaqaaq lacageed",
+      customer_payment: "Lacag-bixin macmiil", supplier_payment: "Lacag-bixin alaab-qeybiye", refund: "Lacag celin", transfer: "Wareejin", adjustment: "Lacagta milkiilaha gal / bax", opening: "Hadhaaga bilowga",
+      warranty: "Adeeg dammaanad", reservation: "Deebaajiga ballanta", tailoring: "Tolid", gold_buy: "Dahab la iibsaday" },
+    dir: { in: "lacag soo gashay", out: "lacag baxday" },
+    overdue: "Waqtigii dhaafay", aging: "Inta ay jirto", buckets: { current: "Weli lama gaarin", d30: "1–30 maalmood", d60: "31–60 maalmood", d90: "61–90 maalmood", d90plus: "In ka badan 90 maalmood" },
+    documents: "Dukumentiyo", original: "Asalka", paid: "La bixiyay", remaining: "Hadhay", oldest: "Ugu da'da weyn", due: "Waqtiga", daysLate: "{n} maalmood dib u dhac",
+    receivePayment: "Qaado lacag", makePayment: "Bixi alaab-qeybiyaha", owes: "Hadhaaga furan: {amount}",
+    allocationNoteCustomer: "Lacag-bixintu waxay marka hore xirtaa qaansheegyada iyo iibka deynta ah ee ugu da'da weyn.", allocationNoteSupplier: "Lacag-bixintu waxay marka hore xirtaa iibsiyada furan ee ugu da'da weyn.",
+    noCustomerDebts: "Macmiil kuma laha lacag.", noSupplierDebts: "Alaab-qeybiye lacag kuguma laha.", booksNote: "Buugaagta: {amount} (waxaa ku jira iib deyn ah oo aan macmiil lahayn)",
+    reports: { pnl: "Faa'iido & khasaare", income: "Warbixinta dakhliga", expenses: "Warbixinta kharashka", cash: "Warbixinta caddaanka & bangiga", receivables: "Deynta macaamiisha", payables: "Deynta alaab-qeybiyeyaasha",
+      transactions: "Taariikhda dhaqdhaqaaqa", balance: "Xaashida hadhaaga", trial: "Hadhaaga tijaabada", ledger: "Buugga guud" },
+    asAt: "Ilaa", asAtDate: "Ilaa {date}", print: "Daabac", excel: "Excel (CSV)", chooseAccount: "Dooro xisaab",
+    revenue: "Dakhli", totalRevenue: "Wadarta dakhliga", cogs: "Qiimaha alaabta la iibiyay", totalCogs: "Wadarta qiimaha alaabta la iibiyay", grossProfit: "Faa'iidada guud", totalExpenses: "Wadarta kharashka", netProfit: "Faa'iidada saafiga ah",
+    cashBasis: "Saldhig caddaan: lacagta la helay iyo ta la bixiyay", otherIncomeList: "Dakhliga kale ee la diiwaan geliyay", expenseList: "Kharashyada la diiwaan geliyay",
+    opening: "Hadhaaga bilowga", moneyIn: "Lacag soo gashay", moneyOut: "Lacag baxday", closing: "Hadhaaga xiritaanka",
+    balanced: "Waa isku dheelli tiran yahay", notBalanced: "Isku dheelli tiran ma aha", assets: "Waxa ganacsigu leeyahay", liabilities: "Waxa lagu leeyahay ganacsiga", equity: "Saamiga milkiilaha",
+    totalAssets: "Wadarta hantida", totalLiabilities: "Wadarta deymaha", totalEquity: "Wadarta saamiga milkiilaha", liabilitiesAndEquity: "Deymaha + saamiga milkiilaha", profitToDate: "Faa'iidada ilaa hadda",
+    types: { asset: "Hanti", liability: "Deymo", equity: "Saamiga milkiilaha", revenue: "Dakhli", cogs: "Qiimaha alaabta la iibiyay", expense: "Kharashyo" },
+    chartHelp: "Faatix ayaa si toos ah u haysa xisaabaadkan iyada oo ka qaadanaysa iibkaaga, iibsiyadaada, lacag-bixinta, kharashka iyo kaydka. Waad beddeli kartaa magaca xisaabta; koodkeeda iyo diiwaannadeeda marna isma beddelaan.",
+    rename: "Beddel magaca", renameNote: "Magaca oo keliya ayaa isbeddela; wax kasta oo xisaabta lagu gudbiyay way sii jiraan.",
+    method: "Habka xisaabinta", methods: { accrual: "Saldhig kasbasho (accrual)", cash: "Saldhig caddaan" },
+    methodHelp: { accrual: "Dakhligu wuxuu tirsamaa marka aad iibiso ama qaansheeg sameyso, kharashkuna marka uu dhaco — xitaa haddii aan la bixin. Ugu fiican ganacsiyada badankood.", cash: "Dakhligu wuxuu tirsamaa marka lacagtu soo gasho, kharashkuna marka lacagtu baxdo." },
+    financialYear: "Sannadka maaliyadda", fyStart: "Sannadka maaliyaddu wuxuu bilaabmaa", currency: "Lacagta", ownerOnly: "Milkiilaha oo keliya (ama door leh \"Maamul xisaabaadka\") ayaa beddeli kara."
+  },
   groups: { setup: "Habaynta", importExport: "Soo geli & dhoofi", printExport: "Daabac & dhoofi", access: "Gelitaanka & akoonka", status: "Xaaladda" },
   common: {
     save: "Kaydi", saving: "Waa la kaydinayaa…", cancel: "Jooji", close: "Xir", edit: "Wax ka beddel", add: "Ku dar", delete: "Tirtir", view: "Eeg",
@@ -987,7 +1054,7 @@ const so = {
     slugTaken: "Ganacsi kale ayaa isticmaala cinwaankan.", passwordWeak: "Ugu yaraan 8 xaraf.", invalidDomain: "Domain sax ah ma aha, tusaale shop.example.com.", useSubdomain: "Cinwaannada domain-ka Faatix waa subdomain — beddel subdomain-ka.",
     domainTaken: "Domain-kan horay ayaa loo daray.", notProvisioned: "Ganacsiga lama hawlgelin karo inta diyaarintiisu aysan dhammaan.", tenantKeyMissing: "TENANT_DB_KEY laguma dejin server-ka, sidaa darteed kayd xog gaar ah lama samayn karo.",
     notFailed: "Diyaarin fashilantay oo keliya ayaa dib loo isku dayi karaa.", jobExpired: "Diyaarintan dib looma isku dayi karo (xogteedii way baxday). Mar kale diiwaan geli ganacsiga.", sharedDatabase: "Ganacsigan wuxuu isticmaalaa kaydka xogta dhexe ee la wadaago.",
-    notReady: "Kaydka xogta weli diyaar ma aha.", migrationFailed: "Cusboonaysiintu way fashilantay. Eeg khaladkii u dambeeyay bogga Kaydadka xogta.", backupFailed: "Nuqul-kaydintu way fashilantay. Hubi log-ga server-ka iyo galka nuqulada.", businessNotReady: "Ganacsigan weli waa la diyaarinayaa.", moduleDisabled: "Qaybtan Faatix waa laga damiyay ganacsigaaga. La xiriir Faatix si loo shido.", notShared: "Ganacsigan horay ayuu u leeyahay kayd u gaar ah.", twoFactorWrong: "Koodhku waa khalad ama waa duug. Isku day koodhka ugu cusub.", notYourself: "Ma beddeli kartid doorkaaga mana dami kartid naftaada.",
+    notReady: "Kaydka xogta weli diyaar ma aha.", migrationFailed: "Cusboonaysiintu way fashilantay. Eeg khaladkii u dambeeyay bogga Kaydadka xogta.", backupFailed: "Nuqul-kaydintu way fashilantay. Hubi log-ga server-ka iyo galka nuqulada.", businessNotReady: "Ganacsigan weli waa la diyaarinayaa.", advancedAccounting: "Tani waa qayb ka mid ah xisaabaadka horumarsan. Weydii Faatix inay shidaan.", moduleDisabled: "Qaybtan Faatix waa laga damiyay ganacsigaaga. La xiriir Faatix si loo shido.", notShared: "Ganacsigan horay ayuu u leeyahay kayd u gaar ah.", twoFactorWrong: "Koodhku waa khalad ama waa duug. Isku day koodhka ugu cusub.", notYourself: "Ma beddeli kartid doorkaaga mana dami kartid naftaada.",
     lastOwner: "Had iyo jeer waa inuu jiraa ugu yaraan hal milkiile oo firfircoon.", noSubscription: "Ganacsigan weli qorshe ma leh. Marka hore sii qorshe.", invalidIp: "Ciwaan IP sax ah ma aha.", ownIp: "Taasi waa ciwaankaaga IP.", adminPasswordWeak: "Isticmaal ugu yaraan 10 xaraf oo xarfo iyo tiro leh.", lineLocked: "Safkan isma beddeli karo (serial / IMEI, duub ama cunto-karis). Jooji qaansheegta oo samee mid cusub.", useNewInvoice: "Alaabta serial / IMEI, duub ama cunto-karis lagu iibiyo laguma dari karo beddel. Samee qaansheeg cusub.", lockedLineRemoved: "Safafka serial / IMEI, duub ama cunto-karis lagama saari karo beddel. Halkii jooji qaansheegta.", customerHasPayments: "Qaansheegtan lacag ayaa lagu bixiyay, sidaa darteed macmiilkeeda isma beddeli karo.", draftNoTracked: "Alaabta serial / IMEI leh ama duubka ka timaada qabyo kuma jiri karto.", draftNoPayment: "Qabyo lacag laguma bixin karo. Marka hore diiwaangeli.", notDraft: "Qaansheegtan qabyo ma aha.", cancelledNoEdit: "Qaansheeg la joojiyay wax lagama beddeli karo.", invoiceChanged: "Qof kale ayaa qaansheegtan beddelay. Dib u soo deji.", noChanges: "Waxba lama beddelin.", invoiceEditNeedsApproval: "Isbeddeladan waxay u baahan yihiin ansixinta maamule.", cannotApproveEdit: "Isticmaalahan ma ansixin karo isbeddelka qaansheegta.", cannotApprovePrice: "Isticmaalahan ma ansixin karo qiimaha ka hooseeya kan ugu yar.",
     trackingNeedsZeroStock: "Habka raacidda waxaa la beddeli karaa kaliya marka alaabtu kayd la'aan tahay.",
     trackedNoReverse: "Kaydka serial / IMEI waxaa lagu saxaa Hagaaji (dooro qalabka).", devicesAdjustOnly: "Isticmaal Ku dar / Ka jar adiga oo dooranaya qalabka.",
@@ -1425,7 +1492,8 @@ const so = {
       database: "Kaydka xogta", dedicated: "Kayd gaar ah", shared: "Dhexe (la wadaago)", signin: "Gelitaan", setup: "Diyaarin", viewSetup: "Eeg diyaarinta", copy: "Koobiyee", copied: "La koobiyeeyay",
       expire: "U calaamadee dhacay", archive: "Kaydi", setupFailed: "Diyaarintu waxay ku fashilantay “{step}”. Fur bogga diyaarinta si aad mar kale isku dayto."
     },
-    modules: { title: "Qaybaha", help: "Dami qaybaha uusan ganacsigan isticmaalin. Waxay ka baxayaan app-kiisa, server-kuna wuu diidayaa isbeddel lagu sameeyo; xogta horay loo diiwaan geliyay waa la hayaa." },
+    modules: { title: "Qaybaha", help: "Dami qaybaha uusan ganacsigan isticmaalin. Waxay ka baxayaan app-kiisa, server-kuna wuu diidayaa isbeddel lagu sameeyo; xogta horay loo diiwaan geliyay waa la hayaa.",
+      accountingType: "Nooca xisaabaadka", accountingHelp: { simple: "Fudud: guudmar, dakhli, kharash, caddaan & bangi, deynta macaamiisha iyo alaab-qeybiyeyaasha, warbixinnada maaliyadda.", advanced: "Horumarsan: wax kasta oo Fudud ah, oo lagu daray xaashida hadhaaga, hadhaaga tijaabada, buugga guud iyo jaantuska xisaabaadka." } },
     settings: { backups: "Nuqulada kaydka", daily: "Maalin kasta samee nuqul kayd kasta", keep: "Nuqulada tooska ah ee la hayo kayd kasta" }
   },
   adminDash: {
@@ -1787,7 +1855,7 @@ const so = {
     "cash.view": "Arag haraagga caddaanka iyo bangiga", "cash.edit": "Ku dar lacag, wareejin iyo akoonno bangi",
     "stock.view": "Arag kaydka, dhaqdhaqaaqa iyo qiimaynta", "stock.add": "Ku dar kayd iyo kayd furitaan", "stock.adjust": "Hagaaji kaydka, tirinta iyo celinta",
     "stock.transfer": "Kayd u kala wareeji goobaha", "stock.locations": "Maamul goobaha kaydka",
-    "reports.view": "Arag warbixinnada", "audit.view": "Arag diiwaanka hawlaha"
+    "reports.view": "Arag warbixinnada", "audit.view": "Arag diiwaanka hawlaha", "accounting.view": "Arag xisaabaadka (buugaagta, deymaha, warbixinnada maaliyadda)", "accounting.manage": "Maamul xisaabaadka (habka, sannadka maaliyadda, magacyada xisaabaadka)"
   },
   business: {
     title: "Xogta ganacsiga", logo: "Astaanta", removeLogo: "Ka saar astaanta", ownerName: "Magaca milkiilaha", type: "Nooca ganacsiga", created: "La diiwaan geliyay",

@@ -4,7 +4,6 @@ import { useLanguage } from "../i18n/LanguageContext.jsx";
 import usePageTitle from "../hooks/usePageTitle.js";
 import { MODULES, QUICK_ACTIONS, GROUPS } from "./modules.js";
 import { usePerm, useModuleOff, PageHeader } from "./ui.jsx";
-import { fill } from "./format.js";
 import { useProfile } from "./profile.js";
 import { ClockCard } from "./Hr.jsx";
 import { ACTIONS, useShortcuts, Kbd } from "./Shortcuts.jsx";
@@ -40,7 +39,6 @@ export function GroupPage() {
   return (
     <div className="page">
       <PageHeader icon={g.icon} title={t(`app.groups.${g.id}`)} back="/app" />
-      <p className="page-help"><Icon name="info" /> {t(`app.groups.help.${g.id}`)}</p>
       {/* organised sections of plain links (not buttons): a title, then each module with a one-line description */}
       <div className="group-sections">
         {(g.sections || [{ id: "all", modules: g.modules }]).map((sec) => {
@@ -117,7 +115,6 @@ export default function Dashboard() {
             <Link key={g.id} to={g.items.length === 1 ? `/app/m/${g.items[0].id}` : `/app/g/${g.id}`} className="dash-tile dash-tile--group" style={{ "--tile": g.color }}>
               <span className="dash-tile__icon"><Icon name={g.icon} /></span>
               <span className="dash-tile__label">{t(`app.groups.${g.id}`)}</span>
-              <small className="dash-tile__count">{fill(t("app.groups.count"), { n: g.items.length })}</small>
             </Link>
           ))}
         </nav>

@@ -614,12 +614,19 @@ export function BusinessModules({ businessId, can }) {
   const { t } = useLanguage();
   const d = useApi(`/api/admin/businesses/${businessId}/modules`);
   const [off, setOff] = useState(null);
+  const [accMode, setAccMode] = useState("simple");
   const sub = useSubmit();
   const [saved, setSaved] = useState(false);
-  useEffect(() => { if (d.data) setOff(new Set(d.data.modules.filter((m) => !m.enabled).map((m) => m.id))); }, [d.data]);
+  useEffect(() => { if (d.data) { setOff(new Set(d.data.modules.filter((m) => !m.enabled).map((m) => m.id))); setAccMode(d.data.accountingMode || "simple"); } }, [d.data]);
   if (!d.data || !off) return null;
   const toggle = (m) => { setSaved(false); const n = new Set(off); if (n.has(m)) n.delete(m); else n.add(m); setOff(n); };
-  const save = async () => { if (await sub.run(() => apiRequest(`/api/admin/businesses/${businessId}/modules`, { method: "PUT", body: { disabled: [...off] } }))) setSaved(true); };
+  const save = async () => {
+    const ok = await sub.run(async () => {
+      await apiRequest(`/api/admin/businesses/${businessId}/modules`, { method: "PUT", body: { disabled: [...off] } });
+      await apiRequest(`/api/admin/businesses/${businessId}/accounting-mode`, { method: "PUT", body: { mode: accMode } });
+    });
+    if (ok) setSaved(true);
+  };
   return (
     <section className="panel-card">
       <h2 className="panel-card__title"><Icon name="grid" /> {t("ui.tenancy.modules.title")}</h2>
@@ -631,6 +638,14 @@ export function BusinessModules({ businessId, can }) {
           </label>
         ))}
       </div>
+      {/* accounting: Simple (small businesses) or Advanced (medium: balance sheet, trial balance, ledger, chart of accounts) */}
+      {!off.has("accounting") && (
+        <div className="acc-mode-pick">
+          <span className="ff__label">{t("ui.tenancy.modules.accountingType")}</span>
+          <div className="seg">{["simple", "advanced"].map((x) => <button key={x} type="button" aria-pressed={accMode === x} disabled={!can("businesses")} onClick={() => { setSaved(false); setAccMode(x); }}>{t(`ui.acc.modes.${x}`)}</button>)}</div>
+          <small className="muted">{t(`ui.tenancy.modules.accountingHelp.${accMode}`)}</small>
+        </div>
+      )}
       <FormError error={sub.formError} />
       {can("businesses") && <div className="form-actions"><button type="button" className="btn btn--primary btn--sm" onClick={save} disabled={sub.busy}>{t("ui.common.save")}</button>{saved && <span className="slug-ok"><Icon name="check" /> {t("ui.common.saved")}</span>}</div>}
     </section>

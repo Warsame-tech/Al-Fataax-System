@@ -9,10 +9,11 @@ const EXPENSE_CATS = ["rent", "salaries", "electricity", "internet", "transport"
 const INCOME_CATS = ["service", "commission", "rental", "interest", "other"];
 
 /* ===================== Expenses & other income ===================== */
-export function Expenses() {
+/* embedded: shown inside Accounting (no page title; the tab is fixed by kind) */
+export function Expenses({ embedded = false, kind = null }) {
   const { t, lang } = useLanguage();
   const can = usePerm();
-  const [tab, setTab] = useState("expenses");
+  const [tab, setTab] = useState(kind === "income" ? "income" : "expenses");
   const [range, setRange] = useState({ from: daysAgo(29), to: isoDate(new Date()) });
   const [adding, setAdding] = useState(false);
   const isExp = tab === "expenses";
@@ -26,13 +27,13 @@ export function Expenses() {
 
   return (
     <div className="page">
-      <PageHeader icon="wallet" title={t("app.modules.expenses")} actions={
+      <EmbedHead embedded={embedded} icon="wallet" title={t("app.modules.expenses")} actions={
         <>
           <button type="button" className="btn btn--outline" onClick={() => downloadCsv(`${tab}.csv`, ["date", "category", "amount", "method", "description"], rows.map((r) => [r.date, r.category, r.amount, r.method, r.description || ""]))}><Icon name="download" /><span>{t("ui.common.exportCsv")}</span></button>
           {can("expenses.create") && <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}><Icon name="plus" /><span>{t(isExp ? "ui.money.addExpense" : "ui.money.addIncome")}</span></button>}
         </>
       } />
-      <Tabs value={tab} onChange={setTab} tabs={[{ id: "expenses", label: t("ui.money.expenses"), icon: "arrow-up-right" }, { id: "income", label: t("ui.money.income"), icon: "arrow-down-left" }]} />
+      {!kind && <Tabs value={tab} onChange={setTab} tabs={[{ id: "expenses", label: t("ui.money.expenses"), icon: "arrow-up-right" }, { id: "income", label: t("ui.money.income"), icon: "arrow-down-left" }]} />}
       <div className="toolbar"><DateRange value={range} onChange={setRange} /></div>
 
       {list.loading && !list.data ? <Loading /> : (
@@ -106,7 +107,7 @@ function EntryForm({ kind, cats, catKey, onClose, onSaved }) {
 }
 
 /* ===================== Cash & bank ===================== */
-export function Cashbook() {
+export function Cashbook({ embedded = false }) {
   const { t, lang } = useLanguage();
   const can = usePerm();
   const accounts = useApi("/api/accounts");
@@ -123,7 +124,7 @@ export function Cashbook() {
 
   return (
     <div className="page">
-      <PageHeader icon="book-open" title={t("ui.cash.title")} actions={can("cash.edit") && (
+      <EmbedHead embedded={embedded} icon="book-open" title={t("ui.cash.title")} actions={can("cash.edit") && (
         <>
           <button type="button" className="btn btn--outline" onClick={() => setModal("bank")}><Icon name="landmark" /><span>{t("ui.cash.addBank")}</span></button>
           <button type="button" className="btn btn--outline" onClick={() => setModal("transfer")}><Icon name="swap" /><span>{t("ui.cash.transfer")}</span></button>
@@ -220,3 +221,9 @@ function MoveForm({ mode, accounts, onClose, onSaved }) {
 }
 
 export { useMoney };
+
+/* the page title, or (inside Accounting) just its buttons on the right */
+function EmbedHead({ embedded, actions, ...props }) {
+  if (!embedded) return <PageHeader {...props} actions={actions} />;
+  return actions ? <div className="embed-head">{actions}</div> : null;
+}

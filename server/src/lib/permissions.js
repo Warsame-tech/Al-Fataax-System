@@ -28,6 +28,8 @@ export const PERMISSION_GROUPS = [
   { module: "expenses", perms: ["expenses.view", "expenses.create", "expenses.delete"] },
   { module: "cashbook", perms: ["cash.view", "cash.edit"] },
   { module: "reports", perms: ["reports.view"] },
+  // accounting (lib/accounting.js): see the financial pages and reports; manage the chart of accounts and accounting settings
+  { module: "accounting", perms: ["accounting.view", "accounting.manage"] },
   { module: "audit", perms: ["audit.view"] },
   { module: "hr", perms: ["hr.view", "hr.manage", "hr.payroll"] },
   // food businesses only (profile.food): kitchen display, kitchen status updates, table setup
@@ -67,7 +69,7 @@ const LEGACY = {
   "suppliers.view": ["manager", "stockkeeper"], "suppliers.edit": ["manager", "stockkeeper"],
   "purchases.view": ["manager", "stockkeeper"], "purchases.create": ["manager", "stockkeeper"], "purchases.pay": OM, "purchases.cancel": OM,
   "expenses.view": OM, "expenses.create": OM, "expenses.delete": [],
-  "cash.view": OM, "cash.edit": OM, "reports.view": OM, "audit.view": OM,
+  "cash.view": OM, "cash.edit": OM, "reports.view": OM, "audit.view": OM, "accounting.view": OM, "accounting.manage": [],
   "hr.view": ["manager"], "hr.manage": ["manager"], "hr.payroll": [],
   "kitchen.view": ["manager"], "kitchen.update": ["manager"], "tables.manage": ["manager"]
 };

@@ -6,6 +6,7 @@ import { env } from "../config/env.js";
 import { profileFor } from "../lib/businessProfiles.js";
 import { resolveBranch } from "../lib/branches.js";
 import { disabledModules, blockedModule } from "../lib/modules.js";
+import { forgetSync } from "../lib/accounting.js";
 
 export const SESSION_COOKIE = "faatix_session";
 
@@ -109,6 +110,8 @@ export async function requireAuth(req, res, next) {
     req.business.disabledModules = await disabledModules(row.business_id);
     const blocked = blockedModule(req.business.disabledModules, req.method, req.originalUrl);
     if (blocked) return res.status(403).json({ code: "moduleDisabled", module: blocked });
+    // anything saved may change the books: the next accounting page brings them up to date at once
+    if (!["GET", "HEAD", "OPTIONS"].includes(req.method)) res.on("finish", () => forgetSync(row.business_id));
     next();
   } catch (err) {
     next(err);
