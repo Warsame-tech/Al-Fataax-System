@@ -382,3 +382,18 @@ export function ActionMenu({ items, label, icon, small = false, primary = false,
     </>
   );
 }
+
+/* ---------- a password box with show / hide ---------- */
+export function PasswordInput({ value, onChange, autoComplete = "new-password", autoFocus = false, id, invalid = false }) {
+  const { t } = useLanguage();
+  const [show, setShow] = useState(false);
+  return (
+    <span className="pw-input">
+      <input id={id} className={"input" + (invalid ? " has-error" : "")} type={show ? "text" : "password"} value={value} onChange={onChange}
+        autoComplete={autoComplete} autoFocus={autoFocus} autoCapitalize="none" spellCheck="false" maxLength={200} />
+      <button type="button" className="pw-input__eye" onClick={() => setShow((v) => !v)} aria-pressed={show} aria-label={t(show ? "signin.hide" : "signin.show")}>
+        <Icon name={show ? "eye" : "eye-off"} />
+      </button>
+    </span>
+  );
+}

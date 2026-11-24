@@ -1,5 +1,4 @@
 import { Router } from "express";
-import crypto from "node:crypto";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import rateLimit from "express-rate-limit";
@@ -206,7 +205,8 @@ router.patch("/businesses/:id/trial", requireAdminPerm("businesses"), ah(async (
 const BUSINESS_STATUSES = ["pending", "provisioning", "active", "suspended", "expired", "archived", "deactivated"];
 const TYPES = ["supermarket", "cosmetics", "fashion", "pharmacy", "electronics", "jewelry", "fabric", "restaurant", "cafe", "fast_food", "bakery", "juice_bar", "food_truck", "takeaway", "food_other"];
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const tempPassword = () => `${crypto.randomBytes(6).toString("base64url").replace(/[-_]/g, "x")}${crypto.randomInt(10, 99)}`;
+/* super admin passwords: at least 10 characters, letters and numbers (as for My account → password) */
+const adminPasswordOk = (p) => p.length >= 10 && p.length <= 200 && /[A-Za-z]/.test(p) && /[0-9]/.test(p);
 
 /* PUT /api/admin/businesses/:id { name, ownerName, phone, email, address, type } — correct a business's details */
 router.put("/businesses/:id", requireAdminPerm("businesses"), ah(async (req, res) => {
@@ -228,10 +228,13 @@ router.put("/businesses/:id", requireAdminPerm("businesses"), ah(async (req, res
   res.json({ code: "saved" });
 }));
 
-/* POST /api/admin/businesses/:id/reset-owner-password — a new password for the owner, shown once (they should change it) */
+/* POST /api/admin/businesses/:id/reset-owner-password { password } — the owner's new password, chosen by the super admin */
 router.post("/businesses/:id/reset-owner-password", requireAdminPerm("businesses"), ah(async (req, res) => {
   const bid = id(req.params.id);
-  const password = tempPassword();
+  // the super admin types the owner's new password (same rule as business staff passwords)
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  if (!password) throw badRequest({ password: "required" });
+  if (password.length < 8 || password.length > 200 || !/[A-Za-z]/.test(password) || !/[0-9]/.test(password)) throw badRequest({ password: "weakPassword" });
   const hash = await bcrypt.hash(password, 12);
   const o = await withTenant(bid || 0, async (tp) => {
     const [[u]] = await tp.query("SELECT u.id, u.username FROM users u JOIN business_user_roles r ON r.user_id = u.id AND r.role = 'owner' WHERE u.business_id = ? LIMIT 1", [bid || 0]);
@@ -240,7 +243,7 @@ router.post("/businesses/:id/reset-owner-password", requireAdminPerm("businesses
   });
   if (!o) return res.status(404).json({ code: "notFound" });
   await adminAudit(pool, { adminId: req.admin.id, businessId: bid, action: "admin.owner_password_reset", entity: "user", entityId: o.id, ip: req.ip });
-  res.json({ username: o.username, password });
+  res.json({ username: o.username });
 }));
 
 /* POST /api/admin/businesses/:id/sign-out-all — every user of the business is signed out now */
@@ -327,13 +330,15 @@ router.post("/admins", requireAdminPerm("admins"), ah(async (req, res) => {
   if (!/^[a-z0-9._-]{3,60}$/.test(username)) e.username = "invalidUsername";
   if (email && !EMAIL.test(email)) e.email = "invalidEmail";
   if (!ADMIN_ROLES[role]) e.role = "required";
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  if (!password) e.password = "required";
+  else if (!adminPasswordOk(password)) e.password = "adminPasswordWeak";
   if (Object.keys(e).length) throw badRequest(e);
   const [[taken]] = await pool.query("SELECT id FROM platform_admins WHERE username = ? OR (email IS NOT NULL AND email = ?)", [username, email || ""]);
   if (taken) throw badRequest({ username: "usernameTaken" });
-  const password = tempPassword();
   const [r] = await pool.query("INSERT INTO platform_admins (username, email, role, password_hash) VALUES (?, ?, ?, ?)", [username, email, role, await bcrypt.hash(password, 12)]);
   await adminAudit(pool, { adminId: req.admin.id, action: "admin.admin_created", entity: "platform_admin", entityId: r.insertId, meta: { username, role }, ip: req.ip });
-  res.status(201).json({ id: r.insertId, username, password });
+  res.status(201).json({ id: r.insertId, username });   // the password is the one the super admin typed: never sent back
 }));
 router.patch("/admins/:id", requireAdminPerm("admins"), ah(async (req, res) => {
   const aid = id(req.params.id);
@@ -352,11 +357,13 @@ router.post("/admins/:id/reset-password", requireAdminPerm("admins"), ah(async (
   const aid = id(req.params.id);
   const [[a]] = await pool.query("SELECT id, username FROM platform_admins WHERE id = ?", [aid || 0]);
   if (!a) return res.status(404).json({ code: "notFound" });
-  const password = tempPassword();
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+  if (!password) throw badRequest({ password: "required" });
+  if (!adminPasswordOk(password)) throw badRequest({ password: "adminPasswordWeak" });
   // a reset also turns two-step sign-in off, so a lost phone can be recovered
   await pool.query("UPDATE platform_admins SET password_hash = ?, totp_enabled = 0, totp_secret = NULL WHERE id = ?", [await bcrypt.hash(password, 12), a.id]);
   await adminAudit(pool, { adminId: req.admin.id, action: "admin.admin_password_reset", entity: "platform_admin", entityId: a.id, ip: req.ip });
-  res.json({ username: a.username, password });
+  res.json({ username: a.username });
 }));
 
 /* my two-step sign-in: setup gives a new secret (QR / key for the authenticator app), enable checks a code from it, disable needs the password */

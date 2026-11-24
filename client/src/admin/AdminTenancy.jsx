@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { apiRequest } from "../services/api.js";
-import { useApi, useSubmit, Field, FormError, Loading, EmptyState, StatusBadge, SearchBox, Modal, useErrorText, ActionMenu } from "../app/ui.jsx";
+import { useApi, useSubmit, Field, FormError, Loading, EmptyState, StatusBadge, SearchBox, Modal, useErrorText, ActionMenu, PasswordInput } from "../app/ui.jsx";
 import { date, fill } from "../app/format.js";
 
 /*
@@ -111,7 +111,7 @@ export function RegisterBusiness() {
   const dbName = `faatix_${(f.slug || "slug").replace(/-/g, "_")}_db`;
   const canNext = [
     f.name.trim().length >= 2 && f.slug && slugState?.ok && f.type && f.phone.trim(),
-    f.ownerName.trim().length >= 2 && /^[a-zA-Z0-9_.]{3,30}$/.test(f.username) && (!f.password || f.password.length >= 8),
+    f.ownerName.trim().length >= 2 && /^[a-zA-Z0-9_.]{3,30}$/.test(f.username) && f.password.length >= 8 && /[A-Za-z]/.test(f.password) && /[0-9]/.test(f.password),
     true, true, true][step];
 
   const create = async () => {
@@ -170,7 +170,7 @@ export function RegisterBusiness() {
             <Field label={t("ui.tenancy.register.ownerPhone")}><input className="input" type="tel" value={f.ownerPhone} onChange={set("ownerPhone")} placeholder={f.phone} maxLength={30} /></Field>
             <Field label={t("ui.tenancy.register.ownerEmail")} error={fe.ownerEmail}><input className="input" type="email" value={f.ownerEmail} onChange={set("ownerEmail")} maxLength={190} /></Field>
             <Field label={t("ui.tenancy.register.password")} error={fe.password} hint={t("ui.tenancy.register.passwordHelp")} full>
-              <input className="input" type="text" autoComplete="new-password" value={f.password} onChange={set("password")} maxLength={200} />
+              <PasswordInput value={f.password} onChange={set("password")} />
             </Field>
           </div>
         )}

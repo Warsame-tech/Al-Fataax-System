@@ -1930,3 +1930,12 @@ tr.is-danger td { background: #fff5f5; }
 .action-menu--sheet .action-menu__cancel { display: block; width: 100%; margin-top: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: #fff; font: inherit; font-weight: 600; color: var(--navy); cursor: pointer; }
 @media (prefers-reduced-motion: reduce) { .action-menu, .action-menu--sheet { animation: none; } }
 @media print { .action-menu, .action-menu__scrim { display: none !important; } }
+
+/* password box with show / hide (app/ui.jsx PasswordInput) */
+.pw-input { position: relative; display: block; }
+.pw-input .input { width: 100%; padding-right: 46px; }
+.pw-input__eye { position: absolute; top: 50%; right: 4px; transform: translateY(-50%); display: grid; place-items: center; width: 38px; height: 38px; border: 0; border-radius: 8px; background: transparent; color: var(--muted); cursor: pointer; }
+.pw-input__eye:hover { color: var(--navy); }
+.pw-input__eye .icon { width: 18px; height: 18px; }
+[dir="rtl"] .pw-input .input { padding-right: 12px; padding-left: 46px; }
+[dir="rtl"] .pw-input__eye { right: auto; left: 4px; }

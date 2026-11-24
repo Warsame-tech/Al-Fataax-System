@@ -10,7 +10,7 @@ import logo from "../assets/faatix-logo.png";
 import AdminDashboard from "./AdminDashboard.jsx";
 import { Subscriptions, Payments, Plans, GivePlan, RecordPayment } from "./AdminBilling.jsx";
 import { Tickets, Messages } from "./AdminSupport.jsx";
-import { Announcements, Reports, Security, AdminsPage, SettingsPage, ExportPage, AccountPage, ShownOnce } from "./AdminPlatform.jsx";
+import { Announcements, Reports, Security, AdminsPage, SettingsPage, ExportPage, AccountPage, ShownOnce, SetPasswordModal } from "./AdminPlatform.jsx";
 import { RegisterBusiness, ProvisioningRoute, Hosting, Databases, Backups, BranchOverview, BranchLimit, BusinessModules, LogoPicker } from "./AdminTenancy.jsx";
 
 /*
@@ -310,7 +310,7 @@ function BusinessDetail({ can }) {
   const m = (v) => money(v, cur, lang);
   const close = () => { setModal(null); d.reload(); };
   const setStatus = (status, reason) => apiRequest(`/api/admin/businesses/${b.id}`, { method: "PATCH", body: { status, reason } }).then(() => d.reload());
-  const resetOwner = async () => { if (!window.confirm(fill(t("ui.platform.resetOwnerConfirm"), { name: b.name }))) return; const r = await apiRequest(`/api/admin/businesses/${b.id}/reset-owner-password`, { method: "POST" }); setShown({ ...r, title: t("ui.platform.newPassword") }); };
+  const resetOwner = () => { setMsg(null); setModal("ownerPassword"); };
   const signOutAll = async () => { if (!window.confirm(fill(t("ui.platform.signOutConfirm"), { name: b.name }))) return; await apiRequest(`/api/admin/businesses/${b.id}/sign-out-all`, { method: "POST" }); setMsg(t("ui.platform.signedOut")); d.reload(); };
   const addNote = async (e) => { e.preventDefault(); if (!note.trim()) return; await apiRequest(`/api/admin/businesses/${b.id}/notes`, { method: "POST", body: { note } }); setNote(""); d.reload(); };
   const delNote = async (n) => { await apiRequest(`/api/admin/businesses/${b.id}/notes/${n.id}`, { method: "DELETE" }); d.reload(); };
@@ -402,6 +402,9 @@ function BusinessDetail({ can }) {
         <h2 className="panel-card__title">{t("ui.admin.activity")}</h2>
         <ul className="pay-list">{activity.map((a, i) => <li key={i}>{date(a.at, lang, true)} · {a.user || "—"} · <code className="action-code">{a.action}</code></li>)}</ul>
       </section>
+      {modal === "ownerPassword" && <SetPasswordModal who={owner?.username || b.name} rule="business" note={fill(t("ui.platform.resetOwnerNote"), { name: b.name })}
+        save={(password) => apiRequest(`/api/admin/businesses/${b.id}/reset-owner-password`, { method: "POST", body: { password } })}
+        onClose={() => setModal(null)} onDone={() => { setModal(null); setMsg(fill(t("ui.platform.passwordSavedFor"), { name: owner?.username || b.name })); }} />}
       {modal === "branches" && <BranchLimit business={{ id: b.id, name: b.name, limitFrom: b.maxBranches ? "business" : null, limit: b.maxBranches }} onClose={() => setModal(null)} onDone={close} />}
       {["suspended", "deactivated", "expired", "archived"].includes(modal) && <ReasonModal title={modal === "expired" ? t("ui.tenancy.detail.expire") : modal === "archived" ? t("ui.tenancy.detail.archive") : t(`ui.admin.${modal === "suspended" ? "suspend" : "deactivate"}`)} help={t("ui.admin.reasonRequired")} confirmLabel={t("ui.common.confirm")}
         onConfirm={(reason) => setStatus(modal, reason)} onClose={() => setModal(null)} />}

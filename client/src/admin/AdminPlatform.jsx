@@ -4,7 +4,7 @@ import { BrowserQRCodeSvgWriter } from "@zxing/browser";
 import Icon from "../components/Icon.jsx";
 import { useLanguage } from "../i18n/LanguageContext.jsx";
 import { apiRequest } from "../services/api.js";
-import { useApi, useSubmit, Field, FormError, Loading, EmptyState, StatusBadge, Modal } from "../app/ui.jsx";
+import { useApi, useSubmit, Field, FormError, Loading, EmptyState, StatusBadge, Modal, PasswordInput } from "../app/ui.jsx";
 import { date, fill, money } from "../app/format.js";
 import { AreaChart, BarChart, Donut, paletteColor } from "./Charts.jsx";
 
@@ -215,11 +215,13 @@ export function AdminsPage({ can }) {
   const [shown, setShown] = useState(null);
   const [error, setError] = useState(null);
   const change = async (a, patch) => { setError(null); try { await apiRequest(`/api/admin/admins/${a.id}`, { method: "PATCH", body: patch }); d.reload(); } catch (err) { setError(err?.data?.code || "failed"); } };
-  const reset = async (a) => { if (!window.confirm(fill(t("ui.platform.resetConfirm"), { name: a.username }))) return; const r = await apiRequest(`/api/admin/admins/${a.id}/reset-password`, { method: "POST" }); setShown({ ...r, title: t("ui.platform.newPassword") }); };
+  const [resetting, setResetting] = useState(null);
+  const [done, setDone] = useState(null);
   return (
     <div className="page">
       <div className="admin-head"><h1 className="admin-title">{t("ui.admin.menu.admins")}</h1>{can("admins") && <button type="button" className="btn btn--primary" onClick={() => setAdding(true)}><Icon name="plus" /><span>{t("ui.platform.addAdmin")}</span></button>}</div>
-      <div className="role-cards">{["owner", "admin", "support", "billing"].map((r) => <div key={r} className="role-card"><strong>{t(`ui.platform.roles.${r}`)}</strong><small>{t(`ui.platform.roleHelp.${r}`)}</small></div>)}</div>
+      {done && <p className="form-status form-status--success" role="status"><Icon name="check" /> {done}</p>}
+      <div className="role-cards">{(d.data?.roles || ["owner", "admin", "technical", "billing", "support"]).map((r) => <div key={r} className="role-card"><strong>{t(`ui.platform.roles.${r}`)}</strong><small>{t(`ui.platform.roleHelp.${r}`)}</small></div>)}</div>
       {error && <p className="form-status form-status--error">{t(`ui.errors.${error}`)}</p>}
       {!d.data ? <Loading /> : (
         <div className="table-wrap"><table className="table">
@@ -233,21 +235,29 @@ export function AdminsPage({ can }) {
               <td><StatusBadge status={a.status === "active" ? "active" : "disabled"} /></td>
               <td className="row-actions">{can("admins") && !a.me && <>
                 <button type="button" className="btn btn--outline btn--sm" onClick={() => change(a, { status: a.status === "active" ? "disabled" : "active" })}>{t(a.status === "active" ? "ui.platform.disable" : "ui.platform.enable")}</button>
-                <button type="button" className="btn btn--outline btn--sm" onClick={() => reset(a)}>{t("ui.platform.resetPassword")}</button></>}</td>
+                <button type="button" className="btn btn--outline btn--sm" onClick={() => { setDone(null); setResetting(a); }}>{t("ui.platform.resetPassword")}</button></>}</td>
             </tr>
           ))}</tbody>
         </table></div>
       )}
-      {adding && <AddAdmin roles={d.data?.roles || []} onClose={() => setAdding(false)} onDone={(r) => { setAdding(false); setShown({ ...r, title: t("ui.platform.adminAdded") }); d.reload(); }} />}
+      {adding && <AddAdmin roles={d.data?.roles || []} onClose={() => setAdding(false)} onDone={(r) => { setAdding(false); setDone(fill(t("ui.platform.adminAddedOk"), { name: r.username })); d.reload(); }} />}
+      {resetting && <SetPasswordModal who={resetting.username} rule="admin" note={t("ui.platform.resetAdminNote")}
+        save={(password) => apiRequest(`/api/admin/admins/${resetting.id}/reset-password`, { method: "POST", body: { password } })}
+        onClose={() => setResetting(null)} onDone={() => { setDone(fill(t("ui.platform.passwordSavedFor"), { name: resetting.username })); setResetting(null); d.reload(); }} />}
       {shown && <ShownOnce title={shown.title} username={shown.username} password={shown.password} onClose={() => setShown(null)} />}
     </div>
   );
 }
 function AddAdmin({ roles, onClose, onDone }) {
   const { t } = useLanguage();
-  const [f, setF] = useState({ username: "", email: "", role: "support" });
+  const [f, setF] = useState({ username: "", email: "", role: "support", password: "", confirm: "" });
   const sub = useSubmit();
-  const save = async (e) => { e.preventDefault(); const r = await sub.run(() => apiRequest("/api/admin/admins", { method: "POST", body: f })); if (r) onDone(r); };
+  const save = async (e) => {
+    e.preventDefault();
+    if (f.password !== f.confirm) { sub.setFieldErrors({ confirm: "mismatch" }); return; }
+    const r = await sub.run(() => apiRequest("/api/admin/admins", { method: "POST", body: { username: f.username, email: f.email, role: f.role, password: f.password } }));
+    if (r) onDone(r);
+  };
   return (
     <Modal title={t("ui.platform.addAdmin")} onClose={onClose}>
       <form onSubmit={save} className="form-grid">
@@ -255,8 +265,39 @@ function AddAdmin({ roles, onClose, onDone }) {
         <Field label={`${t("ui.admin.email")} ${t("ui.common.optional")}`} error={sub.fieldErrors.email}><input className="input" type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
         <Field label={t("ui.admin.role")}><select className="input" value={f.role} onChange={(e) => setF({ ...f, role: e.target.value })}>{roles.map((r) => <option key={r} value={r}>{t(`ui.platform.roles.${r}`)}</option>)}</select></Field>
         <p className="muted">{t(`ui.platform.roleHelp.${f.role}`)}</p>
-        <FormError error={sub.formError} />
+        <Field label={t("ui.platform.password")} error={sub.fieldErrors.password} hint={t("ui.platform.passwordRuleAdmin")}><PasswordInput value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
+        <Field label={t("ui.platform.confirmPassword")} error={sub.fieldErrors.confirm}><PasswordInput value={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.value })} /></Field>
+        <FormError error={sub.formError?.errors ? null : sub.formError} />
         <div className="form-actions"><button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button><button type="submit" className="btn btn--primary" disabled={sub.busy}>{t("ui.platform.addAdmin")}</button></div>
+      </form>
+    </Modal>
+  );
+}
+
+/*
+ * Set a new password for someone (a super admin, or a business's owner): typed twice, never generated.
+ *   rule: "admin" (10+ characters, letters and numbers) or "business" (8+ characters, letters and numbers)
+ */
+export function SetPasswordModal({ who, rule = "admin", note, save, onClose, onDone }) {
+  const { t } = useLanguage();
+  const [f, setF] = useState({ password: "", confirm: "" });
+  const sub = useSubmit();
+  const submit = async (e) => {
+    e.preventDefault();
+    if (f.password !== f.confirm) { sub.setFieldErrors({ confirm: "mismatch" }); return; }
+    if (await sub.run(() => save(f.password))) onDone();
+  };
+  return (
+    <Modal title={fill(t("ui.platform.setPasswordFor"), { name: who })} onClose={onClose}>
+      <form onSubmit={submit} className="form-grid">
+        {note && <p className="muted">{note}</p>}
+        <Field label={t("ui.platform.newPasswordLabel")} error={sub.fieldErrors.password} hint={t(rule === "admin" ? "ui.platform.passwordRuleAdmin" : "ui.platform.passwordRuleBusiness")}>
+          <PasswordInput value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} autoFocus />
+        </Field>
+        <Field label={t("ui.platform.confirmPassword")} error={sub.fieldErrors.confirm}><PasswordInput value={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.value })} /></Field>
+        <FormError error={sub.formError?.errors ? null : sub.formError} />
+        <div className="form-actions"><button type="button" className="btn btn--outline" onClick={onClose}>{t("ui.common.cancel")}</button>
+          <button type="submit" className="btn btn--primary" disabled={sub.busy || !f.password || !f.confirm}><Icon name="lock" /><span>{t("ui.platform.savePassword")}</span></button></div>
       </form>
     </Modal>
   );

@@ -45,7 +45,6 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE = /^\+?[0-9\s-]{7,20}$/;
 const USERNAME = /^[a-zA-Z0-9_.]{3,30}$/;
 const DOMAIN = /^(?=.{4,190}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/;
-const tempPassword = () => `${crypto.randomBytes(7).toString("base64url").replace(/[-_]/g, "x")}${crypto.randomInt(10, 99)}`;
 const urlOf = (slug) => (env.baseDomain ? `https://${slug}.${env.baseDomain}` : null);
 const linkOf = (slug) => `/b/${slug}`;
 const job = (j) => j && ({ id: j.id, status: j.status, step: j.step, error: j.error, attempts: j.attempts, createdAt: j.created_at, finishedAt: j.finished_at,
@@ -94,7 +93,9 @@ export function tenancyRoutes(router) {
     if (d.ownerName.length < 2) e.ownerName = "required";
     if (!USERNAME.test(d.username)) e.username = "invalidUsername";
     if (d.ownerEmail && !EMAIL.test(d.ownerEmail)) e.ownerEmail = "invalidEmail";
-    if (d.password && (d.password.length < 8 || d.password.length > 200)) e.password = "passwordWeak";
+    // the owner's password is typed by the super admin (never generated)
+    if (!d.password) e.password = "required";
+    else if (d.password.length < 8 || d.password.length > 200 || !/[A-Za-z]/.test(d.password) || !/[0-9]/.test(d.password)) e.password = "weakPassword";
     if (!Number.isInteger(d.trialDays) || d.trialDays < 0 || d.trialDays > 365) e.trialDays = "invalidAmount";
     if (d.maxBranches !== null && (!Number.isInteger(d.maxBranches) || d.maxBranches < 1 || d.maxBranches > 500)) e.maxBranches = "invalidAmount";
     if (d.planId) { const [[p]] = await db.query("SELECT id FROM plans WHERE id = ? AND is_active = 1", [d.planId]); if (!p) e.planId = "required"; }
@@ -104,8 +105,7 @@ export function tenancyRoutes(router) {
     if (Object.keys(e).length) throw badRequest(e);
     if (d.dbMode === "dedicated" && env.isProd && !env.tenantDbKey) throw conflict("tenantKeyMissing");
 
-    const generated = !d.password;
-    const password = d.password || tempPassword();
+    const password = d.password;
     const passwordHash = await bcrypt.hash(password, 12);
     const conn = await db.getConnection();
     let businessId;
@@ -135,7 +135,7 @@ export function tenancyRoutes(router) {
     await adminAudit(db, { adminId: req.admin.id, businessId, action: "admin.business_registered", meta: { name: d.name, slug: d.slug, mode: d.dbMode, plan: d.planId }, ip: req.ip });
     forgetSlugs();
     runJob(jobId);   // in the background; the page follows GET /businesses/:id/provisioning
-    res.status(201).json({ businessId, jobId, owner: { username: d.username, password: generated ? password : null }, url: urlOf(d.slug), link: linkOf(d.slug) });
+    res.status(201).json({ businessId, jobId, owner: { username: d.username }, url: urlOf(d.slug), link: linkOf(d.slug) });
   }));
 
   router.get("/businesses/:id/provisioning", ah(async (req, res) => {
