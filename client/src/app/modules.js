@@ -53,7 +53,10 @@ export const moduleById = (id) => MODULES.find((m) => m.id === id);
  * its modules (/app/g/<group>). Every other module keeps its own button on the dashboard.
  */
 export const GROUPS = [
-  { id: "money",      icon: "wallet",    color: "#dc2626", modules: ["overview", "expenses", "cashbook", "reports"] },
-  { id: "business",   icon: "briefcase", color: "#2c3494", modules: ["business", "branches", "staff", "hr", "settings", "audit", "profile", "support"] }
+  { id: "money", icon: "wallet", color: "#dc2626", modules: ["overview", "expenses", "cashbook", "reports"],
+    // the group's page shows its modules in these sections, as simple links
+    sections: [{ id: "moneyFlow", modules: ["expenses", "cashbook"] }, { id: "insight", modules: ["overview", "reports"] }] },
+  { id: "business", icon: "briefcase", color: "#2c3494", modules: ["business", "branches", "staff", "hr", "settings", "audit", "profile", "support"],
+    sections: [{ id: "company", modules: ["business", "branches", "settings"] }, { id: "people", modules: ["staff", "hr", "profile"] }, { id: "help", modules: ["audit", "support"] }] }
 ];
 export const groupOf = (moduleId) => GROUPS.find((g) => g.modules.includes(moduleId))?.id || null;

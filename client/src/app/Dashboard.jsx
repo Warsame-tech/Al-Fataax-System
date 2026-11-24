@@ -41,15 +41,30 @@ export function GroupPage() {
     <div className="page">
       <PageHeader icon={g.icon} title={t(`app.groups.${g.id}`)} back="/app" />
       <p className="page-help"><Icon name="info" /> {t(`app.groups.help.${g.id}`)}</p>
-      <nav className="dash-tiles" aria-label={t(`app.groups.${g.id}`)}>
-        {g.items.map((mod) => (
-          <Link key={mod.id} to={`/app/m/${mod.id}`} className="dash-tile" style={{ "--tile": mod.color }}>
-            <span className="dash-tile__icon"><Icon name={mod.icon} /></span>
-            <span className="dash-tile__label">{t(`app.modules.${mod.id}`)}</span>
-            <Kbd combo={moduleKey(mod.id)} className="dash-tile__kbd" />
-          </Link>
-        ))}
-      </nav>
+      {/* organised sections of plain links (not buttons): a title, then each module with a one-line description */}
+      <div className="group-sections">
+        {(g.sections || [{ id: "all", modules: g.modules }]).map((sec) => {
+          const items = sec.modules.map((mid) => g.items.find((m) => m.id === mid)).filter(Boolean);
+          if (!items.length) return null;
+          return (
+            <section key={sec.id} className="group-section" aria-labelledby={`gs-${sec.id}`}>
+              <h2 id={`gs-${sec.id}`} className="group-section__title">{t(`app.groups.sections.${sec.id}`)}</h2>
+              <ul className="group-links">
+                {items.map((mod) => (
+                  <li key={mod.id}>
+                    <Link to={`/app/m/${mod.id}`} className="group-link" style={{ "--tile": mod.color }}>
+                      <Icon name={mod.icon} className="group-link__icon" />
+                      <span className="group-link__text"><strong>{t(`app.modules.${mod.id}`)}</strong><small>{t(`app.groups.desc.${mod.id}`)}</small></span>
+                      <Kbd combo={moduleKey(mod.id)} className="group-link__kbd" />
+                      <Icon name="chevron-right" className="group-link__go" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          );
+        })}
+      </div>
     </div>
   );
 }

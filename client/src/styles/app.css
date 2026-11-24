@@ -372,3 +372,21 @@ select.input {
 
 /* dashboard: the combined buttons (Money & reports, Business) — a tile with how many sections it holds */
 .dash-tile--group .dash-tile__count { margin-top: -4px; color: var(--muted); font-size: .8rem; }
+
+/* Money & reports and Business pages: sections of plain links (app/Dashboard.jsx GroupPage) */
+.group-sections { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 18px; align-items: start; }
+.group-section { padding: 18px 18px 10px; border-radius: 18px; background: #fff; box-shadow: 0 2px 0 rgba(11, 13, 61, .03), 0 12px 24px -20px rgba(11, 13, 61, .35); }
+.group-section__title { margin: 0 0 6px; padding: 0 8px; font-size: .78rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+.group-links { margin: 0; padding: 0; list-style: none; }
+.group-links li + li { border-top: 1px solid var(--line); }
+.group-link { display: flex; align-items: center; gap: 12px; padding: 12px 8px; color: var(--navy); text-decoration: none; border-radius: 10px; }
+.group-link:hover strong { color: var(--tile); }
+.group-link:focus-visible { outline: 2px solid color-mix(in srgb, var(--tile) 50%, transparent); outline-offset: 1px; }
+.group-link__icon { flex: none; width: 20px; height: 20px; color: var(--tile); }
+.group-link__text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.group-link__text strong { font-weight: 600; font-size: .98rem; transition: color .12s ease; }
+.group-link__text small { color: var(--muted); font-size: .82rem; line-height: 1.35; }
+.group-link__kbd { flex: none; }
+.group-link__go { flex: none; width: 16px; height: 16px; color: var(--muted); opacity: .6; transition: transform .12s ease, opacity .12s ease; }
+.group-link:hover .group-link__go { opacity: 1; transform: translateX(2px); }
+[dir="rtl"] .group-link__go { transform: scaleX(-1); }
